@@ -200,7 +200,7 @@ export default {
 		reverse(str) {
 			const words = str.split(' ')
 			const reversed = words.reverse()
-			const reversedResult = words.join('.')
+			const reversedResult = reversed.join('.')
 			return reversedResult
 		},
 		randomNumber(max, min) {
@@ -220,6 +220,13 @@ export default {
 			let tz = date.getTimezoneOffset();
 			y += 2990;
 			return new Date(y, m, d, h, mi, s, ms).toISOString();
+		},
+		renderTalent(talent) {
+			if (!talent || !talent.id) return 'Unknown Talent';
+			const data = this.getTalent(talent.id);
+			const name = data?.name || `Unknown Talent (${talent.id})`;
+			const rank = talent.rank || 0;
+			return `${name} ${'I'.repeat(rank)}`;
 		}
 	},
 };
