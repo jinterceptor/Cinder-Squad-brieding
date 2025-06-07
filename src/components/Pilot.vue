@@ -22,11 +22,13 @@
         <div class="chip-container" v-for="n in 3" :key="n">
           <span class="chip" v-if="pilot.talents?.[n - 1]">
             <i aria-hidden="true" class="notranslate cci cci-talent"></i>
-            {{
-              getTalent(pilot.talents[n - 1]?.id)?.name
-              || `Unknown Talent (${pilot.talents[n - 1]?.id || 'Invalid'})`
-            }}
-            {{ 'I'.repeat(pilot.talents[n - 1]?.rank || 0) }}
+            <template v-if="getTalent(pilot.talents[n - 1].id)">
+              {{ getTalent(pilot.talents[n - 1].id).name }}
+              {{ 'I'.repeat(pilot.talents[n - 1]?.rank || 0) }}
+            </template>
+            <template v-else>
+              Unknown Talent ({{ pilot.talents[n - 1]?.id || 'Missing ID' }})
+            </template>
           </span>
           <span class="chip faded" v-else>
             <i aria-hidden="true" class="notranslate cci cci-talent"></i>
@@ -144,10 +146,6 @@
     </div>
   </div>
 </template>
-
-
-
-
 
 <script>
 import 'external-svg-loader'
