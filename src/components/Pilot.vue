@@ -16,19 +16,13 @@
         <Typer :values="pilotCode" />
       </div>
 
-      <!-- ✅ Talents display with safety for missing entries -->
+      <!-- ✅ Talents display safely using helper -->
       <div class="talents">
         <h1>Talents</h1>
         <div class="chip-container" v-for="n in 3" :key="n">
           <span class="chip" v-if="pilot.talents?.[n - 1]">
             <i aria-hidden="true" class="notranslate cci cci-talent"></i>
-            <template v-if="getTalent(pilot.talents[n - 1].id)">
-              {{ getTalent(pilot.talents[n - 1].id).name }}
-              {{ 'I'.repeat(pilot.talents[n - 1]?.rank || 0) }}
-            </template>
-            <template v-else>
-              Unknown Talent ({{ pilot.talents[n - 1]?.id || 'Missing ID' }})
-            </template>
+            {{ renderTalent(pilot.talents[n - 1]) }}
           </span>
           <span class="chip faded" v-else>
             <i aria-hidden="true" class="notranslate cci cci-talent"></i>
@@ -297,6 +291,14 @@ export default {
         description: "This talent was not found in the current data set.",
         ranks: [],
       }
+    },
+    // ✅ NEW: Safe rendering for talent name + rank
+    renderTalent(talent) {
+      if (!talent || !talent.id) return 'Unknown Talent (Missing)'
+      const t = this.getTalent(talent.id)
+      const name = t?.name || `Unknown Talent (${talent.id})`
+      const rank = talent.rank || 0
+      return `${name} ${'I'.repeat(rank)}`
     },
     pilotModal() {
       this.$oruga.modal.open({
