@@ -58,7 +58,7 @@
 								<div class="chip-container" v-for="talent in pilot.talents" :key="talent.id">						
 									<span class="chip">
 										<i aria-hidden="true" class="notranslate cci cci-talent"></i>
-										{{ getTalent?.(talent.id)?.name || 'Unknown Talent' }}{{ 'I'.repeat(talent.rank) }}
+										{{ getTalent?.(talent.id)?.name || 'Unknown Talent' }} {{ 'I'.repeat(talent.rank) }}
 									</span>
 								</div>
 							</div>
