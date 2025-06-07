@@ -117,7 +117,6 @@
 	</div>
 </template>
 
-
 <script>
 import { VueMarkdownIt } from '@f3ve/vue-markdown-it';
 import { capitalize } from 'vue';
