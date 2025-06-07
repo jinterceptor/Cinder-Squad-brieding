@@ -7,15 +7,24 @@
 			</div>
 			<div class="rhombus-back">&nbsp;</div>
 		</div>
-		<div class="event">
+
+		<div v-if="event && event.content" class="event">
 			<div class="name">
 				<h1>{{ event.location }} // {{ event.time }}</h1>
 				<h2>{{ event.title }}</h2>
 			</div>
 			<vue-markdown-it :source="event.content" class="markdown" />
 		</div>
+
+		<div v-else class="event">
+			<div class="name">
+				<h2>[No Event Selected]</h2>
+			</div>
+			<p class="subtle--text">Please select an event to view its details.</p>
+		</div>
 	</div>
 </template>
+
 
 <script>
 import { VueMarkdownIt } from '@f3ve/vue-markdown-it';
