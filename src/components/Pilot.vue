@@ -17,19 +17,19 @@
       </div>
 
       <!-- ✅ Talents display safely using helper -->
-<div class="talents">
-  <h1>Talents</h1>
-  <div class="chip-container" v-for="n in 3" :key="n">
-    <span class="chip" v-if="pilot.talents?.[n - 1]">
-      <i aria-hidden="true" class="notranslate cci cci-talent"></i>
-      {{ renderTalent(pilot.talents[n - 1]) }}
-    </span>
-    <span class="chip faded" v-else>
-      <i aria-hidden="true" class="notranslate cci cci-talent"></i>
-      No Talent Selected
-    </span>
-  </div>
-</div>
+      <div class="talents">
+        <h1>Talents</h1>
+        <div class="chip-container" v-for="n in 3" :key="n">
+          <span class="chip" v-if="pilot.talents?.[n - 1]">
+            <i aria-hidden="true" class="notranslate cci cci-talent"></i>
+            {{ renderTalent(pilot.talents[n - 1]) }}
+          </span>
+          <span class="chip faded" v-else>
+            <i aria-hidden="true" class="notranslate cci cci-talent"></i>
+            No Talent Selected
+          </span>
+        </div>
+      </div>
 
     <div v-if="!pilotInfo.bondId" class="gear-column">
       <div class="gear-row">
