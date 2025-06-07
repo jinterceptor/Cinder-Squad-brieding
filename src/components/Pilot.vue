@@ -146,7 +146,7 @@ import ktbData from 'lancer-ktb-data'
 import nrfawData from 'lancer-nrfaw-data'
 import longrimData from 'lancer-longrim-data'
 import wallflowerData from '@/assets/LCPs/wallflower-data-2.0.5'
-import osrData from '@/assets/LCPs/osr-data-1/.2.0'
+import osrData from '@/assets/LCPs/osr-data-1.2.0'
 
 import PilotModal from '@/components/modals/PilotModal.vue'
 import MechModal from '@/components/modals/MechModal.vue'
