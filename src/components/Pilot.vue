@@ -280,7 +280,7 @@ export default {
       this.activeMech.manufacturer = frame.source
       this.activeMech.mechtype = frame.mechtype.join(' // ')
     },
-    // ✅ NEW: Defensive fallback for missing talents
+    // ✅ Defensive fallback for unknown or missing talents
     getTalent(id) {
       const talent = this.talents.find(obj => obj.id === id)
       if (!talent) {
@@ -293,7 +293,7 @@ export default {
         ranks: [],
       }
     },
-    // ✅ NEW: Safe rendering for talent name + rank
+    // ✅ Safe talent render function for UI
     renderTalent(talent) {
       if (!talent || !talent.id) return 'Unknown Talent (Missing)'
       const t = this.getTalent(talent.id)
@@ -311,7 +311,7 @@ export default {
           talents: this.talents,
           skills: this.skills,
           frames: this.frames,
-          getTalent: this.getTalent, // ✅ Passed to modal
+          getTalent: this.getTalent,
         },
         class: 'custom-modal',
         width: 1920,
