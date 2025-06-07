@@ -134,6 +134,7 @@ import nrfawData from 'lancer-nrfaw-data'
 import longrimData from 'lancer-longrim-data'
 import wallflowerData from '@/assets/LCPs/wallflower-data-2.0.5'
 import osrData from '@/assets/LCPs/osr-data-1.2.0'
+import sotwData from '@/assets/LCPs/sotw-data-1.0.2'
 
 import PilotModal from '@/components/modals/PilotModal.vue'
 import MechModal from '@/components/modals/MechModal.vue'
@@ -178,7 +179,7 @@ export default {
       return [...lancerData.weapons, ...ktbData.weapons, ...nrfawData.weapons, ...longrimData.weapons, ...osrData.weapons]
     },
     mechSystems() {
-      return [...lancerData.systems, ...ktbData.systems, ...nrfawData.systems, ...longrimData.systems, ...osrData.systems]
+      return [...lancerData.systems, ...ktbData.systems, ...nrfawData.systems, ...longrimData.systems, ...osrData.systems, ...sotwData.systems]
     },
     talents() {
       return [...lancerData.talents, ...ktbData.talents, ...nrfawData.talents, ...longrimData.talents, ...osrData.talents]
@@ -187,10 +188,10 @@ export default {
       return [...lancerData.skills]    
     },
     bonds() {
-      return [...ktbData.bonds]
+      return [...ktbData.bonds, ...sotwData.bonds]
     },
     frames() {
-      return [...lancerData.frames, ...ktbData.frames, ...nrfawData.frames, ...longrimData.frames, ...osrData.frames]
+      return [...lancerData.frames, ...ktbData.frames, ...nrfawData.frames, ...longrimData.frames, ...osrData.frames, ...sotwData.frames]
     },
     mechManufacturerIcon() {
       if (this.activeMech.manufacturer)
