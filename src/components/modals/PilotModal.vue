@@ -56,7 +56,10 @@
 								<span>PILOT TALENT AUDIT</span>
 								<br>
 								<div class="chip-container" v-for="talent in pilot.talents" :key="talent.id">						
-									<span class="chip"><i aria-hidden="true" class="notranslate cci cci-talent"></i>{{ getTalent(talent.id, talent.rank) }}</span>
+									<span class="chip">
+										<i aria-hidden="true" class="notranslate cci cci-talent"></i>
+										{{ getTalent?.(talent.id)?.name || 'Unknown Talent' }}{{ 'I'.repeat(talent.rank) }}
+									</span>
 								</div>
 							</div>
 						</div>
@@ -102,6 +105,7 @@
 		</div>
 	</div>
 </template>
+
 
 <script>
 import { VueMarkdownIt } from '@f3ve/vue-markdown-it';
