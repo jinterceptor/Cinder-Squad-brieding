@@ -145,20 +145,12 @@ import lancerData from '@massif/lancer-data'
 import ktbData from 'lancer-ktb-data'
 import nrfawData from 'lancer-nrfaw-data'
 import longrimData from 'lancer-longrim-data'
-
 import wallflowerData from '@/assets/LCPs/wallflower-data-2.0.5'
-/*Append the datasets within computed if your LCP has new items.
-EX:
-pilotGear() {
-  return [...lancerData.pilot_gear, ...wallflowerData.pilot_gear]
-},
-*/
 
 import PilotModal from '@/components/modals/PilotModal.vue'
 import MechModal from '@/components/modals/MechModal.vue'
 
 import Typer from '@/components/Typer.vue'
-
 import ProgressBar from '@/components/ProgressBar.vue'
 import Burden from '@/components/Burden.vue'
 
@@ -226,31 +218,31 @@ export default {
         identName += `${part}.`
       })
       identName += identFirstName;
-			return `Union Administrative RM-4 Pilot Identification Protocol (IDENT) Record ${identName}: ${this.pilot.id} // ${this.pilot.background} // LOADOUT ${this.pilot.loadout.id} - MECH ${this.pilot.mechs[0].id} // HARDPOINTS ${this.pilot.mechs[0].loadouts[0].id}`;
-		},
+      return `Union Administrative RM-4 Pilot Identification Protocol (IDENT) Record ${identName}: ${this.pilot.id} // ${this.pilot.background} // LOADOUT ${this.pilot.loadout.id} - MECH ${this.pilot.mechs[0].id} // HARDPOINTS ${this.pilot.mechs[0].loadouts[0].id}`;
+    },
     pilotInfo() {
       const info = this.pilot
 
       let resolveGear = (type, item, idx, arr) => {
- 	 if (!item) {
-    		arr[idx] = { id: "", flavorName: "—" }
-    		return
-  	}
-  	const gear = this.pilotGear.find((obj) => item.id === obj.id) || null
-  	item.flavorName = gear?.name || "ERR: DATA NOT FOUND"
-  	arr[idx] = item
-}
+        if (!item) {
+          arr[idx] = { id: "", flavorName: "—" }
+          return
+        }
+        const gear = this.pilotGear.find((obj) => item.id === obj.id) || null
+        item.flavorName = gear?.name || "ERR: DATA NOT FOUND"
+        arr[idx] = item
+      }
 
-      info.loadout.armor.forEach((item, index, array) => resolveGear('armor', item, index, array));
-      info.loadout.weapons.forEach((item, index, array) => resolveGear('weapon', item, index, array));
-      info.loadout.gear.forEach((item, index, array) =>resolveGear('gear', item, index, array));
+      info.loadout.armor.forEach((item, index, array) => resolveGear('armor', item, index, array))
+      info.loadout.weapons.forEach((item, index, array) => resolveGear('weapon', item, index, array))
+      info.loadout.gear.forEach((item, index, array) => resolveGear('gear', item, index, array))
 
-      return info;
+      return info
     },
   },
   mounted() {
-    this.getActiveMech();
-    this.getBond();
+    this.getActiveMech()
+    this.getBond()
   },
   methods: {
     getBond() {
@@ -266,10 +258,10 @@ export default {
 
       if (mech) {
         this.activeMech = mech
-      }
-      else {
-        // default to missing frame in case pilot has no mechs
-        this.pilot.mechs[0] ? this.activeMech = this.pilot.mechs[0] : lancerData.frames.find((obj) => { return obj.id === 'missing_frame' })
+      } else {
+        this.pilot.mechs[0]
+          ? this.activeMech = this.pilot.mechs[0]
+          : lancerData.frames.find((obj) => { return obj.id === 'missing_frame' })
       }
 
       let frame = this.frames.find((obj) => {
@@ -284,6 +276,19 @@ export default {
       this.activeMech.manufacturer = frame.source
       this.activeMech.mechtype = frame.mechtype.join(' // ')
     },
+    // ✅ NEW: Defensive fallback for missing talents
+    getTalent(id) {
+      const talent = this.talents.find(obj => obj.id === id)
+      if (!talent) {
+        console.warn(`⚠️ Missing talent data for ID: ${id}`)
+      }
+      return talent || {
+        id,
+        name: "Unknown Talent",
+        description: "This talent was not found in the current data set.",
+        ranks: [],
+      }
+    },
     pilotModal() {
       this.$oruga.modal.open({
         component: PilotModal,
@@ -294,6 +299,7 @@ export default {
           talents: this.talents,
           skills: this.skills,
           frames: this.frames,
+          getTalent: this.getTalent, // ✅ Passed to modal
         },
         class: 'custom-modal',
         width: 1920,
