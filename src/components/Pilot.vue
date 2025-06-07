@@ -30,6 +30,7 @@
           </span>
         </div>
       </div>
+    </div>
 
     <div v-if="!pilotInfo.bondId" class="gear-column">
       <div class="gear-row">
@@ -139,6 +140,7 @@
     </div>
   </div>
 </template>
+
 
 <script>
 import 'external-svg-loader'
