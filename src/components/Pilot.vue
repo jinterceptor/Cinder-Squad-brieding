@@ -22,7 +22,7 @@
         <div class="chip-container" v-for="n in 3" :key="n">
           <span class="chip" v-if="pilot.talents && pilot.talents[n - 1]">
             <i aria-hidden="true" class="notranslate cci cci-talent"></i>
-            {{ getTalent(pilot.talents[n - 1].id).name }} {{ 'I'.repeat(pilot.talents[n - 1].rank) }}
+            {{ getTalent(pilot.talents[n - 1].id)?.name || 'Unknown Talent' }} {{ 'I'.repeat(pilot.talents[n - 1].rank) }}
           </span>
           <span class="chip faded" v-else>
             <i aria-hidden="true" class="notranslate cci cci-talent"></i>
@@ -140,6 +140,7 @@
     </div>
   </div>
 </template>
+
 
 
 <script>
