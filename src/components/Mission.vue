@@ -35,17 +35,26 @@ export default {
   },
   computed: {
     icon() {
-      return `/icons/mission-${this.mission.status}.svg`;
+      return this.mission?.status ? `/icons/mission-${this.mission.status}.svg` : '/icons/mission-missing.svg';
     },
     missionStatus() {
-      if (this.mission.status === "start") return "Current\nBriefing";
-      if (this.mission.status === "partial-success") return "Partial\nSuccess";
-      if (this.mission.status === "success") return "Mission\nSuccess";
-      if (this.mission.status === "failure") return "Mission\nFailure";
+      switch (this.mission?.status) {
+        case 'start':
+          return 'Current\nBriefing';
+        case 'partial-success':
+          return 'Partial\nSuccess';
+        case 'success':
+          return 'Mission\nSuccess';
+        case 'failure':
+          return 'Mission\nFailure';
+        default:
+          return 'Unknown Status';
+      }
     },
     isActive() {
-      return this.mission.slug === this.selected;
+      return this.mission?.slug === this.selected;
     },
   },
 };
 </script>
+
