@@ -119,15 +119,19 @@ export default {
 		},
 		skills: {
 			type: Array,
-			required:true
+			required: true
 		},
 		talents: {
 			type: Array,
-			required:true
+			required: true
 		},
 		frames: {
 			type: Array,
-			required:true
+			required: true
+		},
+		getTalent: {
+			type: Function,
+			required: true
 		}
 	},
 	data() {
@@ -164,23 +168,13 @@ export default {
 			return response;
 		},
 		getSkill(id) {
-			let skill = this.skills.find((x) => x.id == id);
-			return skill.name
-		},
-		getTalent(id, value) {
-			let talent = this.talents.find((x) => x.id == id);
-			let response = talent.name + " "
-			
-			for (let i = 0; i < value; i++){
-				response += "I"
-			}
-			return response;
+			let skill = this.skills.find((x) => x.id === id);
+			return skill?.name || "Unknown Skill"
 		},
 		getLicense(id, value) {
-			let frame = this.frames.find((x) => x.id == id);
-			let response = frame.source + " " + frame.name + " "
-			
-			for (let i = 0; i < value; i++){
+			let frame = this.frames.find((x) => x.id === id);
+			let response = (frame?.source || "Unknown Source") + " " + (frame?.name || "Unknown Frame") + " "
+			for (let i = 0; i < value; i++) {
 				response += "I"
 			}
 			return response;
@@ -215,3 +209,4 @@ export default {
 	},
 };
 </script>
+
