@@ -225,7 +225,7 @@ export default {
 			const data = this.getTalent(talent.id);
 			const name = data?.name || `Unknown Talent (${talent.id})`;
 			const rank = talent.rank || 0;
-			return `${name} ${'I'.repeat(rank)}`;
+			return `${name}${rank > 0 ? ' ' + 'I'.repeat(rank) : ''}`;
 		}
 	},
 };
