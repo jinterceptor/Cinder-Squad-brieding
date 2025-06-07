@@ -1,5 +1,5 @@
 <template>
-	<div class="pilot-wrapper">
+  <div class="pilot-wrapper">
     <div class="pilot-column" @click="pilotModal">
       <img :src="pilotPortrait" class="portrait" />
       <div class="pilot-info">
@@ -15,10 +15,24 @@
       <div class="pilot-code">
         <Typer :values="pilotCode" />
       </div>
+
+      <!-- ✅ Talents display with safety for missing entries -->
+      <div class="talents">
+        <h1>Talents</h1>
+        <div class="chip-container" v-for="n in 3" :key="n">
+          <span class="chip" v-if="pilot.talents && pilot.talents[n - 1]">
+            <i aria-hidden="true" class="notranslate cci cci-talent"></i>
+            {{ getTalent(pilot.talents[n - 1].id).name }} {{ 'I'.repeat(pilot.talents[n - 1].rank) }}
+          </span>
+          <span class="chip faded" v-else>
+            <i aria-hidden="true" class="notranslate cci cci-talent"></i>
+            No Talent Selected
+          </span>
+        </div>
+      </div>
     </div>
-    <div
-      v-if="!pilotInfo.bondId"
-      class="gear-column">
+
+    <div v-if="!pilotInfo.bondId" class="gear-column">
       <div class="gear-row">
         <div class="armor">
           <h1>Pilot Armor</h1>
@@ -50,9 +64,8 @@
         </div>
       </div>
     </div>
-    <div
-      v-if="pilotInfo.bondId"
-      class="bonds-column">
+
+    <div v-if="pilotInfo.bondId" class="bonds-column">
       <div class="bonds">
         <div class="bond">
           <h1>Bond</h1>
@@ -60,63 +73,52 @@
         </div>
         <div class="experience">
           <h1>Experience</h1>
-          <ProgressBar
-            :value="pilotInfo.xp"
-            :max="8"
-            color="rgba(125, 187, 187, 1)"
-          />
+          <ProgressBar :value="pilotInfo.xp" :max="8" color="rgba(125, 187, 187, 1)" />
         </div>
         <div class="stress">
           <h1>Stress</h1>
-          <ProgressBar
-            :value="pilotInfo.stress"
-            :max="8" color="#F00" />
+          <ProgressBar :value="pilotInfo.stress" :max="8" color="#F00" />
         </div>
       </div>
-      <div
-        v-if="pilotInfo.burdens.length > 0"
-        class="burdens">
-        <Burden
-          v-for="item in pilotInfo.burdens"
-          :key="item.id"
-          :burden="item"
-          :animate="animate"/>
-    </div>
-    <div
-      v-else
-      class="gear-column">
-      <div class="gear-row">
-        <div class="armor">
-          <h1>Pilot Armor</h1>
-          <h2>{{ pilotInfo.loadout.armor[0].flavorName }}</h2>
-        </div>
-        <div class="gear">
-          <h1>Pilot Gear</h1>
-          <h2>{{ pilotInfo.loadout.gear[0].flavorName }}</h2>
-        </div>
+
+      <div v-if="pilotInfo.burdens.length > 0" class="burdens">
+        <Burden v-for="item in pilotInfo.burdens" :key="item.id" :burden="item" :animate="animate" />
       </div>
-      <div class="gear-row">
-        <div class="weapon">
-          <h1>Pilot Weapon</h1>
-          <h2>{{ pilotInfo.loadout.weapons[0].flavorName }}</h2>
+
+      <div v-else class="gear-column">
+        <div class="gear-row">
+          <div class="armor">
+            <h1>Pilot Armor</h1>
+            <h2>{{ pilotInfo.loadout.armor[0].flavorName }}</h2>
+          </div>
+          <div class="gear">
+            <h1>Pilot Gear</h1>
+            <h2>{{ pilotInfo.loadout.gear[0].flavorName }}</h2>
+          </div>
         </div>
-        <div class="gear">
-          <h1>Pilot Gear</h1>
-          <h2>{{ pilotInfo.loadout.gear[1].flavorName }}</h2>
+        <div class="gear-row">
+          <div class="weapon">
+            <h1>Pilot Weapon</h1>
+            <h2>{{ pilotInfo.loadout.weapons[0].flavorName }}</h2>
+          </div>
+          <div class="gear">
+            <h1>Pilot Gear</h1>
+            <h2>{{ pilotInfo.loadout.gear[1].flavorName }}</h2>
+          </div>
         </div>
-      </div>
-      <div class="gear-row">
-        <div class="weapon">
-          <h1>Pilot Weapon</h1>
-          <h2>{{ pilotInfo.loadout.weapons[1].flavorName }}</h2>
-        </div>
-        <div class="gear">
-          <h1>Pilot Gear</h1>
-          <h2>{{ pilotInfo.loadout.gear[2].flavorName }}</h2>
+        <div class="gear-row">
+          <div class="weapon">
+            <h1>Pilot Weapon</h1>
+            <h2>{{ pilotInfo.loadout.weapons[1].flavorName }}</h2>
+          </div>
+          <div class="gear">
+            <h1>Pilot Gear</h1>
+            <h2>{{ pilotInfo.loadout.gear[2].flavorName }}</h2>
+          </div>
         </div>
       </div>
     </div>
-    </div>
+
     <div class="mech-column" @click="mechModal">
       <div class="mech-info">
         <div class="name">
@@ -134,10 +136,11 @@
           {{ activeMech.mechtype }}
         </div>
       </div>
-      <img :src="mechPortrait" class="portrait">
+      <img :src="mechPortrait" class="portrait" />
     </div>
   </div>
 </template>
+
 
 <script>
 import 'external-svg-loader'
