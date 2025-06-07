@@ -68,8 +68,8 @@
 									<span class="chip" :class="{ 'empty-chip': !pilot.talents?.[i - 1] }">
 										<i aria-hidden="true" class="notranslate cci cci-talent"></i>
 										<template v-if="pilot.talents?.[i - 1]">
-											{{ getTalent?.(pilot.talents[i - 1].id)?.name || 'Unknown Talent' }}
-											{{ pilot.talents[i - 1].rank ? ' ' + 'I'.repeat(pilot.talents[i - 1].rank) : '' }}
+											{{ getTalent(pilot.talents[i - 1]?.id)?.name || 'Unknown Talent' }}
+											{{ pilot.talents[i - 1]?.rank ? ' ' + 'I'.repeat(pilot.talents[i - 1]?.rank) : '' }}
 										</template>
 										<template v-else>
 											Unknown Talent
@@ -117,6 +117,7 @@
 		</div>
 	</div>
 </template>
+
 
 <script>
 import { VueMarkdownIt } from '@f3ve/vue-markdown-it';
