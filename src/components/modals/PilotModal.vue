@@ -222,3 +222,8 @@ export default {
 };
 </script>
 
+<style scoped>
+.empty-chip {
+	opacity: 0.4;
+}
+</style>
