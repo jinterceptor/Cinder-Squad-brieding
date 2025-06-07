@@ -16,7 +16,6 @@
         <Typer :values="pilotCode" />
       </div>
 
-      <!-- ✅ Talents display safely using helper -->
       <div class="talents">
         <h1>Talents</h1>
         <div class="chip-container" v-for="n in 3" :key="n">
@@ -36,31 +35,31 @@
       <div class="gear-row">
         <div class="armor">
           <h1>Pilot Armor</h1>
-          <h2>{{ pilotInfo.loadout.armor[0].flavorName }}</h2>
+          <h2>{{ pilotInfo.loadout.armor?.[0]?.flavorName || '—' }}</h2>
         </div>
         <div class="gear">
           <h1>Pilot Gear</h1>
-          <h2>{{ pilotInfo.loadout.gear[0].flavorName }}</h2>
+          <h2>{{ pilotInfo.loadout.gear?.[0]?.flavorName || '—' }}</h2>
         </div>
       </div>
       <div class="gear-row">
         <div class="weapon">
           <h1>Pilot Weapon</h1>
-          <h2>{{ pilotInfo.loadout.weapons[0].flavorName }}</h2>
+          <h2>{{ pilotInfo.loadout.weapons?.[0]?.flavorName || '—' }}</h2>
         </div>
         <div class="gear">
           <h1>Pilot Gear</h1>
-          <h2>{{ pilotInfo.loadout.gear[1].flavorName }}</h2>
+          <h2>{{ pilotInfo.loadout.gear?.[1]?.flavorName || '—' }}</h2>
         </div>
       </div>
       <div class="gear-row">
         <div class="weapon">
           <h1>Pilot Weapon</h1>
-          <h2>{{ pilotInfo.loadout.weapons[1].flavorName }}</h2>
+          <h2>{{ pilotInfo.loadout.weapons?.[1]?.flavorName || '—' }}</h2>
         </div>
         <div class="gear">
           <h1>Pilot Gear</h1>
-          <h2>{{ pilotInfo.loadout.gear[2].flavorName }}</h2>
+          <h2>{{ pilotInfo.loadout.gear?.[2]?.flavorName || '—' }}</h2>
         </div>
       </div>
     </div>
@@ -69,7 +68,7 @@
       <div class="bonds">
         <div class="bond">
           <h1>Bond</h1>
-          <h2>{{ bond.name }}</h2>
+          <h2>{{ bond?.name || 'Unknown Bond' }}</h2>
         </div>
         <div class="experience">
           <h1>Experience</h1>
@@ -89,31 +88,31 @@
         <div class="gear-row">
           <div class="armor">
             <h1>Pilot Armor</h1>
-            <h2>{{ pilotInfo.loadout.armor[0].flavorName }}</h2>
+            <h2>{{ pilotInfo.loadout.armor?.[0]?.flavorName || '—' }}</h2>
           </div>
           <div class="gear">
             <h1>Pilot Gear</h1>
-            <h2>{{ pilotInfo.loadout.gear[0].flavorName }}</h2>
+            <h2>{{ pilotInfo.loadout.gear?.[0]?.flavorName || '—' }}</h2>
           </div>
         </div>
         <div class="gear-row">
           <div class="weapon">
             <h1>Pilot Weapon</h1>
-            <h2>{{ pilotInfo.loadout.weapons[0].flavorName }}</h2>
+            <h2>{{ pilotInfo.loadout.weapons?.[0]?.flavorName || '—' }}</h2>
           </div>
           <div class="gear">
             <h1>Pilot Gear</h1>
-            <h2>{{ pilotInfo.loadout.gear[1].flavorName }}</h2>
+            <h2>{{ pilotInfo.loadout.gear?.[1]?.flavorName || '—' }}</h2>
           </div>
         </div>
         <div class="gear-row">
           <div class="weapon">
             <h1>Pilot Weapon</h1>
-            <h2>{{ pilotInfo.loadout.weapons[1].flavorName }}</h2>
+            <h2>{{ pilotInfo.loadout.weapons?.[1]?.flavorName || '—' }}</h2>
           </div>
           <div class="gear">
             <h1>Pilot Gear</h1>
-            <h2>{{ pilotInfo.loadout.gear[2].flavorName }}</h2>
+            <h2>{{ pilotInfo.loadout.gear?.[2]?.flavorName || '—' }}</h2>
           </div>
         </div>
       </div>
@@ -140,7 +139,6 @@
     </div>
   </div>
 </template>
-
 
 <script>
 import 'external-svg-loader'
