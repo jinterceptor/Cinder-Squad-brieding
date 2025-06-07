@@ -232,11 +232,14 @@ export default {
       const info = this.pilot
 
       let resolveGear = (type, item, idx, arr) => {
-        item = item || {id: "", flavorName: ""};
-        const gear = this.pilotGear.find((obj) => { return item.id === obj.id }) || null;
-        item.flavorName = gear?.name || "ERR: DATA NOT FOUND";
-        arr[idx] = item;
-      }
+ 	 if (!item) {
+    		arr[idx] = { id: "", flavorName: "—" }
+    		return
+  	}
+  	const gear = this.pilotGear.find((obj) => item.id === obj.id) || null
+  	item.flavorName = gear?.name || "ERR: DATA NOT FOUND"
+  	arr[idx] = item
+}
 
       info.loadout.armor.forEach((item, index, array) => resolveGear('armor', item, index, array));
       info.loadout.weapons.forEach((item, index, array) => resolveGear('weapon', item, index, array));
