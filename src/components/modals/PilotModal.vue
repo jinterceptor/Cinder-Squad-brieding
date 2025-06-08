@@ -64,15 +64,10 @@
 							<div class="col col-share">
 								<span>PILOT TALENT AUDIT</span>
 								<br>
-								<div class="chip-container" v-for="i in 3" :key="i">
-									<span class="chip" :class="{ 'empty-chip': !pilot.talents?.[i - 1] }">
+								<div class="chip-container" v-for="(talent, index) in pilot.talents" :key="index">
+									<span class="chip">
 										<i aria-hidden="true" class="notranslate cci cci-talent"></i>
-										<template v-if="pilot.talents?.[i - 1]">
-											{{ renderTalent(pilot.talents[i - 1]) }}
-										</template>
-										<template v-else>
-											Unknown Talent
-										</template>
+										{{ renderTalent(talent) }}
 									</span>
 								</div>
 							</div>
@@ -116,6 +111,7 @@
 		</div>
 	</div>
 </template>
+
 
 <script>
 import { VueMarkdownIt } from '@f3ve/vue-markdown-it';
