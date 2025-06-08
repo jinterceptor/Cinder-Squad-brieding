@@ -2,18 +2,18 @@
   "initialSlug": "001",
   "planetPath": "/planet.webm",
   "animate": true,
-  "defaultTitle": "MSMC |",
-  "icon": "/faction-logos/msmc.svg",
+  "defaultTitle": "UNION |",
+  "icon": "/faction-logos/union.svg",
   "header": {
-    "planet": "Heiligtum-6 'Deep Blue'",
-    "year": "5017u",
-    "system": "Heiligtum",
+    "planet": "Ardennes-3 'Hercynia'",
+    "year": "5014u",
+    "system": "Ardennes",
     "gate": "Rào Cỏ",
     "ring": "Annamite",
-    "headerTitle": "Mirrorsmoke",
-    "headerSubtitle": "Mercenary Company",
-    "subheaderTitle": "Contract Work",
-    "subheaderSubtitle": "Sierra-Whiskey-Alpha-Golf"
+    "headerTitle": "Union",
+    "headerSubtitle": "Quick Reaction Force",
+    "subheaderTitle": "Releif Effort",
+    "subheaderSubtitle": "Golf-Oskar-Lima-India-Alpha"
   },
   "pilotSpecialInfo": {}
 }
