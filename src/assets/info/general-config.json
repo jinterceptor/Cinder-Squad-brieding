@@ -1,8 +1,8 @@
 {
-  "initialSlug": "001",
+  "initialSlug": "003",
   "planetPath": "/planet.webm",
   "animate": true,
-  "defaultTitle": "UNION |",
+  "defaultTitle": "CINDER SQUAD |",
   "icon": "/faction-logos/union.svg",
   "header": {
     "planet": "Ardennes-3 'Hercynia'",
