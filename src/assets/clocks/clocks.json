@@ -11,7 +11,7 @@
     "name": "The Machine Horde",
     "description": "Represents the number of Rogue Machines and the danger they pose.",
     "type": "Threat",
-    "value": 2,
+    "value": 3,
     "max": 6,
     "color": "#d94b4b"
   },
