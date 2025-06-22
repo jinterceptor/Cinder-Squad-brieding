@@ -3,7 +3,7 @@
     "name": "DEFENSE OF EVERGREEN",
     "description": "Represents the integrity and readiness of Evergreen's Militia and Defences.",
     "type": "Story",
-    "value": 4,
+    "value": 3,
     "max": 6,
     "color": "#7ecb7e"
   },
@@ -11,7 +11,7 @@
     "name": "The Machine Horde",
     "description": "Represents the number of Rogue Machines and the danger they pose.",
     "type": "Threat",
-    "value": 3,
+    "value": 4,
     "max": 6,
     "color": "#d94b4b"
   },
