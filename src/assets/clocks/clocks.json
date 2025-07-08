@@ -1,26 +1,10 @@
 [
   {
-    "name": "DEFENSE OF EVERGREEN",
-    "description": "Represents the integrity and readiness of Evergreen's Militia and Defences.",
-    "type": "Story",
-    "value": 3,
-    "max": 6,
-    "color": "#7ecb7e"
-  },
-  {
-    "name": "The Machine Horde",
-    "description": "Represents the number of Rogue Machines and the danger they pose.",
-    "type": "Threat",
-    "value": 4,
-    "max": 6,
-    "color": "#d94b4b"
-  },
-  {
-    "name": "CRT Relationship",
-    "description": "Represents how the Colonial Response Team (CRT) views the pilots as a whole.",
-    "value": 3,
-    "max": 6,
-    "color": "#3b82f6",
+    "name": "Consumption",
+    "description": "The Power Surges in Evergreen are steadily worsening, it's only a matter of time before Beggar One completes whatever he's planning.",
+    "value": 0,
+    "max": 4,
+    "color": "#8A0303",
     "type": "Story"
   }
 ]
