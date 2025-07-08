@@ -10,7 +10,7 @@
   {
     "name": "Plan The Escape",
     "description": "The steps needed in order to plan a successful escape from the Evergreen Prison",
-    "value": 3,
+    "value": 2,
     "max": 8,
     "color": "#001F54",
     "type": "Story"
