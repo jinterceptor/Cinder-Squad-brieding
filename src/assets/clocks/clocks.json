@@ -2,7 +2,7 @@
   {
     "name": "Consumption",
     "description": "The Power Surges in Evergreen are steadily worsening, it's only a matter of time before Beggar One completes whatever he's planning.",
-    "value": 1,
+    "value": 2,
     "max": 4,
     "color": "#8A0303",
     "type": "Story"
