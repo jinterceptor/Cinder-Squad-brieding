@@ -1,19 +1,19 @@
 {
-  "initialSlug": "006",
+  "initialSlug": "001",
   "planetPath": "/planet.webm",
   "animate": true,
-  "defaultTitle": "CINDER SQUAD |",
+  "defaultTitle": "Test |",
   "icon": "/faction-logos/union.svg",
   "header": {
-    "planet": "Ardennes-3 'Hercynia'",
-    "year": "5014u",
-    "system": "Ardennes",
-    "gate": "Rào Cỏ",
-    "ring": "Annamite",
+    "planet": "Cressidium",
+    "year": "5016u",
+    "system": "Vestan Binaria-864",
+    "gate": "Lassen Gate",
+    "ring": "Cascade-Line",
     "headerTitle": "Union",
-    "headerSubtitle": "Quick Reaction Force",
-    "subheaderTitle": "Relief Effort",
-    "subheaderSubtitle": "Cinder Squad"
+    "headerSubtitle": "Lancer Squad",
+    "subheaderTitle": "Designation",
+    "subheaderSubtitle": "Unknown"
   },
   "pilotSpecialInfo": {}
 }
