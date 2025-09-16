@@ -16,7 +16,7 @@ const routes = [
 		name: "Mission Status",
 		component: Status,
 		props: true,
-		meta: { title: `${DEFAULT_TITLE} MISSION STATUS` },
+		meta: { title: `${DEFAULT_TITLE} BRIEFING SYSTEM` },
 	},
 	{
 		path: "/pilots",
