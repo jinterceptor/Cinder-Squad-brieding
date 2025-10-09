@@ -5,7 +5,7 @@
 			<h2>{{ event.title }}</h2>
 		</div>
 
-		<!-- Updated image handling -->
+		<!-- Thumbnail image -->
 		<img
 			class="thumbnail"
 			:src="getThumbnail(event.thumbnail)"
@@ -51,15 +51,16 @@ export default {
 		},
 
 		/**
-		 * Returns the correct path for a thumbnail.
-		 * - Local filenames load from /events/
-		 * - Full URLs (http/https) are used as-is
-		 * - Falls back to /events/default.png if missing
+		 * Returns the correct image path for the thumbnail.
+		 * - Absolute paths (starting with "/") are used as-is (for /events/...).
+		 * - Full URLs (http/https) are used as-is (for legacy Imgur links).
+		 * - Plain filenames (e.g. "000/header.png") are prefixed with /events/.
+		 * - Falls back to /events/default.png if missing.
 		 */
 		getThumbnail(thumb) {
-			if (!thumb) return "/events/default.png"; // fallback
-			if (thumb.startsWith("http")) return thumb; // remote URL
-			return `/events/${thumb}`; // local file under /public/events/
+			if (!thumb) return "/events/default.png"; // fallback image
+			if (thumb.startsWith("http") || thumb.startsWith("/")) return thumb;
+			return `/events/${thumb}`;
 		},
 	},
 };
@@ -72,5 +73,6 @@ export default {
 	height: auto;
 	border-radius: 0.5rem;
 	margin: 0.5rem 0 1rem;
+	object-fit: cover;
 }
 </style>
