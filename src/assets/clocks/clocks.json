@@ -1,4 +1,10 @@
 [
   {
-  }
+  "name": "Hours Remaining",
+  "type": "Story",
+  "description": "The total hours allotted for Operation: Solstice Rain.",
+  "max": 36,
+  "value": 2,
+  "color": "#e63946"
+}
 ]
