@@ -23,11 +23,6 @@
           </div>
         </div>
 
-        <!-- Frame / Stats -->
-        <div class="member-stats">
-          <p><strong>Frame Stats:</strong> HULL: 0 | AGI: 0 | SYS: 0 | ENG: 0</p>
-        </div>
-
         <!-- Skills / Certifications -->
         <div class="member-skills">
           <p><strong>Certifications:</strong></p>
@@ -101,13 +96,6 @@ export default {
   justify-content: space-between;
   margin: 0.5rem 0;
   font-size: 0.9rem;
-}
-
-.member-stats {
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-  border-top: 1px solid #1e90ff;
-  padding-top: 0.3rem;
 }
 
 .member-skills {
