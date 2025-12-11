@@ -5,82 +5,68 @@
   </div>
 
   <div id="router-view-container">
-    <!-- Passing pilots array to PilotsView -->
-    <router-view :pilots="pilots" />
+    <router-view :members="members" />
   </div>
 </template>
 
 <script>
 import Header from "./components/layout/Header.vue";
 import Sidebar from "./components/layout/Sidebar.vue";
-import Papa from "papaparse"; // PapaParse for CSV parsing
+import Papa from "papaparse";
 import Config from "@/assets/info/general-config.json";
 
 export default {
-  components: {
-    Header,
-    Sidebar,
-  },
+  components: { Header, Sidebar },
 
   data() {
     return {
       animate: Config.animate,
       planetPath: Config.planetPath,
       header: Config.header,
-      members: [], // raw member names
-      pilots: [],  // displayed in PilotsView
+      members: [], // this will hold all member names
     };
   },
 
   created() {
-    this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
+    this.setTitleFavicon(Config.defaultTitle + " MEMBERS", Config.icon);
 
-    // Import MembersMaster CSV (just names for now)
-    this.importMembers(
+    // Load MembersMaster CSV
+    this.loadMembersCSV(
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv"
     );
   },
 
   mounted() {
-    this.$router.push("/status");
+    this.$router.push("/pilots"); // we can rename later
   },
 
   methods: {
     setTitleFavicon(title, favicon) {
       document.title = title;
-      const headEl = document.querySelector("head");
-      const faviconEl = document.createElement("link");
-      faviconEl.setAttribute("rel", "shortcut icon");
-      faviconEl.setAttribute("href", favicon);
-      headEl.appendChild(faviconEl);
+      const link = document.createElement("link");
+      link.rel = "shortcut icon";
+      link.href = favicon;
+      document.head.appendChild(link);
     },
 
-    async importMembers(csvUrl) {
-      try {
-        const response = await fetch(csvUrl);
-        const csvText = await response.text();
+    loadMembersCSV(csvUrl) {
+      Papa.parse(csvUrl, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          console.log("MembersMaster headers:", results.meta.fields);
 
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            // Pull only "Name" column
-            this.members = results.data
-              .map((row) => row["Name"]?.trim())
-              .filter((name) => name);
-
-            // For testing, populate pilots with same array
-            this.pilots = [...this.members];
-
-            console.log("Members loaded:", this.members);
-          },
-          error: (err) => {
-            console.error("Error parsing MembersMaster CSV:", err);
-          },
-        });
-      } catch (err) {
-        console.error("Failed to fetch MembersMaster CSV:", err);
-      }
+          // Column 2 = 'Name' (assuming first real data row)
+          this.members = results.data
+            .map((row) => row["Name"]?.trim())
+            .filter((name) => name); // remove empty
+          console.log("Members loaded:", this.members.length);
+        },
+        error: (err) => {
+          console.error("Failed to load MembersMaster CSV:", err);
+        },
+      });
     },
   },
 };
