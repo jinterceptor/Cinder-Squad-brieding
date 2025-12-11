@@ -1,382 +1,142 @@
-<template>
-  <section id="members" class="section-container">
-    <div style="height: 52px; overflow: hidden">
-      <div class="section-header clipped-medium-backward-pilot">
-        <img src="/icons/license.svg" alt="Members Icon" />
-        <h1>Unit ORBAT</h1>
-      </div>
-      <div class="rhombus-back">&nbsp;</div>
-    </div>
-
-    <div class="section-content-container">
-      <div class="orbat-wrapper">
-        <div v-if="!squadsToShow.length">
-          Loading squads and members...
-        </div>
-
-        <div v-else class="squad-grid">
-          <div
-            v-for="sq in squadsToShow"
-            :key="sq.squad"
-            class="squad-card"
-            @click="toggleSquad(sq.squad)"
-          >
-            <!-- Squad header / tile face -->
-            <div class="squad-header">
-              <div class="squad-insignia">
-                <span>{{ squadInitials(sq.squad) }}</span>
-              </div>
-
-              <div class="squad-meta">
-                <h2>{{ sq.squad }}</h2>
-                <p class="squad-subtitle">
-                  {{ squadDescriptor(sq.squad) }}
-                </p>
-                <p class="squad-count">
-                  {{ sq.members.length }} PERSONNEL REGISTERED
-                </p>
-              </div>
-
-              <div class="squad-chevron" :class="{ open: isOpen(sq.squad) }">
-                <span v-if="isOpen(sq.squad)">▼</span>
-                <span v-else>▶</span>
-              </div>
-            </div>
-
-            <!-- Members inside squad -->
-            <transition name="squad-expand">
-              <div
-                v-if="isOpen(sq.squad)"
-                class="squad-members"
-                @click.stop
-              >
-                <div class="members-grid">
-                  <div
-                    v-for="member in sq.members"
-                    :key="member.id || member.name"
-                    class="member-card"
-                  >
-                    <!-- Header -->
-                    <div class="member-header">
-                      <h3>{{ member.name.toUpperCase() }}</h3>
-                      <span class="subtitle">({{ member.rank }})</span>
-                    </div>
-
-                    <!-- Info blocks -->
-                    <div class="member-info">
-                      <div class="info-left">
-                        <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
-                        <p><strong>Member ID:</strong> {{ member.id }}</p>
-                      </div>
-                      <div class="info-right">
-                        <p>CALLSIGN AVAILABLE</p>
-                        <p>IDENTITY VERIFIED</p>
-                        <p>DATA REGISTERED</p>
-                      </div>
-                    </div>
-
-                    <!-- Skills / Certifications -->
-                    <div class="member-skills">
-                      <p><strong>Certifications:</strong></p>
-                      <div class="skills-tags">
-                        <span
-                          v-for="(cert, index) in member.certifications"
-                          :key="index"
-                          class="skill-tag"
-                        >
-                          {{ cert }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Footer / Biometric -->
-                    <div class="member-footer">
-                      <p>BIOMETRIC RECORD VALID</p>
-                      <p>UNSC SYSTEMS DATABASE</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </transition>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-</template>
-
-<script>
-export default {
-  name: "PilotsView",
-  props: {
-    animate: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
-    members: {
-      type: Array,
-      required: false,
-      default: () => [],
-    },
-    orbat: {
-      type: Array,
-      required: false,
-      default: () => [],
-    },
-  },
-  data() {
-    return {
-      openSquads: {}, // { [squadName]: boolean }
-    };
-  },
-  computed: {
-    squadsToShow() {
-      if (this.orbat && this.orbat.length) {
-        // Sort for consistency
-        return this.orbat
-          .slice()
-          .sort((a, b) =>
-            a.squad.localeCompare(b.squad, undefined, {
-              numeric: true,
-              sensitivity: "base",
-            }),
-          );
-      }
-      if (this.members && this.members.length) {
-        return [
-          {
-            squad: "All Personnel",
-            members: this.members,
-          },
-        ];
-      }
-      return [];
-    },
-  },
-  methods: {
-    toggleSquad(squadName) {
-      this.openSquads[squadName] = !this.openSquads[squadName];
-    },
-    isOpen(squadName) {
-      return !!this.openSquads[squadName];
-    },
-    squadInitials(name) {
-      if (!name) return "UNSC";
-      const parts = String(name).trim().split(/\s+/);
-      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-      return parts
-        .map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
-        .join("")
-        .toUpperCase();
-    },
-    squadDescriptor(name) {
-      const n = String(name).toLowerCase();
-      if (n.includes("chalk")) return "INFANTRY CHALK // UNSC GROUND FORCES";
-      if (n.includes("command") || n.includes("hq"))
-        return "COMMAND ELEMENT // UNSC GROUND FORCES";
-      if (n.includes("pilot") || n.includes("air") || n.includes("wing"))
-        return "AVIATION ELEMENT // UNSC AIR ASSETS";
-      return "UNSC REGISTERED ELEMENT";
-    },
-  },
-};
-</script>
-
 <style scoped>
-/* Override the default narrow Lancer section for THIS view only */
+/* OVERRIDE LANCER NARROW WRAPPER */
 .section-container {
-  padding: 1rem 2rem;
+  padding: 2rem 3rem;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
-  width: 100% !important;      /* take all available width */
-  max-width: 1400px;           /* keep it sane on ultra-wide */
+  width: 100% !important;
+  max-width: 1800px;          /* increased overall width */
+  margin: 0 auto;
   box-sizing: border-box;
-  margin: 0 auto;              /* center within router-view area */
 }
 
-/* Make the inner content also span full width */
+/* Expand content to full width */
 .section-content-container {
   width: 100% !important;
 }
 
-.orbat-wrapper {
-  width: 100%;
-  margin-top: 0.5rem;
-}
-
-/* 3-column squad grid by default */
+/* --- SQUAD GRID (BIGGER) --- */
 .squad-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(3, minmax(350px, 1fr)); /* was 280px */
+  gap: 2rem;                                            /* bigger spacing */
+  margin-top: 2rem;
 }
 
 /* Medium screens: 2 columns */
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .squad-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
   }
 }
 
 /* Small screens: 1 column */
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .squad-grid {
     grid-template-columns: 1fr;
   }
 }
 
-/* SQUAD TILE */
+/* --- SQUAD TILE (BIGGER) --- */
 .squad-card {
   background: radial-gradient(
       circle at top left,
-      rgba(30, 144, 255, 0.2),
+      rgba(30, 144, 255, 0.25),
       transparent 55%
     ),
     rgba(0, 10, 30, 0.9);
-  border: 1px solid rgba(30, 144, 255, 0.6);
-  border-radius: 0.5rem;
-  box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
-  overflow: hidden;
+  border: 2px solid rgba(30, 144, 255, 0.8); /* thicker border */
+  border-radius: 0.75rem;                    /* rounder edges */
+  box-shadow: 0 0 22px rgba(0, 0, 0, 0.8);
   cursor: pointer;
 }
 
-/* SQUAD HEADER / FACE */
+/* --- SQUAD HEADER FACE --- */
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  padding: 0.9rem 1rem;
-  background: linear-gradient(
-    90deg,
-    rgba(10, 25, 55, 0.95),
-    rgba(10, 25, 55, 0.7)
-  );
+  padding: 1.4rem 1.6rem;       /* more padding */
 }
 
+/* BIGGER INSIGNIA */
 .squad-insignia {
-  width: 54px;
-  height: 54px;
-  border-radius: 0.4rem;
-  border: 2px solid #1e90ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 0.9rem;
-  font-size: 0.85rem;
-  font-weight: bold;
-  color: #1e90ff;
-  background: rgba(0, 0, 0, 0.6);
-  text-align: center;
+  width: 80px;                 /* was 54px */
+  height: 80px;
+  border-radius: 0.6rem;
+  border: 3px solid #1e90ff;   /* thicker */
+  font-size: 1.3rem;           /* larger text */
+  margin-right: 1.5rem;
 }
 
+/* Squad text bigger */
 .squad-meta h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.6rem;           /* was ~1rem */
   color: #e0f0ff;
-  letter-spacing: 0.05em;
 }
 
 .squad-subtitle {
-  margin: 0.1rem 0 0 0;
-  font-size: 0.75rem;
-  color: #9ec5e6;
-  text-transform: uppercase;
+  font-size: 1rem;
+  margin-top: 0.25rem;
 }
 
 .squad-count {
-  margin: 0.35rem 0 0 0;
-  font-size: 0.75rem;
-  color: #7aa7c7;
+  font-size: 0.95rem;
+  margin-top: 0.4rem;
 }
 
+/* Bigger arrow */
 .squad-chevron {
-  font-size: 0.9rem;
-  color: #9ec5e6;
-  margin-left: 0.8rem;
+  font-size: 1.6rem;
+  margin-left: 1rem;
 }
 
-/* EXPAND ANIMATION */
-.squad-expand-enter-active,
-.squad-expand-leave-active {
-  transition: all 0.2s ease-out;
-}
-.squad-expand-enter-from,
-.squad-expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-.squad-expand-enter-to,
-.squad-expand-leave-from {
-  opacity: 1;
-  max-height: 1600px;
-}
-
-/* MEMBERS INSIDE TILE */
+/* --- EXPANDED SECTION --- */
 .squad-members {
-  padding: 0.6rem 1rem 1rem 1rem;
-  background: rgba(0, 5, 20, 0.9);
-  border-top: 1px solid rgba(30, 144, 255, 0.4);
+  padding: 1.2rem 1.6rem 1.6rem 1.6rem; /* bigger padding */
 }
 
+/* Larger member tiles */
 .members-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); /* bigger */
+  gap: 1.2rem;
 }
 
+/* MEMBER TILE */
 .member-card {
-  background: rgba(0, 10, 30, 0.8);
-  padding: 0.7rem;
-  border-left: 3px solid #1e90ff;
-  border-radius: 0.25rem;
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
-  display: flex;
-  flex-direction: column;
+  background: rgba(0, 10, 30, 0.85);
+  padding: 1rem;
+  border-left: 4px solid #1e90ff; /* thicker */
+  border-radius: 0.35rem;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .member-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  color: #1e90ff;
+  font-size: 1.3rem;       /* bigger */
 }
 
 .subtitle {
-  font-size: 0.8rem;
-  color: #9ec5e6;
+  font-size: 1rem;
 }
 
 .member-info {
-  display: flex;
-  justify-content: space-between;
-  margin: 0.4rem 0;
-  font-size: 0.85rem;
+  font-size: 1rem;
+  margin: 0.6rem 0;
 }
 
 .member-skills {
-  margin: 0.4rem 0;
-}
-
-.skills-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-top: 0.2rem;
+  font-size: 1rem;
 }
 
 .skill-tag {
-  background: #1e90ff;
-  color: #fff;
-  padding: 0.15rem 0.35rem;
-  border-radius: 0.2rem;
-  font-size: 0.7rem;
+  font-size: 0.85rem;       /* slightly bigger */
+  padding: 0.3rem 0.5rem;
 }
 
 .member-footer {
-  font-size: 0.65rem;
-  margin-top: 0.4rem;
-  color: #7aa7c7;
+  font-size: 0.8rem;
+  margin-top: 0.6rem;
 }
 </style>
