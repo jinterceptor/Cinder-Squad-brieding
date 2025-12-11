@@ -15,6 +15,7 @@
           <div class="info-left">
             <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
             <p><strong>Member ID:</strong> {{ member.id }}</p>
+            <p><strong>Squad:</strong> {{ member.squad || 'Unassigned' }}</p>
           </div>
           <div class="info-right">
             <p>CALLSIGN AVAILABLE</p>
@@ -59,7 +60,7 @@ export default {
 <style scoped>
 .members-view {
   padding: 1rem;
-  color: #dce6f1; /* UNSC style light blue text */
+  color: #dce6f1;
   font-family: 'Consolas', 'Courier New', monospace;
 }
 
@@ -71,9 +72,9 @@ export default {
 }
 
 .member-card {
-  background: rgba(0, 10, 30, 0.7); /* dark navy transparent */
+  background: rgba(0, 10, 30, 0.7);
   padding: 1rem;
-  border-left: 4px solid #1e90ff; /* UNSC-style accent */
+  border-left: 4px solid #1e90ff;
   border-radius: 0.3rem;
   box-shadow: 0 0 8px rgba(0,0,0,0.5);
   display: flex;
