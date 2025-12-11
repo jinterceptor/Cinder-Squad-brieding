@@ -47,10 +47,12 @@ export default {
       planetPath: Config.planetPath,
       header: Config.header,
       pilotSpecialInfo: Config.pilotSpecialInfo,
+
       missions: [],
       events: [],
-      members: [], // raw MembersMaster
-      orbat: [],   // merged RefData + MembersMaster
+
+      members: [], // MembersMaster: rank, name, joinDate, id, certifications, squad
+      orbat: [],   // optional later grouping structure
       reserves: [],
     };
   },
@@ -58,13 +60,20 @@ export default {
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
-    // Load missions and events as before
+    // Local content
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
-    // Load live Google Sheet CSVs
-    this.loadMembersCSV("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv");
-    this.loadRefDataCSV("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv");
+    // Load sheets: RefData AFTER members so we can match names
+    const membersUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv";
+
+    const refDataUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
+
+    this.loadMembersCSV(membersUrl).then(() => {
+      this.loadRefDataCSV(refDataUrl);
+    });
   },
 
   mounted() {
@@ -81,25 +90,44 @@ export default {
       headEl.appendChild(faviconEl);
     },
 
+    // ---- MembersMaster ----
     async loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
           skipEmptyLines: true,
+          header: false,         // we'll handle rows manually
           complete: (results) => {
             const rows = results.data;
 
-            // Row 2 (index 1) has the real headers
-            const headers = rows[1];
+            // Row 0: title row (Member Details / Certifications etc.) -> ignore
+            // Row 1: actual headers -> we already know their positions
+            // Data starts at row index 2
+            const dataRows = rows.slice(2);
 
-            // Data starts from row 3 (index 2)
-            const members = rows.slice(2).map((row) => ({
-              rank: row[0]?.trim() || "",
-              name: row[1]?.trim() || "",
-              joinDate: row[3]?.trim() || "",
-              id: row[4]?.trim() || "",
-              certifications: row.slice(5).map((c) => c?.trim()).filter((c) => c),
-            })).filter((m) => m.name);
+            const members = dataRows
+              .map((row) => {
+                const rank = row[0]?.trim() || "";
+                const name = row[1]?.trim() || "";
+                const joinDate = row[3]?.trim() || "";
+                const id = row[4]?.trim() || "";
+                const certs = row
+                  .slice(5)
+                  .map((c) => c?.trim())
+                  .filter((c) => c);
+
+                if (!name) return null;
+
+                return {
+                  rank,
+                  name,
+                  joinDate,
+                  id,
+                  certifications: certs,
+                  squad: "", // will be filled from RefData
+                };
+              })
+              .filter(Boolean);
 
             console.log("Members loaded:", members.length);
             this.members = members;
@@ -113,24 +141,68 @@ export default {
       });
     },
 
+    // ---- RefData: squad assignments ----
     async loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
           skipEmptyLines: true,
+          header: false,      // we'll find "Squad Member" / "Squads" ourselves
           complete: (results) => {
             const rows = results.data;
 
-            // Column N = Squad Assignments, Column O = Squads
-            const orbatEntries = rows.slice(1).map((row) => ({
-              squadAssignment: row[13]?.trim() || "",
-              squad: row[14]?.trim() || "",
-              name: row[1]?.trim() || "", // fallback name column if needed
-            })).filter((o) => o.squadAssignment);
+            // Row 1 (index 1) should contain "Squad Member" and "Squads" in columns N/O
+            const headerRow = rows[1] || [];
+            const memberColIndex = headerRow.findIndex(
+              (cell) => String(cell).trim().toLowerCase() === "squad member"
+            );
+            const squadColIndex = headerRow.findIndex(
+              (cell) => String(cell).trim().toLowerCase() === "squads"
+            );
 
-            console.log("ORBAT loaded:", orbatEntries.length);
-            this.orbat = orbatEntries;
-            resolve(orbatEntries);
+            if (memberColIndex === -1 || squadColIndex === -1) {
+              console.error("Could not find 'Squad Member' or 'Squads' columns in RefData.", headerRow);
+              resolve([]);
+              return;
+            }
+
+            // Data rows start after headerRow -> index 2 onwards
+            const assignments = rows
+              .slice(2)
+              .map((row) => {
+                const memberLabel = row[memberColIndex]?.trim();
+                const squadName = row[squadColIndex]?.trim();
+                if (!memberLabel || !squadName) return null;
+                return { memberLabel, squad: squadName };
+              })
+              .filter(Boolean);
+
+            console.log("Raw squad assignments:", assignments.length);
+
+            // Apply squad to members: RefData uses "Rank Name" for memberLabel
+            this.members = this.members.map((m) => {
+              const fullLabel = `${m.rank} ${m.name}`.trim();
+              const match = assignments.find((a) => a.memberLabel === fullLabel);
+              return {
+                ...m,
+                squad: match ? match.squad : "",
+              };
+            });
+
+            // Optional: build a basic orbat structure (squads with members)
+            const orbatMap = {};
+            this.members.forEach((m) => {
+              if (!m.squad) return;
+              if (!orbatMap[m.squad]) orbatMap[m.squad] = [];
+              orbatMap[m.squad].push(m);
+            });
+            this.orbat = Object.entries(orbatMap).map(([squad, members]) => ({
+              squad,
+              members,
+            }));
+
+            console.log("Squads in ORBAT:", this.orbat.length);
+            resolve(this.orbat);
           },
           error: (err) => {
             console.error("Error loading RefData CSV:", err);
@@ -140,35 +212,38 @@ export default {
       });
     },
 
+    // ---- Missions / Events (unchanged) ----
     async importMissions(files) {
       const filePromises = Object.keys(files).map((path) => files[path]());
       const fileContents = await Promise.all(filePromises);
       fileContents.forEach((content) => {
+        const lines = content.split("\n");
         const mission = {
-          slug: content.split("\n")[0],
-          name: content.split("\n")[1],
-          status: content.split("\n")[2],
-          content: content.split("\n").splice(3).join("\n"),
+          slug: lines[0],
+          name: lines[1],
+          status: lines[2],
+          content: lines.slice(3).join("\n"),
         };
-        this.missions = [...this.missions, mission];
+        this.missions.push(mission);
       });
-      this.missions = this.missions.sort((a, b) => b.slug - a.slug);
+      this.missions.sort((a, b) => b.slug - a.slug);
     },
 
     async importEvents(files) {
       const filePromises = Object.keys(files).map((path) => files[path]());
       const fileContents = await Promise.all(filePromises);
       fileContents.forEach((content) => {
+        const lines = content.split("\n");
         const event = {
-          title: content.split("\n")[0],
-          location: content.split("\n")[1],
-          time: content.split("\n")[2],
-          thumbnail: content.split("\n")[3],
-          content: content.split("\n").splice(4).join("\n"),
+          title: lines[0],
+          location: lines[1],
+          time: lines[2],
+          thumbnail: lines[3],
+          content: lines.slice(4).join("\n"),
         };
-        this.events = [...this.events, event];
+        this.events.push(event);
       });
-      this.events = this.events.reverse();
+      this.events.reverse();
     },
   },
 };
