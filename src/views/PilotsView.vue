@@ -8,7 +8,6 @@
       <div class="rhombus-back">&nbsp;</div>
     </div>
 
-    <!-- Make this whole content area tall and let it scroll -->
     <div class="section-content-container">
       <div class="orbat-wrapper">
         <div v-if="!squadsToShow.length">
@@ -185,28 +184,25 @@ export default {
 </script>
 
 <style scoped>
+/* Override the default narrow Lancer section for THIS view only */
 .section-container {
-  padding: 1rem;
+  padding: 1rem 2rem;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
-  /* give the whole view height so the content can fill it */
-  height: calc(100vh - 80px);
+  width: 100% !important;      /* take all available width */
+  max-width: 1400px;           /* keep it sane on ultra-wide */
   box-sizing: border-box;
+  margin: 0 auto;              /* center within router-view area */
 }
 
-/* make this area fill the section and hold the scrollable ORBAT */
+/* Make the inner content also span full width */
 .section-content-container {
-  height: calc(100% - 52px); /* subtract header strip height */
-  display: flex;
+  width: 100% !important;
 }
 
-/* ORBAT wrapper fills the available space and can scroll */
 .orbat-wrapper {
-  flex: 1;
   width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  padding-right: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 /* 3-column squad grid by default */
