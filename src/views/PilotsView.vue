@@ -131,7 +131,7 @@ export default {
   computed: {
     squadsToShow() {
       if (this.orbat && this.orbat.length) {
-        // sort for a bit of consistency
+        // Sort for consistency
         return this.orbat
           .slice()
           .sort((a, b) =>
@@ -193,12 +193,26 @@ export default {
   margin: 0 auto;
 }
 
-/* 3-column squad grid */
+/* 3-column squad grid by default */
 .squad-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
   margin-top: 1rem;
+}
+
+/* Medium screens: 2 columns */
+@media (max-width: 900px) {
+  .squad-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Small screens: 1 column */
+@media (max-width: 600px) {
+  .squad-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* SQUAD TILE */
@@ -247,7 +261,7 @@ export default {
 
 .squad-meta h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   color: #e0f0ff;
   letter-spacing: 0.05em;
 }
