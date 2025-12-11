@@ -184,131 +184,130 @@ export default {
 </script>
 
 <style scoped>
-/* Make this view fill the router area's width */
+/* Make this view span the full router-view width */
 .section-container {
-  padding: 2rem 3rem;
+  padding: 2.5rem 3rem;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
   width: 100% !important;
-  max-width: 1800px;
+  max-width: 2200px; /* increased horizontal space */
   margin: 0 auto;
   box-sizing: border-box;
 }
 
-/* Inner container full width */
 .section-content-container {
   width: 100% !important;
 }
 
 .orbat-wrapper {
   width: 100%;
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
 }
 
-/* === BIG DASHBOARD STRIPS === */
-/* 3 large tiles per row on desktop */
+/* === SQUAD GRID ====================================================== */
+/* 3 large tiles */
 .squad-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2rem;
+  gap: 3rem; /* widened horizontally */
   margin-top: 2rem;
-  align-items: stretch;
 }
 
-/* Medium screens: 2 big tiles per row */
-@media (max-width: 1200px) {
+/* Medium screens */
+@media (max-width: 1400px) {
   .squad-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-/* Small screens: 1 tile per row */
-@media (max-width: 800px) {
+/* Small screens */
+@media (max-width: 900px) {
   .squad-grid {
     grid-template-columns: 1fr;
   }
 }
 
-/* SQUAD TILE: tall dashboard panel */
+/* === SQUAD TILE ====================================================== */
 .squad-card {
   background: radial-gradient(
       circle at top left,
       rgba(30, 144, 255, 0.25),
-      transparent 55%
+      transparent 65%
     ),
-    rgba(0, 10, 30, 0.92);
-  border: 2px solid rgba(30, 144, 255, 0.8);
-  border-radius: 0.9rem;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
+    rgba(0, 10, 30, 0.9);
+  border: 2px solid rgba(30, 144, 255, 0.85);
+  border-radius: 0.8rem;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
   cursor: pointer;
-  min-height: 260px;          /* gives it “strip” height even when collapsed */
-  display: flex;
-  flex-direction: column;
+
+  /* ↓↓↓ reduced 20% from previous */
+  min-height: 210px;
+
+  /* ↓↓↓ slightly wider presentation */
+  padding-right: 1.5rem;
 }
 
-/* SQUAD HEADER / FACE – large, chunky */
+/* === SQUAD HEADER (reduced vertical space) ============================ */
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  padding: 1.6rem 2rem;
-  background: linear-gradient(
-    90deg,
-    rgba(10, 25, 55, 0.98),
-    rgba(10, 25, 55, 0.7)
-  );
+
+  /* ↓↓↓ padding reduced from 2rem → 1.4rem (~30%) */
+  padding: 1.4rem 2rem;
 }
 
-/* Oversized insignia block */
+/* === INSIGNIA BLOCK (reduced 20%) ==================================== */
 .squad-insignia {
-  width: 110px;
-  height: 110px;
-  border-radius: 0.8rem;
-  border: 3px solid #1e90ff;
+  width: 95px;  /* was 120px */
+  height: 95px; /* was 120px */
+  border-radius: 0.6rem;
+  border: 4px solid #1e90ff;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 1.8rem;
-  font-size: 1.8rem;
+  margin-right: 1.6rem;
+  font-size: 2rem; /* was 2.4rem */
   font-weight: bold;
   color: #1e90ff;
   background: rgba(0, 0, 0, 0.7);
   text-align: center;
 }
 
-/* Big squad text */
+/* === SQUAD TITLE ====================================================== */
 .squad-meta h2 {
   margin: 0;
-  font-size: 2rem;
+
+  /* horizontally bigger title */
+  font-size: 2.3rem; /* slightly increased */
   color: #e0f0ff;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .squad-subtitle {
-  margin: 0.3rem 0 0 0;
-  font-size: 1rem;
+  margin: 0.2rem 0 0;
+  font-size: 1.1rem; /* slightly reduced vertically */
   color: #9ec5e6;
   text-transform: uppercase;
 }
 
 .squad-count {
-  margin: 0.6rem 0 0 0;
-  font-size: 0.95rem;
+  margin: 0.4rem 0 0;
+  font-size: 1rem;
   color: #7aa7c7;
 }
 
-/* Large chevron for expand/collapse */
+/* Arrow */
 .squad-chevron {
-  font-size: 2rem;
+  font-size: 1.8rem;
   color: #9ec5e6;
-  margin-left: 1.2rem;
+  margin-left: 1.3rem;
 }
 
-/* EXPAND ANIMATION */
+/* Expansion animation */
 .squad-expand-enter-active,
 .squad-expand-leave-active {
-  transition: all 0.2s ease-out;
+  transition: all 0.25s ease-out;
 }
 .squad-expand-enter-from,
 .squad-expand-leave-to {
@@ -321,32 +320,36 @@ export default {
   max-height: 2000px;
 }
 
-/* MEMBERS SECTION – fills remaining vertical space when open */
+/* === EXPANDED MEMBERS AREA ============================================ */
 .squad-members {
-  padding: 1.4rem 1.8rem 1.8rem 1.8rem;
-  background: rgba(0, 5, 20, 0.95);
-  border-top: 1px solid rgba(30, 144, 255, 0.5);
-  flex: 1;
+  padding: 1.2rem 2rem 1.6rem 2rem; /* reduced vertical padding */
+  background: rgba(0, 5, 20, 0.96);
+  border-top: 1px solid rgba(30, 144, 255, 0.7);
 }
 
-/* Bigger member tiles */
+/* Member cards grid */
 .members-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 1.4rem;
+
+  /* horizontally increased, vertically reduced layout */
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+
+  gap: 1.2rem;
   margin-top: 0.6rem;
 }
 
+/* === MEMBER CARD ======================================================= */
 .member-card {
-  background: rgba(0, 10, 30, 0.9);
-  padding: 1rem;
+  background: rgba(0, 10, 30, 0.95);
+  padding: 0.9rem 1.1rem;
   border-left: 4px solid #1e90ff;
-  border-radius: 0.4rem;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+  border-radius: 0.3rem;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
 }
 
+/* Member card text sizes reduced slightly vertically */
 .member-header h3 {
   margin: 0;
   font-size: 1.3rem;
@@ -354,40 +357,40 @@ export default {
 }
 
 .subtitle {
-  font-size: 1rem;
+  font-size: 0.95rem;
   color: #9ec5e6;
 }
 
 .member-info {
   display: flex;
   justify-content: space-between;
-  margin: 0.6rem 0;
-  font-size: 0.95rem;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
 }
 
 .member-skills {
   margin: 0.5rem 0;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .skills-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
 }
 
 .skill-tag {
   background: #1e90ff;
   color: #fff;
-  padding: 0.3rem 0.6rem;
+  padding: 0.2rem 0.5rem;
   border-radius: 0.25rem;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .member-footer {
-  font-size: 0.8rem;
-  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
   color: #7aa7c7;
 }
 </style>
