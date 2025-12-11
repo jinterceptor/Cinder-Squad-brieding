@@ -14,40 +14,250 @@
       </div>
 
       <template v-else>
-        <!-- COMMAND ELEMENT (single big tile, centered) -->
+        <!-- COMMAND ELEMENT: single big tile, centered -->
         <div v-if="commandSquad" class="row row-command">
           <div class="row-inner">
-            <SquadTile
-              :squad="commandSquad"
-              :open="isOpen(commandSquad.squad)"
-              @toggle="toggleSquad"
-            />
+            <div
+              class="squad-card squad-card-command"
+              @click="toggleSquad(commandSquad.squad)"
+            >
+              <div class="squad-header">
+                <div class="squad-insignia">
+                  <span>{{ squadInitials(commandSquad.squad) }}</span>
+                </div>
+
+                <div class="squad-meta">
+                  <h2>{{ commandSquad.squad }}</h2>
+                  <p class="squad-subtitle">
+                    {{ squadDescriptor(commandSquad.squad) }}
+                  </p>
+                  <p class="squad-count">
+                    {{ commandSquad.members.length }} PERSONNEL REGISTERED
+                  </p>
+                </div>
+
+                <div class="squad-chevron" :class="{ open: isOpen(commandSquad.squad) }">
+                  <span v-if="isOpen(commandSquad.squad)">▼</span>
+                  <span v-else>▶</span>
+                </div>
+              </div>
+
+              <transition name="squad-expand">
+                <div
+                  v-if="isOpen(commandSquad.squad)"
+                  class="squad-members"
+                >
+                  <div class="members-grid">
+                    <div
+                      v-for="member in commandSquad.members"
+                      :key="member.id || member.name"
+                      class="member-card"
+                    >
+                      <div class="member-header">
+                        <h3>{{ member.name.toUpperCase() }}</h3>
+                        <span class="subtitle">({{ member.rank }})</span>
+                      </div>
+
+                      <div class="member-info">
+                        <div class="info-left">
+                          <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
+                          <p><strong>Member ID:</strong> {{ member.id }}</p>
+                        </div>
+                        <div class="info-right">
+                          <p>CALLSIGN AVAILABLE</p>
+                          <p>IDENTITY VERIFIED</p>
+                          <p>DATA REGISTERED</p>
+                        </div>
+                      </div>
+
+                      <div class="member-skills">
+                        <p><strong>Certifications:</strong></p>
+                        <div class="skills-tags">
+                          <span
+                            v-for="(cert, index) in member.certifications"
+                            :key="index"
+                            class="skill-tag"
+                          >
+                            {{ cert }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="member-footer">
+                        <p>BIOMETRIC RECORD VALID</p>
+                        <p>UNSC SYSTEMS DATABASE</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </div>
 
-        <!-- CHALK LINE (3 big tiles across) -->
+        <!-- CHALK LINE: three tiles across -->
         <div v-if="chalkSquads.length" class="row row-chalks">
           <div class="row-inner chalk-row">
-            <SquadTile
+            <div
               v-for="sq in chalkSquads"
               :key="sq.squad"
-              :squad="sq"
-              :open="isOpen(sq.squad)"
-              @toggle="toggleSquad"
-            />
+              class="squad-card squad-card-chalk"
+              @click="toggleSquad(sq.squad)"
+            >
+              <div class="squad-header">
+                <div class="squad-insignia">
+                  <span>{{ squadInitials(sq.squad) }}</span>
+                </div>
+
+                <div class="squad-meta">
+                  <h2>{{ sq.squad }}</h2>
+                  <p class="squad-subtitle">
+                    {{ squadDescriptor(sq.squad) }}
+                  </p>
+                  <p class="squad-count">
+                    {{ sq.members.length }} PERSONNEL REGISTERED
+                  </p>
+                </div>
+
+                <div class="squad-chevron" :class="{ open: isOpen(sq.squad) }">
+                  <span v-if="isOpen(sq.squad)">▼</span>
+                  <span v-else>▶</span>
+                </div>
+              </div>
+
+              <transition name="squad-expand">
+                <div
+                  v-if="isOpen(sq.squad)"
+                  class="squad-members"
+                >
+                  <div class="members-grid">
+                    <div
+                      v-for="member in sq.members"
+                      :key="member.id || member.name"
+                      class="member-card"
+                    >
+                      <div class="member-header">
+                        <h3>{{ member.name.toUpperCase() }}</h3>
+                        <span class="subtitle">({{ member.rank }})</span>
+                      </div>
+
+                      <div class="member-info">
+                        <div class="info-left">
+                          <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
+                          <p><strong>Member ID:</strong> {{ member.id }}</p>
+                        </div>
+                        <div class="info-right">
+                          <p>CALLSIGN AVAILABLE</p>
+                          <p>IDENTITY VERIFIED</p>
+                          <p>DATA REGISTERED</p>
+                        </div>
+                      </div>
+
+                      <div class="member-skills">
+                        <p><strong>Certifications:</strong></p>
+                        <div class="skills-tags">
+                          <span
+                            v-for="(cert, index) in member.certifications"
+                            :key="index"
+                            class="skill-tag"
+                          >
+                            {{ cert }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="member-footer">
+                        <p>BIOMETRIC RECORD VALID</p>
+                        <p>UNSC SYSTEMS DATABASE</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </div>
 
-        <!-- OTHER ELEMENTS (stacked below) -->
+        <!-- OTHER ELEMENTS: stacked tiles -->
         <div v-if="otherSquads.length" class="row row-others">
           <div class="row-inner others-column">
-            <SquadTile
+            <div
               v-for="sq in otherSquads"
               :key="sq.squad"
-              :squad="sq"
-              :open="isOpen(sq.squad)"
-              @toggle="toggleSquad"
-            />
+              class="squad-card squad-card-other"
+              @click="toggleSquad(sq.squad)"
+            >
+              <div class="squad-header">
+                <div class="squad-insignia">
+                  <span>{{ squadInitials(sq.squad) }}</span>
+                </div>
+
+                <div class="squad-meta">
+                  <h2>{{ sq.squad }}</h2>
+                  <p class="squad-subtitle">
+                    {{ squadDescriptor(sq.squad) }}
+                  </p>
+                  <p class="squad-count">
+                    {{ sq.members.length }} PERSONNEL REGISTERED
+                  </p>
+                </div>
+
+                <div class="squad-chevron" :class="{ open: isOpen(sq.squad) }">
+                  <span v-if="isOpen(sq.squad)">▼</span>
+                  <span v-else>▶</span>
+                </div>
+              </div>
+
+              <transition name="squad-expand">
+                <div
+                  v-if="isOpen(sq.squad)"
+                  class="squad-members"
+                >
+                  <div class="members-grid">
+                    <div
+                      v-for="member in sq.members"
+                      :key="member.id || member.name"
+                      class="member-card"
+                    >
+                      <div class="member-header">
+                        <h3>{{ member.name.toUpperCase() }}</h3>
+                        <span class="subtitle">({{ member.rank }})</span>
+                      </div>
+
+                      <div class="member-info">
+                        <div class="info-left">
+                          <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
+                          <p><strong>Member ID:</strong> {{ member.id }}</p>
+                        </div>
+                        <div class="info-right">
+                          <p>CALLSIGN AVAILABLE</p>
+                          <p>IDENTITY VERIFIED</p>
+                          <p>DATA REGISTERED</p>
+                        </div>
+                      </div>
+
+                      <div class="member-skills">
+                        <p><strong>Certifications:</strong></p>
+                        <div class="skills-tags">
+                          <span
+                            v-for="(cert, index) in member.certifications"
+                            :key="index"
+                            class="skill-tag"
+                          >
+                            {{ cert }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="member-footer">
+                        <p>BIOMETRIC RECORD VALID</p>
+                        <p>UNSC SYSTEMS DATABASE</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </div>
       </template>
@@ -56,130 +266,8 @@
 </template>
 
 <script>
-/**
- * Small local component for a squad tile + its expandable members.
- * Keeps the main template cleaner.
- */
-const SquadTile = {
-  name: "SquadTile",
-  props: {
-    squad: {
-      type: Object,
-      required: true, // { squad: string, members: [] }
-    },
-    open: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  emits: ["toggle"],
-  methods: {
-    squadInitials(name) {
-      if (!name) return "UNSC";
-      const parts = String(name).trim().split(/\s+/);
-      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-      return parts
-        .map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
-        .join("")
-        .toUpperCase();
-    },
-    squadDescriptor(name) {
-      const n = String(name).toLowerCase();
-      if (n.includes("chalk")) return "INFANTRY CHALK // UNSC GROUND FORCES";
-      if (n.includes("command") || n.includes("hq"))
-        return "COMMAND ELEMENT // UNSC GROUND FORCES";
-      if (n.includes("pilot") || n.includes("air") || n.includes("wing"))
-        return "AVIATION ELEMENT // UNSC AIR ASSETS";
-      return "UNSC REGISTERED ELEMENT";
-    },
-    onToggle() {
-      this.$emit("toggle", this.squad.squad);
-    },
-  },
-  template: `
-    <div class="squad-card">
-      <!-- Squad header / tile face -->
-      <div class="squad-header" @click="onToggle">
-        <div class="squad-insignia">
-          <span>{{ squadInitials(squad.squad) }}</span>
-        </div>
-
-        <div class="squad-meta">
-          <h2>{{ squad.squad }}</h2>
-          <p class="squad-subtitle">
-            {{ squadDescriptor(squad.squad) }}
-          </p>
-          <p class="squad-count">
-            {{ squad.members.length }} PERSONNEL REGISTERED
-          </p>
-        </div>
-
-        <div class="squad-chevron" :class="{ open: open }">
-          <span v-if="open">▼</span>
-          <span v-else>▶</span>
-        </div>
-      </div>
-
-      <!-- Members inside squad -->
-      <transition name="squad-expand">
-        <div v-if="open" class="squad-members">
-          <div class="members-grid">
-            <div
-              v-for="member in squad.members"
-              :key="member.id || member.name"
-              class="member-card"
-            >
-              <!-- Header -->
-              <div class="member-header">
-                <h3>{{ member.name.toUpperCase() }}</h3>
-                <span class="subtitle">({{ member.rank }})</span>
-              </div>
-
-              <!-- Info blocks -->
-              <div class="member-info">
-                <div class="info-left">
-                  <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
-                  <p><strong>Member ID:</strong> {{ member.id }}</p>
-                </div>
-                <div class="info-right">
-                  <p>CALLSIGN AVAILABLE</p>
-                  <p>IDENTITY VERIFIED</p>
-                  <p>DATA REGISTERED</p>
-                </div>
-              </div>
-
-              <!-- Skills / Certifications -->
-              <div class="member-skills">
-                <p><strong>Certifications:</strong></p>
-                <div class="skills-tags">
-                  <span
-                    v-for="(cert, index) in member.certifications"
-                    :key="index"
-                    class="skill-tag"
-                  >
-                    {{ cert }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Footer / Biometric -->
-              <div class="member-footer">
-                <p>BIOMETRIC RECORD VALID</p>
-                <p>UNSC SYSTEMS DATABASE</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </div>
-  `,
-};
-
 export default {
   name: "PilotsView",
-  components: {
-    SquadTile,
-  },
   props: {
     animate: {
       type: Boolean,
@@ -203,7 +291,6 @@ export default {
     };
   },
   computed: {
-    // Base sorted list of squads
     allSquads() {
       if (this.orbat && this.orbat.length) {
         return this.orbat
@@ -248,13 +335,13 @@ export default {
     },
 
     otherSquads() {
-      const skipNames = new Set(
+      const skip = new Set(
         [
-          this.commandSquad?.squad,
+          this.commandSquad ? this.commandSquad.squad : null,
           ...this.chalkSquads.map((c) => c.squad),
         ].filter(Boolean),
       );
-      return this.allSquads.filter((sq) => !skipNames.has(sq.squad));
+      return this.allSquads.filter((sq) => !skip.has(sq.squad));
     },
   },
   methods: {
@@ -266,6 +353,24 @@ export default {
     },
     isOpen(squadName) {
       return !!this.openSquads[squadName];
+    },
+    squadInitials(name) {
+      if (!name) return "UNSC";
+      const parts = String(name).trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+      return parts
+        .map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
+        .join("")
+        .toUpperCase();
+    },
+    squadDescriptor(name) {
+      const n = String(name).toLowerCase();
+      if (n.includes("chalk")) return "INFANTRY CHALK // UNSC GROUND FORCES";
+      if (n.includes("command") || n.includes("hq"))
+        return "COMMAND ELEMENT // UNSC GROUND FORCES";
+      if (n.includes("pilot") || n.includes("air") || n.includes("wing"))
+        return "AVIATION ELEMENT // UNSC AIR ASSETS";
+      return "UNSC REGISTERED ELEMENT";
     },
   },
 };
@@ -283,7 +388,7 @@ export default {
   margin: 0 auto;
 }
 
-/* ROW STRUCTURE */
+/* ROWS */
 .row {
   margin-top: 1rem;
 }
@@ -292,7 +397,7 @@ export default {
   width: 100%;
 }
 
-/* Command row: single big tile */
+/* Command row: single big tile centered */
 .row-command .row-inner {
   display: flex;
   justify-content: center;
@@ -308,14 +413,14 @@ export default {
   flex: 1 1 calc(33.333% - 1rem);
 }
 
-/* Other squads: stacked (one per row) */
+/* Other squads stacked */
 .others-column {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
 }
 
-/* SQUAD TILE GENERIC */
+/* SQUAD TILE */
 .squad-card {
   background: radial-gradient(
       circle at top left,
@@ -327,15 +432,23 @@ export default {
   border-radius: 0.5rem;
   box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
   overflow: hidden;
+  cursor: pointer;
 }
 
-/* SQUAD HEADER / FACE OF TILE */
+.squad-card-command {
+  width: 100%;
+}
+
+.squad-card-chalk {
+  min-width: 260px;
+}
+
+/* SQUAD HEADER */
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   padding: 0.9rem 1rem;
-  cursor: pointer;
   background: linear-gradient(
     90deg,
     rgba(10, 25, 55, 0.95),
@@ -401,7 +514,7 @@ export default {
   max-height: 1600px;
 }
 
-/* MEMBERS INSIDE SQUAD TILE */
+/* MEMBERS */
 .squad-members {
   padding: 0.6rem 1rem 1rem 1rem;
   background: rgba(0, 5, 20, 0.9);
