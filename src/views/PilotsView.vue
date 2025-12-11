@@ -8,105 +8,178 @@
       <div class="rhombus-back">&nbsp;</div>
     </div>
 
-    <div class="section-content-container">
-      <!-- No data yet -->
-      <div v-if="!squadsToShow.length">
+    <div class="section-content-container orbat-wrapper">
+      <div v-if="!allSquads.length">
         Loading squads and members...
       </div>
 
-      <!-- Squad tiles -->
-      <div v-else class="squad-grid">
-        <div
-          v-for="squad in squadsToShow"
-          :key="squad.squad"
-          class="squad-card"
-        >
-          <!-- Squad header / tile face -->
-          <div class="squad-header" @click="toggleSquad(squad.squad)">
-            <div class="squad-insignia">
-              <!-- Placeholder for future emblem; currently shows squad initials -->
-              <span>{{ squadInitials(squad.squad) }}</span>
-            </div>
-
-            <div class="squad-meta">
-              <h2>{{ squad.squad }}</h2>
-              <p class="squad-subtitle">
-                {{ squadDescriptor(squad.squad) }}
-              </p>
-              <p class="squad-count">
-                {{ squad.members.length }} PERSONNEL REGISTERED
-              </p>
-            </div>
-
-            <div class="squad-chevron" :class="{ open: isOpen(squad.squad) }">
-              <span v-if="isOpen(squad.squad)">▼</span>
-              <span v-else>▶</span>
-            </div>
+      <template v-else>
+        <!-- COMMAND ELEMENT (single big tile, centered) -->
+        <div v-if="commandSquad" class="row row-command">
+          <div class="row-inner">
+            <SquadTile
+              :squad="commandSquad"
+              :open="isOpen(commandSquad.squad)"
+              @toggle="toggleSquad"
+            />
           </div>
-
-          <!-- Members inside squad -->
-          <transition name="squad-expand">
-            <div
-              v-if="isOpen(squad.squad)"
-              class="squad-members"
-            >
-              <div class="members-grid">
-                <div
-                  v-for="member in squad.members"
-                  :key="member.id || member.name"
-                  class="member-card"
-                >
-                  <!-- Header -->
-                  <div class="member-header">
-                    <h3>{{ member.name.toUpperCase() }}</h3>
-                    <span class="subtitle">({{ member.rank }})</span>
-                  </div>
-
-                  <!-- Info blocks -->
-                  <div class="member-info">
-                    <div class="info-left">
-                      <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
-                      <p><strong>Member ID:</strong> {{ member.id }}</p>
-                    </div>
-                    <div class="info-right">
-                      <p>CALLSIGN AVAILABLE</p>
-                      <p>IDENTITY VERIFIED</p>
-                      <p>DATA REGISTERED</p>
-                    </div>
-                  </div>
-
-                  <!-- Skills / Certifications -->
-                  <div class="member-skills">
-                    <p><strong>Certifications:</strong></p>
-                    <div class="skills-tags">
-                      <span
-                        v-for="(cert, index) in member.certifications"
-                        :key="index"
-                        class="skill-tag"
-                      >
-                        {{ cert }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Footer / Biometric -->
-                  <div class="member-footer">
-                    <p>BIOMETRIC RECORD VALID</p>
-                    <p>UNSC SYSTEMS DATABASE</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </transition>
         </div>
-      </div>
+
+        <!-- CHALK LINE (3 big tiles across) -->
+        <div v-if="chalkSquads.length" class="row row-chalks">
+          <div class="row-inner chalk-row">
+            <SquadTile
+              v-for="sq in chalkSquads"
+              :key="sq.squad"
+              :squad="sq"
+              :open="isOpen(sq.squad)"
+              @toggle="toggleSquad"
+            />
+          </div>
+        </div>
+
+        <!-- OTHER ELEMENTS (stacked below) -->
+        <div v-if="otherSquads.length" class="row row-others">
+          <div class="row-inner others-column">
+            <SquadTile
+              v-for="sq in otherSquads"
+              :key="sq.squad"
+              :squad="sq"
+              :open="isOpen(sq.squad)"
+              @toggle="toggleSquad"
+            />
+          </div>
+        </div>
+      </template>
     </div>
   </section>
 </template>
 
 <script>
+/**
+ * Small local component for a squad tile + its expandable members.
+ * Keeps the main template cleaner.
+ */
+const SquadTile = {
+  name: "SquadTile",
+  props: {
+    squad: {
+      type: Object,
+      required: true, // { squad: string, members: [] }
+    },
+    open: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  emits: ["toggle"],
+  methods: {
+    squadInitials(name) {
+      if (!name) return "UNSC";
+      const parts = String(name).trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+      return parts
+        .map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
+        .join("")
+        .toUpperCase();
+    },
+    squadDescriptor(name) {
+      const n = String(name).toLowerCase();
+      if (n.includes("chalk")) return "INFANTRY CHALK // UNSC GROUND FORCES";
+      if (n.includes("command") || n.includes("hq"))
+        return "COMMAND ELEMENT // UNSC GROUND FORCES";
+      if (n.includes("pilot") || n.includes("air") || n.includes("wing"))
+        return "AVIATION ELEMENT // UNSC AIR ASSETS";
+      return "UNSC REGISTERED ELEMENT";
+    },
+    onToggle() {
+      this.$emit("toggle", this.squad.squad);
+    },
+  },
+  template: `
+    <div class="squad-card">
+      <!-- Squad header / tile face -->
+      <div class="squad-header" @click="onToggle">
+        <div class="squad-insignia">
+          <span>{{ squadInitials(squad.squad) }}</span>
+        </div>
+
+        <div class="squad-meta">
+          <h2>{{ squad.squad }}</h2>
+          <p class="squad-subtitle">
+            {{ squadDescriptor(squad.squad) }}
+          </p>
+          <p class="squad-count">
+            {{ squad.members.length }} PERSONNEL REGISTERED
+          </p>
+        </div>
+
+        <div class="squad-chevron" :class="{ open: open }">
+          <span v-if="open">▼</span>
+          <span v-else>▶</span>
+        </div>
+      </div>
+
+      <!-- Members inside squad -->
+      <transition name="squad-expand">
+        <div v-if="open" class="squad-members">
+          <div class="members-grid">
+            <div
+              v-for="member in squad.members"
+              :key="member.id || member.name"
+              class="member-card"
+            >
+              <!-- Header -->
+              <div class="member-header">
+                <h3>{{ member.name.toUpperCase() }}</h3>
+                <span class="subtitle">({{ member.rank }})</span>
+              </div>
+
+              <!-- Info blocks -->
+              <div class="member-info">
+                <div class="info-left">
+                  <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
+                  <p><strong>Member ID:</strong> {{ member.id }}</p>
+                </div>
+                <div class="info-right">
+                  <p>CALLSIGN AVAILABLE</p>
+                  <p>IDENTITY VERIFIED</p>
+                  <p>DATA REGISTERED</p>
+                </div>
+              </div>
+
+              <!-- Skills / Certifications -->
+              <div class="member-skills">
+                <p><strong>Certifications:</strong></p>
+                <div class="skills-tags">
+                  <span
+                    v-for="(cert, index) in member.certifications"
+                    :key="index"
+                    class="skill-tag"
+                  >
+                    {{ cert }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Footer / Biometric -->
+              <div class="member-footer">
+                <p>BIOMETRIC RECORD VALID</p>
+                <p>UNSC SYSTEMS DATABASE</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </div>
+  `,
+};
+
 export default {
   name: "PilotsView",
+  components: {
+    SquadTile,
+  },
   props: {
     animate: {
       type: Boolean,
@@ -130,8 +203,8 @@ export default {
     };
   },
   computed: {
-    // Prefer structured ORBAT. If empty, fall back to a single "All Personnel" tile.
-    squadsToShow() {
+    // Base sorted list of squads
+    allSquads() {
       if (this.orbat && this.orbat.length) {
         return this.orbat
           .slice()
@@ -142,17 +215,46 @@ export default {
             }),
           );
       }
-
       if (this.members && this.members.length) {
         return [
           {
-            squad: "ALL PERSONNEL",
+            squad: "All Personnel",
             members: this.members,
           },
         ];
       }
-
       return [];
+    },
+
+    commandSquad() {
+      return (
+        this.allSquads.find((sq) =>
+          sq.squad.toLowerCase().includes("broadsword command"),
+        ) || null
+      );
+    },
+
+    chalkSquads() {
+      return this.allSquads
+        .filter((sq) => {
+          const n = sq.squad.toLowerCase();
+          return n.startsWith("chalk ") && !n.includes("actual");
+        })
+        .sort((a, b) => {
+          const anum = parseInt(a.squad.replace(/\D/g, ""), 10) || 0;
+          const bnum = parseInt(b.squad.replace(/\D/g, ""), 10) || 0;
+          return anum - bnum;
+        });
+    },
+
+    otherSquads() {
+      const skipNames = new Set(
+        [
+          this.commandSquad?.squad,
+          ...this.chalkSquads.map((c) => c.squad),
+        ].filter(Boolean),
+      );
+      return this.allSquads.filter((sq) => !skipNames.has(sq.squad));
     },
   },
   methods: {
@@ -165,25 +267,6 @@ export default {
     isOpen(squadName) {
       return !!this.openSquads[squadName];
     },
-    squadInitials(name) {
-      if (!name) return "UNSC";
-      // Take first letters of words: "Chalk 1" -> "C1", "Platoon HQ" -> "PHQ"
-      const parts = String(name).trim().split(/\s+/);
-      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-      return parts
-        .map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
-        .join("")
-        .toUpperCase();
-    },
-    squadDescriptor(name) {
-      const n = String(name).toLowerCase();
-      if (n.includes("chalk")) return "INFANTRY CHALK // UNSC GROUND FORCES";
-      if (n.includes("command") || n.includes("hq"))
-        return "COMMAND ELEMENT // UNSC GROUND FORCES";
-      if (n.includes("pilot") || n.includes("air"))
-        return "AVIATION ELEMENT // UNSC AIR ASSETS";
-      return "UNSC REGISTERED ELEMENT";
-    },
   },
 };
 </script>
@@ -195,14 +278,44 @@ export default {
   font-family: "Consolas", "Courier New", monospace;
 }
 
-/* SQUAD TILE GRID */
-.squad-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 1.2rem;
+.orbat-wrapper {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* ROW STRUCTURE */
+.row {
   margin-top: 1rem;
 }
 
+.row-inner {
+  width: 100%;
+}
+
+/* Command row: single big tile */
+.row-command .row-inner {
+  display: flex;
+  justify-content: center;
+}
+
+/* Chalk row: three tiles across */
+.chalk-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.chalk-row > .squad-card {
+  flex: 1 1 calc(33.333% - 1rem);
+}
+
+/* Other squads: stacked (one per row) */
+.others-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+/* SQUAD TILE GENERIC */
 .squad-card {
   background: radial-gradient(
       circle at top left,
@@ -216,7 +329,7 @@ export default {
   overflow: hidden;
 }
 
-/* SQUAD HEADER / FACE OF THE TILE */
+/* SQUAD HEADER / FACE OF TILE */
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -353,5 +466,12 @@ export default {
   font-size: 0.65rem;
   margin-top: 0.4rem;
   color: #7aa7c7;
+}
+
+/* Responsive: stack chalk tiles on narrow screens */
+@media (max-width: 900px) {
+  .chalk-row > .squad-card {
+    flex: 1 1 100%;
+  }
 }
 </style>
