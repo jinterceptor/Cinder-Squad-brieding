@@ -52,7 +52,7 @@ export default {
       events: [],
 
       members: [], // MembersMaster: rank, name, joinDate, id, certifications, squad
-      orbat: [],   // optional later grouping structure
+      orbat: [],   // squads + members
       reserves: [],
     };
   },
@@ -151,13 +151,20 @@ export default {
           complete: (results) => {
             const rows = results.data;
 
+            const normalize = (str) =>
+              String(str || "")
+                .replace(/"/g, "")        // remove quotes
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase();
+
             // Row 1 (index 1) should contain "Squad Member" and "Squads" in columns N/O
             const headerRow = rows[1] || [];
             const memberColIndex = headerRow.findIndex(
-              (cell) => String(cell).trim().toLowerCase() === "squad member"
+              (cell) => normalize(cell) === "squad member"
             );
             const squadColIndex = headerRow.findIndex(
-              (cell) => String(cell).trim().toLowerCase() === "squads"
+              (cell) => normalize(cell) === "squads"
             );
 
             if (memberColIndex === -1 || squadColIndex === -1) {
@@ -170,26 +177,58 @@ export default {
             const assignments = rows
               .slice(2)
               .map((row) => {
-                const memberLabel = row[memberColIndex]?.trim();
-                const squadName = row[squadColIndex]?.trim();
+                const memberLabel = row[memberColIndex];
+                const squadName = row[squadColIndex];
                 if (!memberLabel || !squadName) return null;
-                return { memberLabel, squad: squadName };
+
+                return {
+                  memberLabel: String(memberLabel).trim(),
+                  squad: String(squadName).trim(),
+                  normLabel: normalize(memberLabel), // e.g. 'pfc m. jinter'
+                };
               })
               .filter(Boolean);
 
             console.log("Raw squad assignments:", assignments.length);
 
-            // Apply squad to members: RefData uses "Rank Name" for memberLabel
+            // Helper to extract "core" info from MembersMaster name
+            const getMemberMatchInfo = (m) => {
+              const normName = normalize(m.name);          // 'm. jinter'
+              const parts = normName.split(" ");
+              const surname = parts[parts.length - 1] || "";
+              const initial = (parts[0] || "").charAt(0);  // 'm'
+              return { normName, surname, initial };
+            };
+
+            // Apply squad to members
             this.members = this.members.map((m) => {
-              const fullLabel = `${m.rank} ${m.name}`.trim();
-              const match = assignments.find((a) => a.memberLabel === fullLabel);
+              const { normName, surname, initial } = getMemberMatchInfo(m);
+
+              const match = assignments.find((a) => {
+                const label = a.normLabel; // e.g. 'pfc m. jinter' or 'sgt t. thy tyrsson'
+
+                // 1) Contains full "initial.surname" string, e.g. 'm. jinter'
+                if (label.includes(normName)) return true;
+
+                // 2) Contains surname and initial with dot, e.g. 'm.' + 'jinter'
+                const initialPattern = `${initial}.`;
+                if (label.includes(surname) && label.includes(initialPattern)) return true;
+
+                // 3) Fallback: last word of label matches surname
+                const labelParts = label.split(" ");
+                const labelSurname = labelParts[labelParts.length - 1] || "";
+                if (labelSurname === surname) return true;
+
+                return false;
+              });
+
               return {
                 ...m,
                 squad: match ? match.squad : "",
               };
             });
 
-            // Optional: build a basic orbat structure (squads with members)
+            // Build ORBAT structure (only squads with members)
             const orbatMap = {};
             this.members.forEach((m) => {
               if (!m.squad) return;
