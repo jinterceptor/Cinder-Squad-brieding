@@ -21,12 +21,23 @@
           :key="squad.squad"
           class="squad-card"
         >
-          <!-- Squad header (click to expand/collapse) -->
+          <!-- Squad header / tile face -->
           <div class="squad-header" @click="toggleSquad(squad.squad)">
-            <div class="squad-title">
-              <h2>{{ squad.squad }}</h2>
-              <p>{{ squad.members.length }} personnel</p>
+            <div class="squad-insignia">
+              <!-- Placeholder for future emblem; currently shows squad initials -->
+              <span>{{ squadInitials(squad.squad) }}</span>
             </div>
+
+            <div class="squad-meta">
+              <h2>{{ squad.squad }}</h2>
+              <p class="squad-subtitle">
+                {{ squadDescriptor(squad.squad) }}
+              </p>
+              <p class="squad-count">
+                {{ squad.members.length }} PERSONNEL REGISTERED
+              </p>
+            </div>
+
             <div class="squad-chevron" :class="{ open: isOpen(squad.squad) }">
               <span v-if="isOpen(squad.squad)">▼</span>
               <span v-else>▶</span>
@@ -115,14 +126,13 @@ export default {
   },
   data() {
     return {
-      openSquads: {}, // { [squadName]: true/false }
+      openSquads: {}, // { [squadName]: boolean }
     };
   },
   computed: {
-    // Prefer structured orbat (from RefData). If it's empty, fall back to a single pseudo-squad.
+    // Prefer structured ORBAT. If empty, fall back to a single "All Personnel" tile.
     squadsToShow() {
       if (this.orbat && this.orbat.length) {
-        // Sort squads nicely (handles "Chalk 1", "Chalk 2", etc.)
         return this.orbat
           .slice()
           .sort((a, b) =>
@@ -136,7 +146,7 @@ export default {
       if (this.members && this.members.length) {
         return [
           {
-            squad: "All Personnel",
+            squad: "ALL PERSONNEL",
             members: this.members,
           },
         ];
@@ -147,13 +157,32 @@ export default {
   },
   methods: {
     toggleSquad(squadName) {
-      this.$set
-        ? this.$set(this.openSquads, squadName, !this.openSquads[squadName])
-        : (this.openSquads[squadName] = !this.openSquads[squadName]);
+      this.openSquads = {
+        ...this.openSquads,
+        [squadName]: !this.openSquads[squadName],
+      };
     },
     isOpen(squadName) {
-      // default: start collapsed
       return !!this.openSquads[squadName];
+    },
+    squadInitials(name) {
+      if (!name) return "UNSC";
+      // Take first letters of words: "Chalk 1" -> "C1", "Platoon HQ" -> "PHQ"
+      const parts = String(name).trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+      return parts
+        .map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
+        .join("")
+        .toUpperCase();
+    },
+    squadDescriptor(name) {
+      const n = String(name).toLowerCase();
+      if (n.includes("chalk")) return "INFANTRY CHALK // UNSC GROUND FORCES";
+      if (n.includes("command") || n.includes("hq"))
+        return "COMMAND ELEMENT // UNSC GROUND FORCES";
+      if (n.includes("pilot") || n.includes("air"))
+        return "AVIATION ELEMENT // UNSC AIR ASSETS";
+      return "UNSC REGISTERED ELEMENT";
     },
   },
 };
@@ -166,50 +195,84 @@ export default {
   font-family: "Consolas", "Courier New", monospace;
 }
 
-/* Squad grid (each squad is a tile) */
+/* SQUAD TILE GRID */
 .squad-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 1.2rem;
   margin-top: 1rem;
 }
 
 .squad-card {
-  background: rgba(0, 10, 30, 0.85);
-  border-left: 4px solid #1e90ff;
-  border-radius: 0.3rem;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+  background: radial-gradient(
+      circle at top left,
+      rgba(30, 144, 255, 0.2),
+      transparent 55%
+    ),
+    rgba(0, 10, 30, 0.9);
+  border: 1px solid rgba(30, 144, 255, 0.6);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
   overflow: hidden;
 }
 
-/* Squad header (click to expand) */
+/* SQUAD HEADER / FACE OF THE TILE */
 .squad-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  padding: 0.7rem 1rem;
+  padding: 0.9rem 1rem;
   cursor: pointer;
-  background: rgba(10, 20, 40, 0.9);
+  background: linear-gradient(
+    90deg,
+    rgba(10, 25, 55, 0.95),
+    rgba(10, 25, 55, 0.7)
+  );
 }
 
-.squad-title h2 {
-  margin: 0;
-  font-size: 1.1rem;
+.squad-insignia {
+  width: 54px;
+  height: 54px;
+  border-radius: 0.4rem;
+  border: 2px solid #1e90ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.9rem;
+  font-size: 0.85rem;
+  font-weight: bold;
   color: #1e90ff;
+  background: rgba(0, 0, 0, 0.6);
+  text-align: center;
 }
 
-.squad-title p {
+.squad-meta h2 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 1.15rem;
+  color: #e0f0ff;
+  letter-spacing: 0.05em;
+}
+
+.squad-subtitle {
+  margin: 0.1rem 0 0 0;
+  font-size: 0.75rem;
   color: #9ec5e6;
+  text-transform: uppercase;
+}
+
+.squad-count {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.75rem;
+  color: #7aa7c7;
 }
 
 .squad-chevron {
   font-size: 0.9rem;
   color: #9ec5e6;
+  margin-left: 0.8rem;
 }
 
-/* Expand animation */
+/* EXPAND ANIMATION */
 .squad-expand-enter-active,
 .squad-expand-leave-active {
   transition: all 0.2s ease-out;
@@ -222,12 +285,14 @@ export default {
 .squad-expand-enter-to,
 .squad-expand-leave-from {
   opacity: 1;
-  max-height: 1000px;
+  max-height: 1600px;
 }
 
-/* Members grid inside each squad */
+/* MEMBERS INSIDE SQUAD TILE */
 .squad-members {
-  padding: 0.5rem 1rem 1rem 1rem;
+  padding: 0.6rem 1rem 1rem 1rem;
+  background: rgba(0, 5, 20, 0.9);
+  border-top: 1px solid rgba(30, 144, 255, 0.4);
 }
 
 .members-grid {
@@ -238,7 +303,7 @@ export default {
 }
 
 .member-card {
-  background: rgba(0, 10, 30, 0.7);
+  background: rgba(0, 10, 30, 0.8);
   padding: 0.7rem;
   border-left: 3px solid #1e90ff;
   border-radius: 0.25rem;
