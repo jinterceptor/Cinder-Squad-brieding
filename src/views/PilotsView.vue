@@ -1,19 +1,26 @@
 <template>
-  <section id="pilots">
-    <h1>Pilot Roster (Test)</h1>
-    <ul>
-      <li v-for="name in pilots" :key="name">{{ name }}</li>
+  <section class="section-container">
+    <h1>Unit Members</h1>
+    <ul v-if="members.length">
+      <li v-for="name in members" :key="name">{{ name }}</li>
     </ul>
+    <p v-else>Loading members...</p>
   </section>
 </template>
 
 <script>
 export default {
   props: {
-    pilots: {
+    members: {
       type: Array,
       required: true,
     },
   },
 };
 </script>
+
+<style scoped>
+.section-container {
+  padding: 1rem;
+}
+</style>
