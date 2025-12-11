@@ -7,6 +7,9 @@
   <div id="router-view-container">
     <router-view
       :animate="animate"
+      :initial-slug="initialSlug"
+      :missions="missions"
+      :events="events"
       :members="members"
     />
   </div>
@@ -41,14 +44,21 @@ export default {
   data() {
     return {
       animate: Config.animate,
+      initialSlug: Config.initialSlug,
       planetPath: Config.planetPath,
       header: Config.header,
-      members: [], // will store member names
+      members: [], // array of member objects
+      missions: [],
+      events: [],
     };
   },
 
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
+
+    // Import missions/events as before
+    this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
+    this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
     // Load MembersMaster CSV
     this.loadMembersCSV(
@@ -56,30 +66,81 @@ export default {
     );
   },
 
+  mounted() {
+    this.$router.push("/status");
+  },
+
   methods: {
     setTitleFavicon(title, favicon) {
       document.title = title;
-      const link = document.createElement("link");
-      link.setAttribute("rel", "shortcut icon");
-      link.setAttribute("href", favicon);
-      document.head.appendChild(link);
+      const headEl = document.querySelector("head");
+      const faviconEl = document.createElement("link");
+      faviconEl.setAttribute("rel", "shortcut icon");
+      faviconEl.setAttribute("href", favicon);
+      headEl.appendChild(faviconEl);
     },
 
-    loadMembersCSV(csvUrl) {
-      Papa.parse(csvUrl, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          // MembersMaster: the column we want is 'Name'
-          const names = results.data.map((row) => row["Name"]).filter((n) => n);
-          this.members = names;
-          console.log("Members loaded:", this.members.length);
-        },
-        error: (err) => {
-          console.error("Failed to load MembersMaster CSV:", err);
-        },
+    async loadMembersCSV(csvUrl) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(csvUrl, {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            console.log("MembersMaster headers: ", results.meta.fields);
+            const members = results.data.map((row) => ({
+              rank: row["Rank"]?.trim() || "",
+              name: row["Name"]?.trim() || "",
+              joinDate: row["Join Date"]?.trim() || "",
+              id: row["Member ID"]?.trim() || "",
+              certifications: Object.keys(row)
+                .slice(5) // assuming certifications start at column 6
+                .filter((key) => row[key]?.trim())
+                .map((key) => key),
+            })).filter((m) => m.name); // filter out blank rows
+            console.log("Members loaded:", members.length);
+            this.members = members;
+            resolve(members);
+          },
+          error: (err) => {
+            console.error("Error loading Members CSV:", err);
+            reject(err);
+          },
+        });
       });
+    },
+
+    async importMissions(files) {
+      const filePromises = Object.keys(files).map((path) => files[path]());
+      const fileContents = await Promise.all(filePromises);
+      fileContents.forEach((content) => {
+        const lines = content.split("\n");
+        const mission = {
+          slug: lines[0],
+          name: lines[1],
+          status: lines[2],
+          content: lines.slice(3).join("\n"),
+        };
+        this.missions.push(mission);
+      });
+      this.missions.sort((a, b) => b.slug - a.slug);
+    },
+
+    async importEvents(files) {
+      const filePromises = Object.keys(files).map((path) => files[path]());
+      const fileContents = await Promise.all(filePromises);
+      fileContents.forEach((content) => {
+        const lines = content.split("\n");
+        const event = {
+          title: lines[0],
+          location: lines[1],
+          time: lines[2],
+          thumbnail: lines[3],
+          content: lines.slice(4).join("\n"),
+        };
+        this.events.push(event);
+      });
+      this.events.reverse();
     },
   },
 };
