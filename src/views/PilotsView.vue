@@ -1,61 +1,68 @@
 <template>
-  <section id="members" class="section-container">
-    <div style="height: 52px; overflow: hidden">
-      <div class="section-header clipped-medium-backward">
-        <img src="/icons/license.svg" alt="Members Icon" />
-        <h1>Unit Members</h1>
-      </div>
-      <div class="rhombus-back">&nbsp;</div>
-    </div>
+  <div class="members-view">
+    <h1>Unit Members</h1>
 
-    <div class="section-content-container">
-      <div v-if="members.length === 0">
-        Loading members...
-      </div>
-      <ul v-else class="member-list">
-        <li v-for="(member, index) in members" :key="index">
-          {{ member }}
-        </li>
-      </ul>
-    </div>
-  </section>
+    <table v-if="members.length">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Name</th>
+          <th>Join Date</th>
+          <th>Member ID</th>
+          <th>Certifications</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="member in members" :key="member.id">
+          <td>{{ member.rank }}</td>
+          <td>{{ member.name }}</td>
+          <td>{{ member.joinDate }}</td>
+          <td>{{ member.id }}</td>
+          <td>
+            <span v-for="(cert, index) in member.certifications" :key="index">
+              {{ cert }}<span v-if="index < member.certifications.length - 1">, </span>
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p v-else>Loading members...</p>
+  </div>
 </template>
 
 <script>
 export default {
-  name: "PilotsView",
   props: {
     members: {
       type: Array,
-      required: true,
+      default: () => [],
     },
   },
 };
 </script>
 
 <style scoped>
-.section-container {
+.members-view {
   padding: 1rem;
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
+table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.section-header img {
-  width: 32px;
-  margin-right: 1rem;
-}
-
-.member-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.member-list li {
-  padding: 0.25rem 0;
+th, td {
+  text-align: left;
+  padding: 0.5rem;
   border-bottom: 1px solid #ccc;
+}
+
+th {
+  background-color: #f4f4f4;
+}
+
+td span {
+  white-space: nowrap;
 }
 </style>
