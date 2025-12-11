@@ -36,6 +36,7 @@
 import Header from "./components/layout/Header.vue";
 import Sidebar from "./components/layout/Sidebar.vue";
 import Config from "@/assets/info/general-config.json";
+import Papa from "papaparse"; // ✅ import PapaParse
 
 export default {
   components: {
@@ -55,7 +56,7 @@ export default {
       missions: [],
       members: [], // raw MembersMaster
       orbat: [],   // merged RefData + MembersMaster
-      pilots: [],  // this is what PilotsView will use
+      pilots: [],  // what PilotsView uses
       reserves: [],
     };
   },
@@ -63,11 +64,11 @@ export default {
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
-    // Missions and Events imports remain as before
+    // Missions and Events imports
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
-    // Live Google Sheet imports
+    // Live Google Sheets imports
     this.importMembers("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv");
     this.importRefData("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv");
   },
@@ -88,42 +89,38 @@ export default {
 
     async importMembers(csvUrl) {
       const response = await fetch(csvUrl);
-      const text = await response.text();
-      const rows = text.split("\n").slice(1); // skip header row
-      const members = rows.map((row) => {
-        const cols = row.split(",");
-        return {
-          rank: cols[0]?.trim(),
-          name: cols[1]?.trim(),
-          joinDate: cols[3]?.trim(),
-          id: cols[4]?.trim(),
-          certifications: cols.slice(5).map((c) => c.trim()).filter((c) => c), // filter out empty
-        };
-      });
-      this.members = members;
+      const csvText = await response.text();
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+
+      this.members = parsed.data.map((row) => ({
+        rank: row["Rank"]?.trim(),
+        name: row["Name"]?.trim(),
+        joinDate: row["Join Date"]?.trim(),
+        id: row["Member ID"]?.trim(),
+        certifications: Object.keys(row)
+          .slice(5)
+          .filter((k) => row[k]?.trim())
+          .map((k) => k.trim()),
+      }));
     },
 
     async importRefData(csvUrl) {
       const response = await fetch(csvUrl);
-      const text = await response.text();
-      const rows = text.split("\n").slice(1); // skip header row
+      const csvText = await response.text();
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
-      // Parse RefData CSV
-      const orbatEntries = rows.map((row) => {
-        const cols = row.split(",");
-        return {
-          status: cols[0]?.trim(), // Active Non Res / Recruit / Not Placed / Reserves
-          recruit: cols[1]?.trim(),
-          notPlaced: cols[2]?.trim(),
-          reserves: cols[3]?.trim(),
-          allSquads: cols[4]?.trim(),
-          squadAssignments: cols[5]?.trim(),
-          squad: cols[6]?.trim(),
-          memberId: cols[7]?.trim(), // assume Member ID is in column H / index 7
-        };
-      });
+      const orbatEntries = parsed.data.map((row) => ({
+        status: row["Active Non Res"]?.trim() || row["Recruits"]?.trim() || row["Not Placed"]?.trim() || row["Reserves"]?.trim(),
+        recruit: row["Recruits"]?.trim(),
+        notPlaced: row["Not Placed"]?.trim(),
+        reserves: row["Reserves"]?.trim(),
+        allSquads: row["All Squads"]?.trim(),
+        squadAssignments: row["Squad Assingments"]?.trim(),
+        squad: row["Squads"]?.trim(),
+        memberId: row["Member ID"]?.trim(),
+      }));
 
-      // Merge with MembersMaster data
+      // Merge with MembersMaster
       this.orbat = orbatEntries.map((entry) => {
         const member = this.members.find((m) => m.id === entry.memberId) || {};
         return {
@@ -132,9 +129,9 @@ export default {
         };
       });
 
-      // Populate pilots and reserves for convenience
-      this.pilots = this.orbat.filter((m) => m.status?.toLowerCase() === "active non res" || m.status?.toLowerCase() === "pilot");
-      this.reserves = this.orbat.filter((m) => m.status?.toLowerCase() === "reserves");
+      // Populate pilots and reserves arrays
+      this.pilots = this.orbat.filter((m) => ["active non res", "pilot"].includes((m.status || "").toLowerCase()));
+      this.reserves = this.orbat.filter((m) => (m.status || "").toLowerCase() === "reserves");
     },
 
     async importMissions(files) {
