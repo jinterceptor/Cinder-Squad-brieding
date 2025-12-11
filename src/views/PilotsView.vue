@@ -8,95 +8,98 @@
       <div class="rhombus-back">&nbsp;</div>
     </div>
 
-    <div class="section-content-container orbat-wrapper">
-      <div v-if="!squadsToShow.length">
-        Loading squads and members...
-      </div>
+    <!-- Make this whole content area tall and let it scroll -->
+    <div class="section-content-container">
+      <div class="orbat-wrapper">
+        <div v-if="!squadsToShow.length">
+          Loading squads and members...
+        </div>
 
-      <div v-else class="squad-grid">
-        <div
-          v-for="sq in squadsToShow"
-          :key="sq.squad"
-          class="squad-card"
-          @click="toggleSquad(sq.squad)"
-        >
-          <!-- Squad header / tile face -->
-          <div class="squad-header">
-            <div class="squad-insignia">
-              <span>{{ squadInitials(sq.squad) }}</span>
+        <div v-else class="squad-grid">
+          <div
+            v-for="sq in squadsToShow"
+            :key="sq.squad"
+            class="squad-card"
+            @click="toggleSquad(sq.squad)"
+          >
+            <!-- Squad header / tile face -->
+            <div class="squad-header">
+              <div class="squad-insignia">
+                <span>{{ squadInitials(sq.squad) }}</span>
+              </div>
+
+              <div class="squad-meta">
+                <h2>{{ sq.squad }}</h2>
+                <p class="squad-subtitle">
+                  {{ squadDescriptor(sq.squad) }}
+                </p>
+                <p class="squad-count">
+                  {{ sq.members.length }} PERSONNEL REGISTERED
+                </p>
+              </div>
+
+              <div class="squad-chevron" :class="{ open: isOpen(sq.squad) }">
+                <span v-if="isOpen(sq.squad)">▼</span>
+                <span v-else>▶</span>
+              </div>
             </div>
 
-            <div class="squad-meta">
-              <h2>{{ sq.squad }}</h2>
-              <p class="squad-subtitle">
-                {{ squadDescriptor(sq.squad) }}
-              </p>
-              <p class="squad-count">
-                {{ sq.members.length }} PERSONNEL REGISTERED
-              </p>
-            </div>
-
-            <div class="squad-chevron" :class="{ open: isOpen(sq.squad) }">
-              <span v-if="isOpen(sq.squad)">▼</span>
-              <span v-else>▶</span>
-            </div>
-          </div>
-
-          <!-- Members inside squad -->
-          <transition name="squad-expand">
-            <div
-              v-if="isOpen(sq.squad)"
-              class="squad-members"
-              @click.stop
-            >
-              <div class="members-grid">
-                <div
-                  v-for="member in sq.members"
-                  :key="member.id || member.name"
-                  class="member-card"
-                >
-                  <!-- Header -->
-                  <div class="member-header">
-                    <h3>{{ member.name.toUpperCase() }}</h3>
-                    <span class="subtitle">({{ member.rank }})</span>
-                  </div>
-
-                  <!-- Info blocks -->
-                  <div class="member-info">
-                    <div class="info-left">
-                      <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
-                      <p><strong>Member ID:</strong> {{ member.id }}</p>
+            <!-- Members inside squad -->
+            <transition name="squad-expand">
+              <div
+                v-if="isOpen(sq.squad)"
+                class="squad-members"
+                @click.stop
+              >
+                <div class="members-grid">
+                  <div
+                    v-for="member in sq.members"
+                    :key="member.id || member.name"
+                    class="member-card"
+                  >
+                    <!-- Header -->
+                    <div class="member-header">
+                      <h3>{{ member.name.toUpperCase() }}</h3>
+                      <span class="subtitle">({{ member.rank }})</span>
                     </div>
-                    <div class="info-right">
-                      <p>CALLSIGN AVAILABLE</p>
-                      <p>IDENTITY VERIFIED</p>
-                      <p>DATA REGISTERED</p>
-                    </div>
-                  </div>
 
-                  <!-- Skills / Certifications -->
-                  <div class="member-skills">
-                    <p><strong>Certifications:</strong></p>
-                    <div class="skills-tags">
-                      <span
-                        v-for="(cert, index) in member.certifications"
-                        :key="index"
-                        class="skill-tag"
-                      >
-                        {{ cert }}
-                      </span>
+                    <!-- Info blocks -->
+                    <div class="member-info">
+                      <div class="info-left">
+                        <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
+                        <p><strong>Member ID:</strong> {{ member.id }}</p>
+                      </div>
+                      <div class="info-right">
+                        <p>CALLSIGN AVAILABLE</p>
+                        <p>IDENTITY VERIFIED</p>
+                        <p>DATA REGISTERED</p>
+                      </div>
                     </div>
-                  </div>
 
-                  <!-- Footer / Biometric -->
-                  <div class="member-footer">
-                    <p>BIOMETRIC RECORD VALID</p>
-                    <p>UNSC SYSTEMS DATABASE</p>
+                    <!-- Skills / Certifications -->
+                    <div class="member-skills">
+                      <p><strong>Certifications:</strong></p>
+                      <div class="skills-tags">
+                        <span
+                          v-for="(cert, index) in member.certifications"
+                          :key="index"
+                          class="skill-tag"
+                        >
+                          {{ cert }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Footer / Biometric -->
+                    <div class="member-footer">
+                      <p>BIOMETRIC RECORD VALID</p>
+                      <p>UNSC SYSTEMS DATABASE</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </transition>
+            </transition>
+          </div>
         </div>
       </div>
     </div>
@@ -186,11 +189,24 @@ export default {
   padding: 1rem;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
+  /* give the whole view height so the content can fill it */
+  height: calc(100vh - 80px);
+  box-sizing: border-box;
 }
 
+/* make this area fill the section and hold the scrollable ORBAT */
+.section-content-container {
+  height: calc(100% - 52px); /* subtract header strip height */
+  display: flex;
+}
+
+/* ORBAT wrapper fills the available space and can scroll */
 .orbat-wrapper {
-  max-width: 1200px;
-  margin: 0 auto;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 0.5rem;
 }
 
 /* 3-column squad grid by default */
