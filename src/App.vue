@@ -11,6 +11,8 @@
       :missions="missions"
       :events="events"
       :members="members"
+      :orbat="orbat"
+      :reserves="reserves"
     />
   </div>
 
@@ -36,10 +38,7 @@ import Config from "@/assets/info/general-config.json";
 import Papa from "papaparse";
 
 export default {
-  components: {
-    Header,
-    Sidebar,
-  },
+  components: { Header, Sidebar },
 
   data() {
     return {
@@ -47,23 +46,25 @@ export default {
       initialSlug: Config.initialSlug,
       planetPath: Config.planetPath,
       header: Config.header,
-      members: [], // array of member objects
+      pilotSpecialInfo: Config.pilotSpecialInfo,
       missions: [],
       events: [],
+      members: [], // raw MembersMaster
+      orbat: [],   // merged RefData + MembersMaster
+      reserves: [],
     };
   },
 
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
-    // Import missions/events as before
+    // Load missions and events as before
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
-    // Load MembersMaster CSV
-    this.loadMembersCSV(
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv"
-    );
+    // Load live Google Sheet CSVs
+    this.loadMembersCSV("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv");
+    this.loadRefDataCSV("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv");
   },
 
   mounted() {
@@ -84,20 +85,22 @@ export default {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
-          header: true,
           skipEmptyLines: true,
           complete: (results) => {
-            console.log("MembersMaster headers: ", results.meta.fields);
-            const members = results.data.map((row) => ({
-              rank: row["Rank"]?.trim() || "",
-              name: row["Name"]?.trim() || "",
-              joinDate: row["Join Date"]?.trim() || "",
-              id: row["Member ID"]?.trim() || "",
-              certifications: Object.keys(row)
-                .slice(5) // assuming certifications start at column 6
-                .filter((key) => row[key]?.trim())
-                .map((key) => key),
-            })).filter((m) => m.name); // filter out blank rows
+            const rows = results.data;
+
+            // Row 2 (index 1) has the real headers
+            const headers = rows[1];
+
+            // Data starts from row 3 (index 2)
+            const members = rows.slice(2).map((row) => ({
+              rank: row[0]?.trim() || "",
+              name: row[1]?.trim() || "",
+              joinDate: row[3]?.trim() || "",
+              id: row[4]?.trim() || "",
+              certifications: row.slice(5).map((c) => c?.trim()).filter((c) => c),
+            })).filter((m) => m.name);
+
             console.log("Members loaded:", members.length);
             this.members = members;
             resolve(members);
@@ -110,37 +113,62 @@ export default {
       });
     },
 
+    async loadRefDataCSV(csvUrl) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(csvUrl, {
+          download: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            const rows = results.data;
+
+            // Column N = Squad Assignments, Column O = Squads
+            const orbatEntries = rows.slice(1).map((row) => ({
+              squadAssignment: row[13]?.trim() || "",
+              squad: row[14]?.trim() || "",
+              name: row[1]?.trim() || "", // fallback name column if needed
+            })).filter((o) => o.squadAssignment);
+
+            console.log("ORBAT loaded:", orbatEntries.length);
+            this.orbat = orbatEntries;
+            resolve(orbatEntries);
+          },
+          error: (err) => {
+            console.error("Error loading RefData CSV:", err);
+            reject(err);
+          },
+        });
+      });
+    },
+
     async importMissions(files) {
       const filePromises = Object.keys(files).map((path) => files[path]());
       const fileContents = await Promise.all(filePromises);
       fileContents.forEach((content) => {
-        const lines = content.split("\n");
         const mission = {
-          slug: lines[0],
-          name: lines[1],
-          status: lines[2],
-          content: lines.slice(3).join("\n"),
+          slug: content.split("\n")[0],
+          name: content.split("\n")[1],
+          status: content.split("\n")[2],
+          content: content.split("\n").splice(3).join("\n"),
         };
-        this.missions.push(mission);
+        this.missions = [...this.missions, mission];
       });
-      this.missions.sort((a, b) => b.slug - a.slug);
+      this.missions = this.missions.sort((a, b) => b.slug - a.slug);
     },
 
     async importEvents(files) {
       const filePromises = Object.keys(files).map((path) => files[path]());
       const fileContents = await Promise.all(filePromises);
       fileContents.forEach((content) => {
-        const lines = content.split("\n");
         const event = {
-          title: lines[0],
-          location: lines[1],
-          time: lines[2],
-          thumbnail: lines[3],
-          content: lines.slice(4).join("\n"),
+          title: content.split("\n")[0],
+          location: content.split("\n")[1],
+          time: content.split("\n")[2],
+          thumbnail: content.split("\n")[3],
+          content: content.split("\n").splice(4).join("\n"),
         };
-        this.events.push(event);
+        this.events = [...this.events, event];
       });
-      this.events.reverse();
+      this.events = this.events.reverse();
     },
   },
 };
