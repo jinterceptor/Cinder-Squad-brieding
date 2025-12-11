@@ -1,26 +1,35 @@
 <template>
-	<div class="page-wrapper">
-		<Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
-		<Sidebar :animate="animate" :class="{ animate: animate }" />
-	</div>
-	<div id="router-view-container">
-		<router-view :animate="animate" :initial-slug="initialSlug" :missions="missions" :events="events"
-			:pilots="pilots" :clocks="clocks" :reserves="reserves" />
-	</div>
-	<svg style="visibility: hidden; position: absolute" width="0" height="0" xmlns="http://www.w3.org/2000/svg"
-		version="1.1">
-		<defs>
-			<filter id="round">
-				<feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-				<feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -5"
-					result="goo" />
-				<feComposite in="SourceGraphic" in2="goo" operator="atop" />
-			</filter>
-		</defs>
-	</svg>
-	<audio autoplay>
-		<source src="/startup.ogg" type="audio/ogg" />
-	</audio>
+  <div class="page-wrapper">
+    <Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
+    <Sidebar :animate="animate" :class="{ animate: animate }" />
+  </div>
+
+  <div id="router-view-container">
+    <router-view
+      :animate="animate"
+      :initial-slug="initialSlug"
+      :missions="missions"
+      :events="events"
+      :pilots="pilots"
+      :clocks="clocks"
+      :reserves="reserves"
+      :orbat="orbat"
+    />
+  </div>
+
+  <svg style="visibility: hidden; position: absolute" width="0" height="0" xmlns="http://www.w3.org/2000/svg" version="1.1">
+    <defs>
+      <filter id="round">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -5" result="goo" />
+        <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+      </filter>
+    </defs>
+  </svg>
+
+  <audio autoplay>
+    <source src="/startup.ogg" type="audio/ogg" />
+  </audio>
 </template>
 
 <script>
@@ -29,137 +38,142 @@ import Sidebar from "./components/layout/Sidebar.vue";
 import Config from "@/assets/info/general-config.json";
 
 export default {
-	components: {
-		Header,
-		Sidebar,
-	},
+  components: {
+    Header,
+    Sidebar,
+  },
 
-	data() {
-		return {
-			animate: Config.animate,
-			initialSlug: Config.initialSlug,
-			planetPath: Config.planetPath,
-			header: Config.header,
-			pilotSpecialInfo: Config.pilotSpecialInfo,
-			clocks: [],
-			events: [],
-			missions: [],
-			pilots: [],
-			reserves: [],
-			bonds: [],
-		};
-	},
-	created() {
-		this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
-		this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: '?raw', import: 'default' }));
-		this.importEvents(import.meta.glob("@/assets/events/*.md", { query: '?raw', import: 'default' }));
-		this.importClocks(import.meta.glob("@/assets/clocks/*.json"));
-		this.importReserves(import.meta.glob("@/assets/reserves/*.json"));
-		this.importPilots(import.meta.glob("@/assets/pilots/*.json"));
-	},
-	mounted() {
-		this.$router.push("/status");
-	},
-	methods: {
-		setTitleFavicon(title, favicon) {
-			document.title = title;
-			let headEl = document.querySelector('head');
-			let faviconEl = document.createElement('link');
-			faviconEl.setAttribute('rel', 'shortcut icon');
-			faviconEl.setAttribute('href', favicon);
-			headEl.appendChild(faviconEl);
-		},
-		async importMissions(files) {
-			let filePromises = Object.keys(files).map(path => files[path]());
-			let fileContents = await Promise.all(filePromises);
-			fileContents.forEach(content => {
-				let mission = {};
-				mission["slug"] = content.split("\n")[0];
-				mission["name"] = content.split("\n")[1];
-				mission["status"] = content.split("\n")[2];
-				mission["content"] = content.split("\n").splice(3).join("\n");
-				this.missions = [...this.missions, mission];
-			});
-			this.missions = this.missions.sort(function (a, b) {
-				return b["slug"] - a["slug"];
-			})
-		},
-		async importEvents(files) {
-			let filePromises = Object.keys(files).map(path => files[path]());
-			let fileContents = await Promise.all(filePromises);
-			fileContents.forEach(content => {
-				let event = {};
-				event["title"] = content.split("\n")[0];
-				event["location"] = content.split("\n")[1];
-				event["time"] = content.split("\n")[2];
-				event["thumbnail"] = content.split("\n")[3];
-				event["content"] = content.split("\n").splice(4).join("\n");
-				this.events = [...this.events, event];
-			});
-			this.events = this.events.reverse();
-		},
-		async importClocks(files) {
-			let filePromises = Object.keys(files).map(path => files[path]());
-			let fileContents = await Promise.all(filePromises);
-			fileContents.forEach(content => {
-				this.clocks = JSON.parse(JSON.stringify(content)).default;
-			});
-		},
-		async importReserves(files) {
-			let filePromises = Object.keys(files).map(path => files[path]());
-			let fileContents = await Promise.all(filePromises);
-			fileContents.forEach(content => {
-				this.reserves = JSON.parse(JSON.stringify(content)).default;
-			});
-		},
-		async importPilots(files) {
-			let filePromises = Object.keys(files).map(path => files[path]());
-			let fileContents = await Promise.all(filePromises);
-			fileContents.forEach(content => {
-				let pilotFromJson = JSON.parse(JSON.stringify(content));
-				// In case the pilot was added from a copy on compcon via sharecode, remove the "reference mark" symbol
-				pilotFromJson.name = pilotFromJson.name.replace("※", "");
-				pilotFromJson.callsign = pilotFromJson.callsign.replace("※", "");
-				let pilotFromVue = this.pilotSpecialInfo[pilotFromJson.callsign.toUpperCase()];
-				let pilot = {
-					...pilotFromJson,
-					...pilotFromVue,
-				};
-				this.pilots = [...this.pilots, pilot];
-				pilot.clocks.forEach(content => {
-					let clock = {};
-					clock["type"] = `Pilot Project // ${pilot.callsign}`;
-					clock["result"] = "";
-					clock["name"] = content.title;
-					clock["description"] = content.description;
-					clock["value"] = content.progress;
-					clock["max"] = content.segments;
-					clock["color"] = "#3CB043";
-					this.clocks = [...this.clocks, clock];
-				});
+  data() {
+    return {
+      animate: Config.animate,
+      initialSlug: Config.initialSlug,
+      planetPath: Config.planetPath,
+      header: Config.header,
+      pilotSpecialInfo: Config.pilotSpecialInfo,
+      clocks: [],
+      events: [],
+      missions: [],
+      members: [], // raw MembersMaster
+      orbat: [],   // merged RefData + MembersMaster
+      pilots: [],  // this is what PilotsView will use
+      reserves: [],
+    };
+  },
 
-				pilot.reserves.forEach(content => {
-					let reserve = {};
-					reserve["type"] = content.type;
-					reserve["name"] = content.name;
-					reserve["description"] = content.description;
-					reserve["label"] = content.label;
-					reserve["cost"] = content.cost;
-					reserve["notes"] = content.notes;
-					reserve["callsign"] = pilot.callsign.toUpperCase();
-					this.reserves = [...this.reserves, reserve];
-				});
-			});
-		},
-	},
+  created() {
+    this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
+
+    // Missions and Events imports remain as before
+    this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
+    this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
+
+    // Live Google Sheet imports
+    this.importMembers("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv");
+    this.importRefData("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=0&single=true&output=csv");
+  },
+
+  mounted() {
+    this.$router.push("/status");
+  },
+
+  methods: {
+    setTitleFavicon(title, favicon) {
+      document.title = title;
+      const headEl = document.querySelector("head");
+      const faviconEl = document.createElement("link");
+      faviconEl.setAttribute("rel", "shortcut icon");
+      faviconEl.setAttribute("href", favicon);
+      headEl.appendChild(faviconEl);
+    },
+
+    async importMembers(csvUrl) {
+      const response = await fetch(csvUrl);
+      const text = await response.text();
+      const rows = text.split("\n").slice(1); // skip header row
+      const members = rows.map((row) => {
+        const cols = row.split(",");
+        return {
+          rank: cols[0]?.trim(),
+          name: cols[1]?.trim(),
+          joinDate: cols[3]?.trim(),
+          id: cols[4]?.trim(),
+          certifications: cols.slice(5).map((c) => c.trim()).filter((c) => c), // filter out empty
+        };
+      });
+      this.members = members;
+    },
+
+    async importRefData(csvUrl) {
+      const response = await fetch(csvUrl);
+      const text = await response.text();
+      const rows = text.split("\n").slice(1); // skip header row
+
+      // Parse RefData CSV
+      const orbatEntries = rows.map((row) => {
+        const cols = row.split(",");
+        return {
+          status: cols[0]?.trim(), // Active Non Res / Recruit / Not Placed / Reserves
+          recruit: cols[1]?.trim(),
+          notPlaced: cols[2]?.trim(),
+          reserves: cols[3]?.trim(),
+          allSquads: cols[4]?.trim(),
+          squadAssignments: cols[5]?.trim(),
+          squad: cols[6]?.trim(),
+          memberId: cols[7]?.trim(), // assume Member ID is in column H / index 7
+        };
+      });
+
+      // Merge with MembersMaster data
+      this.orbat = orbatEntries.map((entry) => {
+        const member = this.members.find((m) => m.id === entry.memberId) || {};
+        return {
+          ...entry,
+          ...member,
+        };
+      });
+
+      // Populate pilots and reserves for convenience
+      this.pilots = this.orbat.filter((m) => m.status?.toLowerCase() === "active non res" || m.status?.toLowerCase() === "pilot");
+      this.reserves = this.orbat.filter((m) => m.status?.toLowerCase() === "reserves");
+    },
+
+    async importMissions(files) {
+      const filePromises = Object.keys(files).map((path) => files[path]());
+      const fileContents = await Promise.all(filePromises);
+      fileContents.forEach((content) => {
+        const mission = {
+          slug: content.split("\n")[0],
+          name: content.split("\n")[1],
+          status: content.split("\n")[2],
+          content: content.split("\n").splice(3).join("\n"),
+        };
+        this.missions = [...this.missions, mission];
+      });
+      this.missions = this.missions.sort((a, b) => b.slug - a.slug);
+    },
+
+    async importEvents(files) {
+      const filePromises = Object.keys(files).map((path) => files[path]());
+      const fileContents = await Promise.all(filePromises);
+      fileContents.forEach((content) => {
+        const event = {
+          title: content.split("\n")[0],
+          location: content.split("\n")[1],
+          time: content.split("\n")[2],
+          thumbnail: content.split("\n")[3],
+          content: content.split("\n").splice(4).join("\n"),
+        };
+        this.events = [...this.events, event];
+      });
+      this.events = this.events.reverse();
+    },
+  },
 };
 </script>
 
 <style>
 #app {
-	min-height: 100vh;
-	overflow: hidden !important;
-	/* border-right: 1px solid #ff0;
-	border-bottom: 1px solid #ff0; */
+  min-height: 100vh;
+  overflow: hidden !important;
 }
 </style>
