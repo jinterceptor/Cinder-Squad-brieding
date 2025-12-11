@@ -10,7 +10,7 @@
       :initial-slug="initialSlug"
       :missions="missions"
       :events="events"
-      :pilots="pilots"
+      :members="activeMembers"
       :clocks="clocks"
       :reserves="reserves"
       :orbat="orbat"
@@ -36,13 +36,10 @@
 import Header from "./components/layout/Header.vue";
 import Sidebar from "./components/layout/Sidebar.vue";
 import Config from "@/assets/info/general-config.json";
-import Papa from "papaparse"; // ✅ import PapaParse
+import Papa from "papaparse";
 
 export default {
-  components: {
-    Header,
-    Sidebar,
-  },
+  components: { Header, Sidebar },
 
   data() {
     return {
@@ -50,25 +47,24 @@ export default {
       initialSlug: Config.initialSlug,
       planetPath: Config.planetPath,
       header: Config.header,
-      pilotSpecialInfo: Config.pilotSpecialInfo,
       clocks: [],
       events: [],
       missions: [],
-      members: [], // raw MembersMaster
-      orbat: [],   // merged RefData + MembersMaster
-      pilots: [],  // what PilotsView uses
-      reserves: [],
+      members: [],        // Raw MembersMaster sheet
+      orbat: [],          // Merged RefData + MembersMaster
+      activeMembers: [],  // Members currently in unit
+      reserves: [],       // Members in reserve
     };
   },
 
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
-    // Missions and Events imports
+    // Load missions and events from local assets
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
-    // Live Google Sheets imports
+    // Load live Google Sheets
     this.importMembers("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv");
     this.importRefData("https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv");
   },
@@ -87,27 +83,47 @@ export default {
       headEl.appendChild(faviconEl);
     },
 
+    // ------------------------
+    // Import MembersMaster sheet
+    // ------------------------
     async importMembers(csvUrl) {
       const response = await fetch(csvUrl);
       const csvText = await response.text();
-      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
-      this.members = parsed.data.map((row) => ({
-        rank: row["Rank"]?.trim(),
-        name: row["Name"]?.trim(),
-        joinDate: row["Join Date"]?.trim(),
-        id: row["Member ID"]?.trim(),
-        certifications: Object.keys(row)
-          .slice(5)
-          .filter((k) => row[k]?.trim())
-          .map((k) => k.trim()),
-      }));
+      const parsed = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      console.log("MembersMaster headers:", parsed.meta.fields);
+
+      this.members = parsed.data.map((row) => {
+        const standardColumns = ["Rank", "Name", "Join Date", "Member ID"];
+        const certifications = Object.keys(row)
+          .filter((key) => !standardColumns.includes(key) && row[key]?.trim())
+          .map((key) => key.trim());
+
+        return {
+          rank: row["Rank"]?.trim(),
+          name: row["Name"]?.trim(),
+          joinDate: row["Join Date"]?.trim(),
+          id: row["Member ID"]?.trim(),
+          certifications,
+        };
+      });
+
+      console.log("Members loaded:", this.members.length);
     },
 
+    // ------------------------
+    // Import RefData sheet and merge with members
+    // ------------------------
     async importRefData(csvUrl) {
       const response = await fetch(csvUrl);
       const csvText = await response.text();
+
       const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      console.log("RefData headers:", parsed.meta.fields);
 
       const orbatEntries = parsed.data.map((row) => ({
         status: row["Active Non Res"]?.trim() || row["Recruits"]?.trim() || row["Not Placed"]?.trim() || row["Reserves"]?.trim(),
@@ -120,23 +136,25 @@ export default {
         memberId: row["Member ID"]?.trim(),
       }));
 
-      // Merge with MembersMaster
       this.orbat = orbatEntries.map((entry) => {
         const member = this.members.find((m) => m.id === entry.memberId) || {};
-        return {
-          ...entry,
-          ...member,
-        };
+        return { ...entry, ...member };
       });
 
-      // Populate pilots and reserves arrays
-      this.pilots = this.orbat.filter((m) => ["active non res", "pilot"].includes((m.status || "").toLowerCase()));
-      this.reserves = this.orbat.filter((m) => (m.status || "").toLowerCase() === "reserves");
+      // Filter for convenience
+      this.activeMembers = this.orbat.filter((m) => m.status?.toLowerCase() === "active non res");
+      this.reserves = this.orbat.filter((m) => m.status?.toLowerCase() === "reserves");
+
+      console.log("ORBAT loaded:", this.orbat.length, "Active Members:", this.activeMembers.length, "Reserves:", this.reserves.length);
     },
 
+    // ------------------------
+    // Import Missions
+    // ------------------------
     async importMissions(files) {
       const filePromises = Object.keys(files).map((path) => files[path]());
       const fileContents = await Promise.all(filePromises);
+
       fileContents.forEach((content) => {
         const mission = {
           slug: content.split("\n")[0],
@@ -146,12 +164,17 @@ export default {
         };
         this.missions = [...this.missions, mission];
       });
+
       this.missions = this.missions.sort((a, b) => b.slug - a.slug);
     },
 
+    // ------------------------
+    // Import Events
+    // ------------------------
     async importEvents(files) {
       const filePromises = Object.keys(files).map((path) => files[path]());
       const fileContents = await Promise.all(filePromises);
+
       fileContents.forEach((content) => {
         const event = {
           title: content.split("\n")[0],
@@ -162,6 +185,7 @@ export default {
         };
         this.events = [...this.events, event];
       });
+
       this.events = this.events.reverse();
     },
   },
