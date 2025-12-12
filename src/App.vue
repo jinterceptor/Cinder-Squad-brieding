@@ -111,10 +111,18 @@ export default {
                 const name = row[1]?.trim() || "";
                 const joinDate = row[3]?.trim() || "";
                 const id = row[4]?.trim() || "";
+
+                // Columns 5–17 (inclusive) = 13 certification flags in fixed order:
+                // Rifleman, Machine Gunner, Anti Tank, Corpsmen,
+                // Combat Engineer, Marksman, Breacher, Grenadier,
+                // Pilot, RTO, PJ, NCO, Officer
+                const CERT_COLUMNS = 13;
                 const certs = row
-                  .slice(5)
-                  .map((c) => c?.trim())
-                  .filter((c) => c);
+                  .slice(5, 5 + CERT_COLUMNS)
+                  .map((c) => {
+                    const v = (c || "").toString().trim().toUpperCase();
+                    return v === "Y" ? "Y" : "N";
+                  });
 
                 if (!name) return null;
 
@@ -123,7 +131,7 @@ export default {
                   name,
                   joinDate,
                   id,
-                  certifications: certs,
+                  certifications: certs, // ordered flags
                   squad: "", // will be filled from RefData
                 };
               })
