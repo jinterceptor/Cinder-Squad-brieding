@@ -87,7 +87,19 @@
               class="member-card"
             >
               <div class="member-header">
-                <div>
+                <!-- Rank insignia -->
+                <div
+                  class="member-rank-insignia-wrapper"
+                  v-if="rankInsignia(member.rank)"
+                >
+                  <img
+                    :src="rankInsignia(member.rank)"
+                    :alt="member.rank + ' insignia'"
+                    class="member-rank-insignia"
+                  />
+                </div>
+
+                <div class="member-header-text">
                   <h3>{{ member.name.toUpperCase() }}</h3>
                   <p class="rank-line">
                     <span class="rank">{{ member.rank }}</span>
@@ -210,6 +222,63 @@ export default {
       if (n.includes("pilot") || n.includes("air") || n.includes("wing"))
         return "AVIATION ELEMENT // UNSC AIR ASSETS";
       return "UNSC REGISTERED ELEMENT";
+    },
+
+    // ---- RANK → IMAGE MAPPING ----------------------------------------
+    rankCode(rank) {
+      if (!rank) return null;
+
+      // Normalise to uppercase, strip extra spaces
+      const key = rank.trim().toUpperCase();
+
+      // Map sheet rank labels → filename (without extension)
+      // Filenames are in public/ranks/ as you described.
+      const rankMap = {
+        // Enlisted / infantry
+        RCT: "Rct",
+        PVT: "Pvt",
+        PFC: "PFC",
+        SPC: "Spc",
+        SPC2: "Spc2",
+        SPC3: "Spc3",
+        SPC4: "Spc4",
+        LCPL: "LCpl",
+        CPL: "Cpl",
+        SGT: "Sgt",
+        SSGT: "SSgt",
+
+        // Warrant officers
+        WO: "WO",
+        CWO2: "CWO2",
+        CWO3: "CWO3",
+        CWO4: "CWO4",
+        CWO5: "CWO5",
+
+        // Commissioned officers
+        "2NDLT": "2ndLt",
+        "1STLT": "1stLt",
+        CAPT: "Capt",
+        MAJ: "Maj",
+
+        // Medical / hospital corps
+        HR: "HR",
+        HA: "HA",
+        HN: "HN",
+        HM3: "HM3",
+        HM2: "HM2",
+        HM1: "HM1",
+        HMC: "HMC",
+      };
+
+      return rankMap[key] || null;
+    },
+
+    rankInsignia(rank) {
+      const fileBase = this.rankCode(rank);
+      if (!fileBase) return null;
+
+      // Files are under public/ranks/, e.g. /ranks/PFC.png
+      return `/ranks/${fileBase}.png`;
     },
   },
 };
@@ -439,7 +508,23 @@ export default {
 }
 
 /* Header */
-.member-header h3 {
+.member-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.member-rank-insignia-wrapper {
+  flex-shrink: 0;
+}
+
+.member-rank-insignia {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.member-header-text h3 {
   margin: 0;
   font-size: 1.2rem;
   color: #1e90ff;
