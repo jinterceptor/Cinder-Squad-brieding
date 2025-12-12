@@ -22,54 +22,57 @@
       </div>
     </div>
 
-    <!-- Members grid -->
-    <div class="squad-members-grid">
-      <div
-        v-for="member in members"
-        :key="member.id || member.name"
-        class="member-card"
-      >
-        <div class="member-header">
-          <div>
-            <h3>{{ member.name.toUpperCase() }}</h3>
-            <p class="rank-line">
-              <span class="rank">{{ member.rank }}</span>
-              <span class="id">ID: {{ member.id || 'N/A' }}</span>
-            </p>
-          </div>
-        </div>
-
-        <div class="member-body">
-          <div class="member-column left">
-            <p><strong>Squad:</strong> {{ member.squad || squadName }}</p>
-            <p><strong>Join Date:</strong> {{ member.joinDate || 'Unknown' }}</p>
-            <p><strong>Status:</strong> {{ member.status || 'Active' }}</p>
-            <p><strong>Slot:</strong> {{ member.squadAssignments || 'N/A' }}</p>
-          </div>
-          <div class="member-column right">
-            <p><strong>Certifications:</strong></p>
-            <div class="cert-tags">
-              <span
-                v-if="member.certifications?.length"
-                v-for="(cert, idx) in member.certifications"
-                :key="idx"
-                class="cert-tag"
-              >
-                {{ cert }}
-              </span>
-              <span v-else class="cert-none">NO CERTS ON FILE</span>
+    <!-- Scrollable content area -->
+    <div class="squad-scroll">
+      <!-- Members grid -->
+      <div class="squad-members-grid">
+        <div
+          v-for="member in members"
+          :key="member.id || member.name"
+          class="member-card"
+        >
+          <div class="member-header">
+            <div>
+              <h3>{{ member.name.toUpperCase() }}</h3>
+              <p class="rank-line">
+                <span class="rank">{{ member.rank }}</span>
+                <span class="id">ID: {{ member.id || 'N/A' }}</span>
+              </p>
             </div>
           </div>
-        </div>
 
-        <div v-if="member.notes" class="member-notes">
-          <p class="notes-label">NOTES / BIO</p>
-          <div class="notes-body" v-html="member.notes" />
-        </div>
+          <div class="member-body">
+            <div class="member-column left">
+              <p><strong>Squad:</strong> {{ member.squad || squadName }}</p>
+              <p><strong>Join Date:</strong> {{ member.joinDate || 'Unknown' }}</p>
+              <p><strong>Status:</strong> {{ member.status || 'Active' }}</p>
+              <p><strong>Slot:</strong> {{ member.squadAssignments || 'N/A' }}</p>
+            </div>
+            <div class="member-column right">
+              <p><strong>Certifications:</strong></p>
+              <div class="cert-tags">
+                <span
+                  v-if="member.certifications?.length"
+                  v-for="(cert, idx) in member.certifications"
+                  :key="idx"
+                  class="cert-tag"
+                >
+                  {{ cert }}
+                </span>
+                <span v-else class="cert-none">NO CERTS ON FILE</span>
+              </div>
+            </div>
+          </div>
 
-        <div class="member-footer">
-          <span>BIOMETRIC RECORD VALID</span>
-          <span>UNSC SYSTEMS DATABASE</span>
+          <div v-if="member.notes" class="member-notes">
+            <p class="notes-label">NOTES / BIO</p>
+            <div class="notes-body" v-html="member.notes" />
+          </div>
+
+          <div class="member-footer">
+            <span>BIOMETRIC RECORD VALID</span>
+            <span>UNSC SYSTEMS DATABASE</span>
+          </div>
         </div>
       </div>
     </div>
@@ -118,14 +121,19 @@ export default {
   background-color: #050811;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
-  max-height: 90vh;
-  overflow-y: auto;
+
+  /* Make the modal content itself flex so we can pin header + scroll body */
+  max-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
+/* Header strip */
 .squad-header-container {
   display: flex;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .squad-header-container img {
@@ -133,14 +141,14 @@ export default {
   margin-right: 0.5rem;
 }
 
-/* Top bar */
+/* Top meta bar */
 .squad-meta-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.2rem;
+  margin-bottom: 0.8rem;
   border-bottom: 1px solid rgba(30, 144, 255, 0.6);
-  padding-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
 }
 
 .squad-title h2 {
@@ -164,7 +172,14 @@ export default {
   color: #1e90ff;
 }
 
-/* Members grid inside modal */
+/* Scrollable area */
+.squad-scroll {
+  margin-top: 0.5rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Members grid inside scroll */
 .squad-members-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
