@@ -19,7 +19,7 @@
             v-for="sq in squadsToShow"
             :key="sq.squad"
             class="squad-card"
-            @click="toggleSquad(sq.squad)"
+            @click="openSquadModal(sq)"
           >
             <!-- Squad header / tile face -->
             <div class="squad-header">
@@ -37,67 +37,10 @@
                 </p>
               </div>
 
-              <div class="squad-chevron" :class="{ open: isOpen(sq.squad) }">
-                <span v-if="isOpen(sq.squad)">▼</span>
-                <span v-else>▶</span>
+              <div class="squad-chevron">
+                <span>▶</span>
               </div>
             </div>
-
-            <!-- Members inside squad -->
-            <transition name="squad-expand">
-              <div
-                v-if="isOpen(sq.squad)"
-                class="squad-members"
-                @click.stop
-              >
-                <div class="members-grid">
-                  <div
-                    v-for="member in sq.members"
-                    :key="member.id || member.name"
-                    class="member-card"
-                  >
-                    <!-- Header -->
-                    <div class="member-header">
-                      <h3>{{ member.name.toUpperCase() }}</h3>
-                      <span class="subtitle">({{ member.rank }})</span>
-                    </div>
-
-                    <!-- Info blocks -->
-                    <div class="member-info">
-                      <div class="info-left">
-                        <p><strong>Join Date:</strong> {{ member.joinDate }}</p>
-                        <p><strong>Member ID:</strong> {{ member.id }}</p>
-                      </div>
-                      <div class="info-right">
-                        <p>CALLSIGN AVAILABLE</p>
-                        <p>IDENTITY VERIFIED</p>
-                        <p>DATA REGISTERED</p>
-                      </div>
-                    </div>
-
-                    <!-- Skills / Certifications -->
-                    <div class="member-skills">
-                      <p><strong>Certifications:</strong></p>
-                      <div class="skills-tags">
-                        <span
-                          v-for="(cert, index) in member.certifications"
-                          :key="index"
-                          class="skill-tag"
-                        >
-                          {{ cert }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Footer / Biometric -->
-                    <div class="member-footer">
-                      <p>BIOMETRIC RECORD VALID</p>
-                      <p>UNSC SYSTEMS DATABASE</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </transition>
           </div>
         </div>
       </div>
@@ -106,6 +49,8 @@
 </template>
 
 <script>
+import SquadModal from "@/components/modals/SquadModal.vue";
+
 export default {
   name: "PilotsView",
   props: {
@@ -124,11 +69,6 @@ export default {
       required: false,
       default: () => [],
     },
-  },
-  data() {
-    return {
-      openSquads: {}, // { [squadName]: boolean }
-    };
   },
   computed: {
     squadsToShow() {
@@ -155,11 +95,18 @@ export default {
     },
   },
   methods: {
-    toggleSquad(squadName) {
-      this.openSquads[squadName] = !this.openSquads[squadName];
-    },
-    isOpen(squadName) {
-      return !!this.openSquads[squadName];
+    openSquadModal(sq) {
+      this.$oruga.modal.open({
+        component: SquadModal,
+        custom: true,
+        trapFocus: true,
+        props: {
+          squadName: sq.squad,
+          members: sq.members,
+        },
+        class: "custom-modal",
+        width: 1920,
+      });
     },
     squadInitials(name) {
       if (!name) return "UNSC";
@@ -184,13 +131,15 @@ export default {
 </script>
 
 <style scoped>
+/* Use your latest size-tuned styles */
+
 /* Make this view span the full router-view width */
 .section-container {
   padding: 2.5rem 3rem;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
   width: 100% !important;
-  max-width: 2200px; /* increased horizontal space */
+  max-width: 2200px; /* wide */
   margin: 0 auto;
   box-sizing: border-box;
 }
@@ -209,7 +158,7 @@ export default {
 .squad-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3rem; /* widened horizontally */
+  gap: 3rem; /* wide spacing */
   margin-top: 2rem;
 }
 
@@ -239,54 +188,46 @@ export default {
   border-radius: 0.8rem;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
   cursor: pointer;
-
-  /* ↓↓↓ reduced 20% from previous */
   min-height: 210px;
-
-  /* ↓↓↓ slightly wider presentation */
   padding-right: 1.5rem;
 }
 
-/* === SQUAD HEADER (reduced vertical space) ============================ */
+/* SQUAD HEADER (reduced vertically) */
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-
-  /* ↓↓↓ padding reduced from 2rem → 1.4rem (~30%) */
   padding: 1.4rem 2rem;
 }
 
-/* === INSIGNIA BLOCK (reduced 20%) ==================================== */
+/* INSIGNIA BLOCK */
 .squad-insignia {
-  width: 95px;  /* was 120px */
-  height: 95px; /* was 120px */
+  width: 95px;
+  height: 95px;
   border-radius: 0.6rem;
   border: 4px solid #1e90ff;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 1.6rem;
-  font-size: 2rem; /* was 2.4rem */
+  font-size: 2rem;
   font-weight: bold;
   color: #1e90ff;
   background: rgba(0, 0, 0, 0.7);
   text-align: center;
 }
 
-/* === SQUAD TITLE ====================================================== */
+/* Squad title text */
 .squad-meta h2 {
   margin: 0;
-
-  /* horizontally bigger title */
-  font-size: 2.3rem; /* slightly increased */
+  font-size: 2.3rem;
   color: #e0f0ff;
   letter-spacing: 0.05em;
 }
 
 .squad-subtitle {
   margin: 0.2rem 0 0;
-  font-size: 1.1rem; /* slightly reduced vertically */
+  font-size: 1.1rem;
   color: #9ec5e6;
   text-transform: uppercase;
 }
@@ -302,95 +243,5 @@ export default {
   font-size: 1.8rem;
   color: #9ec5e6;
   margin-left: 1.3rem;
-}
-
-/* Expansion animation */
-.squad-expand-enter-active,
-.squad-expand-leave-active {
-  transition: all 0.25s ease-out;
-}
-.squad-expand-enter-from,
-.squad-expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-.squad-expand-enter-to,
-.squad-expand-leave-from {
-  opacity: 1;
-  max-height: 2000px;
-}
-
-/* === EXPANDED MEMBERS AREA ============================================ */
-.squad-members {
-  padding: 1.2rem 2rem 1.6rem 2rem; /* reduced vertical padding */
-  background: rgba(0, 5, 20, 0.96);
-  border-top: 1px solid rgba(30, 144, 255, 0.7);
-}
-
-/* Member cards grid */
-.members-grid {
-  display: grid;
-
-  /* horizontally increased, vertically reduced layout */
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-
-  gap: 1.2rem;
-  margin-top: 0.6rem;
-}
-
-/* === MEMBER CARD ======================================================= */
-.member-card {
-  background: rgba(0, 10, 30, 0.95);
-  padding: 0.9rem 1.1rem;
-  border-left: 4px solid #1e90ff;
-  border-radius: 0.3rem;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.55);
-  display: flex;
-  flex-direction: column;
-}
-
-/* Member card text sizes reduced slightly vertically */
-.member-header h3 {
-  margin: 0;
-  font-size: 1.3rem;
-  color: #1e90ff;
-}
-
-.subtitle {
-  font-size: 0.95rem;
-  color: #9ec5e6;
-}
-
-.member-info {
-  display: flex;
-  justify-content: space-between;
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-}
-
-.member-skills {
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-}
-
-.skills-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.2rem;
-}
-
-.skill-tag {
-  background: #1e90ff;
-  color: #fff;
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.8rem;
-}
-
-.member-footer {
-  font-size: 0.75rem;
-  margin-top: 0.5rem;
-  color: #7aa7c7;
 }
 </style>
