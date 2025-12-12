@@ -17,6 +17,11 @@
         </div>
 
         <div v-else class="hierarchy-container">
+          <!-- COMMAND BRANCH LINES INTO CHALK 1/2/3 -->
+          <div class="chalk-branch c1"></div>
+          <div class="chalk-branch c2"></div>
+          <div class="chalk-branch c3"></div>
+
           <!-- TOP: CHALK ACTUAL -->
           <div v-if="hierarchy.chalkActual" class="orbat-row center-row">
             <div class="squad-row single">
@@ -311,12 +316,10 @@ export default {
         ) {
           groups.other.push(sq);
         } else {
-          // fallback bucket
           groups.other.push(sq);
         }
       });
 
-      // Sort each group for consistency
       groups.chalks.sort((a, b) => a.squad.localeCompare(b.squad));
       groups.support.sort((a, b) => a.squad.localeCompare(b.squad));
       groups.other.sort((a, b) => a.squad.localeCompare(b.squad));
@@ -350,20 +353,17 @@ export default {
       return "UNSC ELEMENT";
     },
 
-    // ---- CERTIFICATIONS ----
     hasCert(member, idx) {
       const certs = member.certifications || [];
       const flag = certs[idx];
       return flag === "Y" || flag === true || flag === "1";
     },
 
-    // ---- RANK INSIGNIA ----
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
 
       const rankMap = {
-        // Enlisted / infantry
         RCT: "Rct",
         PVT: "Pvt",
         PFC: "PFC",
@@ -376,20 +376,17 @@ export default {
         SGT: "Sgt",
         SSGT: "SSgt",
 
-        // Warrant officers
         WO: "WO",
         CWO2: "CWO2",
         CWO3: "CWO3",
         CWO4: "CWO4",
         CWO5: "CWO5",
 
-        // Commissioned officers
         "2NDLT": "2ndLt",
         "1STLT": "1stLt",
         CAPT: "Capt",
         MAJ: "Maj",
 
-        // Medical / corps
         HR: "HR",
         HA: "HA",
         HN: "HN",
@@ -412,7 +409,7 @@ export default {
 </script>
 
 <style scoped>
-/* ===== MAIN CONTAINER / WIDTH OVERRIDES (important!) ================== */
+/* ===== MAIN CONTAINER ================================================= */
 .section-container {
   padding: 2.5rem 3rem;
   color: #dce6f1;
@@ -432,8 +429,9 @@ export default {
   margin-top: 0.75rem;
 }
 
-/* ===== HIERARCHY ROWS ================================================= */
+/* ===== HIERARCHY ROWS / LINES ======================================== */
 .hierarchy-container {
+  position: relative; /* needed for absolute lines */
   width: 100%;
   margin-top: 2rem;
 }
@@ -467,6 +465,68 @@ export default {
 @media (max-width: 900px) {
   .squad-row.three {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ===== COMMAND LINES (desktop / wide only) =========================== */
+@media (min-width: 900px) {
+  /* Vertical line down from Chalk Actual */
+  .hierarchy-container::before {
+    content: "";
+    position: absolute;
+    top: 150px; /* bottom of Chalk Actual tile area */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 120px;
+    background: rgba(30, 144, 255, 0.5);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  /* Horizontal line across Chalk 1–3 */
+  .hierarchy-container::after {
+    content: "";
+    position: absolute;
+    top: 260px; /* roughly just above chalk tiles */
+    left: 12%;
+    width: 76%;
+    height: 4px;
+    background: rgba(30, 144, 255, 0.5);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  .chalk-branch {
+    position: absolute;
+    width: 4px;
+    height: 40px;
+    background: rgba(30, 144, 255, 0.5);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  .chalk-branch.c1 {
+    top: 260px;
+    left: 22%;
+  }
+
+  .chalk-branch.c2 {
+    top: 260px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .chalk-branch.c3 {
+    top: 260px;
+    left: 78%;
+  }
+}
+
+/* On small screens, hide the branch divs */
+@media (max-width: 899px) {
+  .chalk-branch {
+    display: none;
   }
 }
 
@@ -516,7 +576,6 @@ export default {
   text-align: center;
 }
 
-/* Squad text */
 .squad-meta h2 {
   margin: 0;
   font-size: 2.3rem;
@@ -537,14 +596,13 @@ export default {
   color: #7aa7c7;
 }
 
-/* Arrow */
 .squad-chevron {
   font-size: 1.8rem;
   color: #9ec5e6;
   margin-left: 1.3rem;
 }
 
-/* ===== FULLSCREEN MODAL =============================================== */
+/* ===== FULLSCREEN MODAL ============================================== */
 .squad-overlay {
   position: fixed;
   inset: 0;
@@ -587,7 +645,6 @@ export default {
   margin-right: 0.5rem;
 }
 
-/* Close button */
 .squad-close {
   background: transparent;
   border: 1px solid rgba(220, 230, 241, 0.4);
@@ -598,7 +655,6 @@ export default {
   cursor: pointer;
 }
 
-/* Meta bar */
 .squad-modal-meta {
   display: flex;
   justify-content: space-between;
@@ -629,21 +685,19 @@ export default {
   color: #1e90ff;
 }
 
-/* Scroll area */
 .squad-modal-scroll {
   margin-top: 0.5rem;
   flex: 1;
   overflow-y: auto;
 }
 
-/* Members grid inside modal */
 .squad-members-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 1rem;
 }
 
-/* Member card styling */
+/* Member card */
 .member-card {
   background: rgba(0, 10, 30, 0.95);
   border-radius: 0.4rem;
@@ -705,7 +759,7 @@ export default {
   margin: 0.18rem 0;
 }
 
-/* Certs – vertical */
+/* Certs vertical */
 .cert-list {
   display: flex;
   flex-direction: column;
