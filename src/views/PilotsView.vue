@@ -19,7 +19,7 @@
             v-for="sq in squadsToShow"
             :key="sq.squad"
             class="squad-card"
-            @click="openSquadModal(sq)"
+            @click="openSquad(sq)"
           >
             <!-- Squad header / tile face -->
             <div class="squad-header">
@@ -45,12 +45,99 @@
         </div>
       </div>
     </div>
+
+    <!-- FULLSCREEN SQUAD ROSTER OVERLAY -->
+    <div v-if="activeSquad" class="squad-overlay">
+      <div class="squad-modal">
+        <!-- Top bar -->
+        <div class="squad-modal-header">
+          <div class="squad-header-left">
+            <div class="section-header clipped-medium-backward-bio">
+              <img src="/icons/license.svg" />
+              <h1>SQUAD ROSTER</h1>
+            </div>
+            <div class="rhombus-back">&nbsp;</div>
+          </div>
+
+          <button class="squad-close" @click="closeSquad">
+            ✕
+          </button>
+        </div>
+
+        <!-- Squad meta -->
+        <div class="squad-modal-meta">
+          <div class="squad-title">
+            <h2>{{ activeSquad.squad }}</h2>
+            <p class="subtitle">
+              {{ squadDescriptor(activeSquad.squad) }} ·
+              {{ activeSquad.members.length }} PERSONNEL
+            </p>
+          </div>
+          <div class="squad-tag">
+            <span>{{ squadInitials(activeSquad.squad) }}</span>
+          </div>
+        </div>
+
+        <!-- Scrollable content -->
+        <div class="squad-modal-scroll">
+          <div class="squad-members-grid">
+            <div
+              v-for="member in activeSquad.members"
+              :key="member.id || member.name"
+              class="member-card"
+            >
+              <div class="member-header">
+                <div>
+                  <h3>{{ member.name.toUpperCase() }}</h3>
+                  <p class="rank-line">
+                    <span class="rank">{{ member.rank }}</span>
+                    <span class="id">ID: {{ member.id || 'N/A' }}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="member-body">
+                <div class="member-column left">
+                  <p><strong>Squad:</strong> {{ member.squad || activeSquad.squad }}</p>
+                  <p><strong>Join Date:</strong> {{ member.joinDate || 'Unknown' }}</p>
+                  <p><strong>Status:</strong> {{ member.status || 'Active' }}</p>
+                  <p><strong>Slot:</strong> {{ member.squadAssignments || 'N/A' }}</p>
+                </div>
+                <div class="member-column right">
+                  <p><strong>Certifications:</strong></p>
+                  <div class="cert-tags">
+                    <span
+                      v-if="member.certifications?.length"
+                      v-for="(cert, idx) in member.certifications"
+                      :key="idx"
+                      class="cert-tag"
+                    >
+                      {{ cert }}
+                    </span>
+                    <span v-else class="cert-none">NO CERTS ON FILE</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="member.notes" class="member-notes">
+                <p class="notes-label">NOTES / BIO</p>
+                <div class="notes-body" v-html="member.notes" />
+              </div>
+
+              <div class="member-footer">
+                <span>BIOMETRIC RECORD VALID</span>
+                <span>UNSC SYSTEMS DATABASE</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- END OVERLAY -->
   </section>
 </template>
 
 <script>
-import SquadModal from "@/components/modals/SquadModal.vue";
-
 export default {
   name: "PilotsView",
   props: {
@@ -69,6 +156,11 @@ export default {
       required: false,
       default: () => [],
     },
+  },
+  data() {
+    return {
+      activeSquad: null, // { squad, members }
+    };
   },
   computed: {
     squadsToShow() {
@@ -95,18 +187,11 @@ export default {
     },
   },
   methods: {
-    openSquadModal(sq) {
-      this.$oruga.modal.open({
-        component: SquadModal,
-        custom: true,
-        trapFocus: true,
-        props: {
-          squadName: sq.squad,
-          members: sq.members,
-        },
-        class: "custom-modal",
-        width: 1920,
-      });
+    openSquad(sq) {
+      this.activeSquad = sq;
+    },
+    closeSquad() {
+      this.activeSquad = null;
     },
     squadInitials(name) {
       if (!name) return "UNSC";
@@ -131,15 +216,13 @@ export default {
 </script>
 
 <style scoped>
-/* Use your latest size-tuned styles */
-
-/* Make this view span the full router-view width */
+/* ===== MAIN ORBAT VIEW (same base sizing you liked) =================== */
 .section-container {
   padding: 2.5rem 3rem;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
   width: 100% !important;
-  max-width: 2200px; /* wide */
+  max-width: 2200px;
   margin: 0 auto;
   box-sizing: border-box;
 }
@@ -153,12 +236,11 @@ export default {
   margin-top: 0.75rem;
 }
 
-/* === SQUAD GRID ====================================================== */
-/* 3 large tiles */
+/* 3 large squad tiles */
 .squad-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3rem; /* wide spacing */
+  gap: 3rem;
   margin-top: 2rem;
 }
 
@@ -176,7 +258,7 @@ export default {
   }
 }
 
-/* === SQUAD TILE ====================================================== */
+/* Squad tile */
 .squad-card {
   background: radial-gradient(
       circle at top left,
@@ -192,7 +274,6 @@ export default {
   padding-right: 1.5rem;
 }
 
-/* SQUAD HEADER (reduced vertically) */
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -200,7 +281,7 @@ export default {
   padding: 1.4rem 2rem;
 }
 
-/* INSIGNIA BLOCK */
+/* Insignia */
 .squad-insignia {
   width: 95px;
   height: 95px;
@@ -217,7 +298,7 @@ export default {
   text-align: center;
 }
 
-/* Squad title text */
+/* Squad text */
 .squad-meta h2 {
   margin: 0;
   font-size: 2.3rem;
@@ -243,5 +324,201 @@ export default {
   font-size: 1.8rem;
   color: #9ec5e6;
   margin-left: 1.3rem;
+}
+
+/* ===== FULLSCREEN SQUAD OVERLAY ====================================== */
+.squad-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The modal panel itself */
+.squad-modal {
+  background-color: #050811;
+  color: #dce6f1;
+  font-family: "Consolas", "Courier New", monospace;
+  width: 90vw;
+  max-width: 1600px;
+  max-height: 90vh;
+  border-radius: 0.8rem;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.9);
+  padding: 1.5rem 2rem 2rem 2rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Modal header (title + close) */
+.squad-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.squad-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.squad-header-left img {
+  width: 48px;
+  margin-right: 0.5rem;
+}
+
+/* Close button */
+.squad-close {
+  background: transparent;
+  border: 1px solid rgba(220, 230, 241, 0.4);
+  color: #dce6f1;
+  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+/* Top meta bar in modal */
+.squad-modal-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(30, 144, 255, 0.6);
+  padding-bottom: 0.5rem;
+}
+
+.squad-title h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  letter-spacing: 0.08em;
+}
+
+.squad-title .subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  color: #9ec5e6;
+  text-transform: uppercase;
+}
+
+.squad-tag {
+  border: 2px solid #1e90ff;
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.95rem;
+  color: #1e90ff;
+}
+
+/* Scrollable area */
+.squad-modal-scroll {
+  margin-top: 0.5rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Members grid inside modal */
+.squad-members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1rem;
+}
+
+/* Member card styling */
+.member-card {
+  background: rgba(0, 10, 30, 0.95);
+  border-radius: 0.4rem;
+  border-left: 4px solid #1e90ff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.member-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #1e90ff;
+}
+
+.rank-line {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+  color: #9ec5e6;
+}
+
+.rank {
+  margin-right: 0.6rem;
+}
+
+.id {
+  opacity: 0.8;
+}
+
+/* Body */
+.member-body {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.member-column {
+  flex: 1;
+}
+
+.member-column.left p,
+.member-column.right p {
+  margin: 0.18rem 0;
+}
+
+/* Certs */
+.cert-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-top: 0.2rem;
+}
+
+.cert-tag {
+  background: #1e90ff;
+  color: #fff;
+  padding: 0.18rem 0.45rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.cert-none {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+/* Notes */
+.member-notes {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.notes-label {
+  margin: 0 0 0.2rem 0;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.notes-body {
+  line-height: 1.3;
+}
+
+/* Footer */
+.member-footer {
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  color: #7aa7c7;
+  display: flex;
+  justify-content: space-between;
 }
 </style>
