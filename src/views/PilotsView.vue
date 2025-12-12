@@ -151,7 +151,7 @@
 </template>
 
 <script>
-import SquadTile from "./SquadTile.vue"; // extracted tile component for cleanliness
+import SquadTile from "@/components/SquadTile.vue"; // extracted tile component for cleanliness
 
 export default {
   name: "PilotsView",
