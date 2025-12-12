@@ -115,18 +115,27 @@
                   <p><strong>Status:</strong> {{ member.status || 'Active' }}</p>
                   <p><strong>Slot:</strong> {{ member.squadAssignments || 'N/A' }}</p>
                 </div>
+
+                <!-- CERTIFICATIONS: labelled checkbox list -->
                 <div class="member-column right">
                   <p><strong>Certifications:</strong></p>
-                  <div class="cert-tags">
-                    <span
-                      v-if="member.certifications?.length"
-                      v-for="(cert, idx) in member.certifications"
-                      :key="idx"
-                      class="cert-tag"
+                  <div class="cert-list">
+                    <div
+                      v-for="(label, idx) in certLabels"
+                      :key="label"
+                      class="cert-row"
                     >
-                      {{ cert }}
-                    </span>
-                    <span v-else class="cert-none">NO CERTS ON FILE</span>
+                      <span
+                        class="cert-checkbox"
+                        :class="{ checked: hasCert(member, idx) }"
+                      >
+                        <span
+                          v-if="hasCert(member, idx)"
+                          class="checkbox-dot"
+                        ></span>
+                      </span>
+                      <span class="cert-label">{{ label }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -177,7 +186,6 @@ export default {
   computed: {
     squadsToShow() {
       if (this.orbat && this.orbat.length) {
-        // Sort for consistency
         return this.orbat
           .slice()
           .sort((a, b) =>
@@ -196,6 +204,24 @@ export default {
         ];
       }
       return [];
+    },
+    // Fixed order of certification labels
+    certLabels() {
+      return [
+        "Rifleman",
+        "Machine Gunner",
+        "Anti Tank",
+        "Corpsmen",
+        "Combat Engineer",
+        "Marksman",
+        "Breacher",
+        "Grenadier",
+        "Pilot",
+        "RTO",
+        "PJ",
+        "NCO",
+        "Officer",
+      ];
     },
   },
   methods: {
@@ -224,15 +250,18 @@ export default {
       return "UNSC REGISTERED ELEMENT";
     },
 
+    // ---- CERTIFICATIONS ----------------------------------------------
+    hasCert(member, idx) {
+      const certs = member.certifications || [];
+      const flag = certs[idx];
+      return flag === "Y" || flag === true || flag === "1";
+    },
+
     // ---- RANK → IMAGE MAPPING ----------------------------------------
     rankCode(rank) {
       if (!rank) return null;
-
-      // Normalise to uppercase, strip extra spaces
       const key = rank.trim().toUpperCase();
 
-      // Map sheet rank labels → filename (without extension)
-      // Filenames are in public/ranks/ as you described.
       const rankMap = {
         // Enlisted / infantry
         RCT: "Rct",
@@ -276,8 +305,6 @@ export default {
     rankInsignia(rank) {
       const fileBase = this.rankCode(rank);
       if (!fileBase) return null;
-
-      // Files are under public/ranks/, e.g. /ranks/PFC.png
       return `/ranks/${fileBase}.png`;
     },
   },
@@ -562,19 +589,45 @@ export default {
 }
 
 /* Certs */
-.cert-tags {
+.cert-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.2rem;
+  gap: 0.15rem 0.75rem;
   margin-top: 0.2rem;
 }
 
-.cert-tag {
-  background: #1e90ff;
-  color: #fff;
-  padding: 0.18rem 0.45rem;
-  border-radius: 0.25rem;
+.cert-row {
+  display: flex;
+  align-items: center;
   font-size: 0.8rem;
+}
+
+.cert-checkbox {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid #7aa7c7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.3rem;
+  box-sizing: border-box;
+}
+
+.cert-checkbox.checked {
+  border-color: #1e90ff;
+  background: rgba(30, 144, 255, 0.15);
+}
+
+.checkbox-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #1e90ff;
+}
+
+.cert-label {
+  white-space: nowrap;
 }
 
 .cert-none {
