@@ -41,10 +41,6 @@
                       {{ hierarchy.chalkActual.members.length }} PERSONNEL
                     </p>
                   </div>
-
-                  <div class="squad-chevron">
-                    <span>▶</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -75,9 +71,6 @@
                       {{ sq.members.length }} PERSONNEL
                     </p>
                   </div>
-                  <div class="squad-chevron">
-                    <span>▶</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -105,9 +98,6 @@
                       {{ sq.members.length }} PERSONNEL
                     </p>
                   </div>
-                  <div class="squad-chevron">
-                    <span>▶</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -134,9 +124,6 @@
                       {{ sq.members.length }} PERSONNEL
                     </p>
                   </div>
-                  <div class="squad-chevron">
-                    <span>▶</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -147,7 +134,11 @@
     </div>
 
     <!-- ================= FULLSCREEN SQUAD ROSTER OVERLAY ================= -->
-    <div v-if="activeSquad" class="squad-overlay">
+    <div
+      v-if="activeSquad"
+      class="squad-overlay"
+      @click.self="closeSquad"
+    >
       <div class="squad-modal">
         <!-- Top bar -->
         <div class="squad-modal-header">
@@ -529,7 +520,7 @@ export default {
 
 .squad-header {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   padding: 1.4rem 2rem;
 }
@@ -569,12 +560,6 @@ export default {
   margin: 0.4rem 0 0;
   font-size: 1rem;
   color: #7aa7c7;
-}
-
-.squad-chevron {
-  font-size: 1.8rem;
-  color: #9ec5e6;
-  margin-left: 1.3rem;
 }
 
 /* ===== FULLSCREEN MODAL ============================================== */
