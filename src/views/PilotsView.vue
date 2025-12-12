@@ -17,13 +17,11 @@
         </div>
 
         <div v-else class="hierarchy-container">
-          <!-- COMMAND BRANCH LINES INTO CHALK 1/2/3 -->
-          <div class="chalk-branch c1"></div>
-          <div class="chalk-branch c2"></div>
-          <div class="chalk-branch c3"></div>
-
           <!-- TOP: CHALK ACTUAL -->
-          <div v-if="hierarchy.chalkActual" class="orbat-row center-row">
+          <div
+            v-if="hierarchy.chalkActual"
+            class="orbat-row center-row actual-row"
+          >
             <div class="squad-row single">
               <div
                 class="squad-card"
@@ -53,7 +51,10 @@
           </div>
 
           <!-- MIDDLE: CHALKS 1–3 -->
-          <div v-if="hierarchy.chalks.length" class="orbat-row">
+          <div
+            v-if="hierarchy.chalks.length"
+            class="orbat-row chalk-row"
+          >
             <div class="squad-row three">
               <div
                 v-for="sq in hierarchy.chalks"
@@ -128,8 +129,7 @@
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
                     <p class="squad-subtitle">
-                      {{ squadDescriptor(sq.squad) }}
-                    </p>
+                      {{ squadDescriptor(sq.squad) }}</p>
                     <p class="squad-count">
                       {{ sq.members.length }} PERSONNEL
                     </p>
@@ -184,7 +184,7 @@
               :key="member.id || member.name"
               class="member-card"
             >
-              <!-- Header with (optional) rank insignia -->
+              <!-- Header with rank insignia -->
               <div class="member-header">
                 <div
                   class="member-rank-insignia-wrapper"
@@ -431,7 +431,6 @@ export default {
 
 /* ===== HIERARCHY ROWS / LINES ======================================== */
 .hierarchy-container {
-  position: relative; /* needed for absolute lines */
   width: 100%;
   margin-top: 2rem;
 }
@@ -468,72 +467,41 @@ export default {
   }
 }
 
-/* ===== COMMAND LINES (desktop / wide only) =========================== */
+/* Command lines on desktop */
 @media (min-width: 900px) {
-  /* Vertical line down from Chalk Actual
-     - Starts a little lower
-     - Stops higher so it doesn't run into the chalk cards
-  */
-  .hierarchy-container::before {
+  /* vertical line from Chalk Actual downwards */
+  .actual-row {
+    position: relative;
+  }
+  .actual-row::after {
     content: "";
     position: absolute;
-    top: 140px;           /* was 150px */
+    bottom: -24px;
     left: 50%;
     transform: translateX(-50%);
-    width: 4px;
-    height: 100px;        /* was 120px -> bottom now ~240px */
-    background: rgba(30, 144, 255, 0.5);
+    width: 3px;
+    height: 24px;
+    background: rgba(30, 144, 255, 0.6);
     border-radius: 2px;
     pointer-events: none;
   }
 
-  /* Horizontal line across Chalk 1–3
-     - Raised so it sits above the chalk tiles, not through them
-  */
-  .hierarchy-container::after {
+  /* horizontal line above Chalks 1–3 */
+  .chalk-row {
+    position: relative;
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+  }
+  .chalk-row::before {
     content: "";
     position: absolute;
-    top: 240px;          /* was 260px */
-    left: 12%;
-    width: 76%;
-    height: 4px;
-    background: rgba(30, 144, 255, 0.5);
+    top: 0;
+    left: 8%;
+    right: 8%;
+    height: 3px;
+    background: rgba(30, 144, 255, 0.6);
     border-radius: 2px;
     pointer-events: none;
-  }
-
-  /* Short branches dropping from the bar into each chalk tile */
-  .chalk-branch {
-    position: absolute;
-    width: 4px;
-    height: 30px;        /* was 40px, so they end nearer the top edge */
-    background: rgba(30, 144, 255, 0.5);
-    border-radius: 2px;
-    pointer-events: none;
-  }
-
-  .chalk-branch.c1 {
-    top: 240px;          /* align with horizontal bar */
-    left: 22%;
-  }
-
-  .chalk-branch.c2 {
-    top: 240px;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-
-  .chalk-branch.c3 {
-    top: 240px;
-    left: 78%;
-  }
-}
-
-
-/* On small screens, hide the branch divs */
-@media (max-width: 899px) {
-  .chalk-branch {
-    display: none;
   }
 }
 
