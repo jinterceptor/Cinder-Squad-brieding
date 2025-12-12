@@ -470,25 +470,30 @@ export default {
 
 /* ===== COMMAND LINES (desktop / wide only) =========================== */
 @media (min-width: 900px) {
-  /* Vertical line down from Chalk Actual */
+  /* Vertical line down from Chalk Actual
+     - Starts a little lower
+     - Stops higher so it doesn't run into the chalk cards
+  */
   .hierarchy-container::before {
     content: "";
     position: absolute;
-    top: 150px; /* bottom of Chalk Actual tile area */
+    top: 140px;           /* was 150px */
     left: 50%;
     transform: translateX(-50%);
     width: 4px;
-    height: 120px;
+    height: 100px;        /* was 120px -> bottom now ~240px */
     background: rgba(30, 144, 255, 0.5);
     border-radius: 2px;
     pointer-events: none;
   }
 
-  /* Horizontal line across Chalk 1–3 */
+  /* Horizontal line across Chalk 1–3
+     - Raised so it sits above the chalk tiles, not through them
+  */
   .hierarchy-container::after {
     content: "";
     position: absolute;
-    top: 260px; /* roughly just above chalk tiles */
+    top: 240px;          /* was 260px */
     left: 12%;
     width: 76%;
     height: 4px;
@@ -497,31 +502,33 @@ export default {
     pointer-events: none;
   }
 
+  /* Short branches dropping from the bar into each chalk tile */
   .chalk-branch {
     position: absolute;
     width: 4px;
-    height: 40px;
+    height: 30px;        /* was 40px, so they end nearer the top edge */
     background: rgba(30, 144, 255, 0.5);
     border-radius: 2px;
     pointer-events: none;
   }
 
   .chalk-branch.c1 {
-    top: 260px;
+    top: 240px;          /* align with horizontal bar */
     left: 22%;
   }
 
   .chalk-branch.c2 {
-    top: 260px;
+    top: 240px;
     left: 50%;
     transform: translateX(-50%);
   }
 
   .chalk-branch.c3 {
-    top: 260px;
+    top: 240px;
     left: 78%;
   }
 }
+
 
 /* On small screens, hide the branch divs */
 @media (max-width: 899px) {
