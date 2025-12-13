@@ -9,7 +9,6 @@
       <div class="rhombus-back">&nbsp;</div>
     </div>
 
-    <!-- MAIN CONTENT -->
     <div class="section-content-container">
       <div class="orbat-wrapper">
         <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
@@ -23,22 +22,17 @@
                   <div class="squad-insignia">
                     <span>{{ squadInitials(hierarchy.chalkActual.squad) }}</span>
                   </div>
-
                   <div class="squad-meta">
                     <h2>{{ hierarchy.chalkActual.squad }}</h2>
-                    <p class="squad-subtitle">
-                      {{ squadDescriptor(hierarchy.chalkActual.squad) }}
-                    </p>
-                    <p class="squad-count">
-                      {{ hierarchy.chalkActual.members.length }} PERSONNEL
-                    </p>
+                    <p class="squad-subtitle">{{ squadDescriptor(hierarchy.chalkActual.squad) }}</p>
+                    <p class="squad-count">{{ personnelCount(hierarchy.chalkActual) }} PERSONNEL</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- MIDDLE: CHALKS 1–4 -->
+          <!-- CHALKS 1–4 -->
           <div v-if="hierarchy.chalks.length" class="orbat-row chalk-row">
             <div class="squad-row three">
               <div
@@ -54,14 +48,14 @@
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
                     <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
-                    <p class="squad-count">{{ sq.members.length }} PERSONNEL</p>
+                    <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- SUPPORT ELEMENTS -->
+          <!-- SUPPORT -->
           <div v-if="hierarchy.support.length" class="orbat-row">
             <div class="squad-row three">
               <div
@@ -77,7 +71,7 @@
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
                     <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
-                    <p class="squad-count">{{ sq.members.length }} PERSONNEL</p>
+                    <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
                   </div>
                 </div>
               </div>
@@ -100,21 +94,20 @@
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
                     <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
-                    <p class="squad-count">{{ sq.members.length }} PERSONNEL</p>
+                    <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <!-- END HIERARCHY -->
+
         </div>
       </div>
     </div>
 
-    <!-- ================= FULLSCREEN SQUAD ROSTER OVERLAY ================= -->
+    <!-- FULLSCREEN OVERLAY -->
     <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
       <div class="squad-modal">
-        <!-- Top bar -->
         <div class="squad-modal-header">
           <div class="squad-header-left">
             <div class="section-header clipped-medium-backward-bio">
@@ -127,13 +120,12 @@
           <button class="squad-close" @click="closeSquad">✕</button>
         </div>
 
-        <!-- Squad meta -->
         <div class="squad-modal-meta">
           <div class="squad-title">
             <h2>{{ activeSquad.squad }}</h2>
             <p class="subtitle">
               {{ squadDescriptor(activeSquad.squad) }} ·
-              {{ activeSquad.members.length }} PERSONNEL
+              {{ personnelCount(activeSquad) }} PERSONNEL
             </p>
           </div>
           <div class="squad-tag">
@@ -141,76 +133,106 @@
           </div>
         </div>
 
-        <!-- Scrollable content -->
         <div class="squad-modal-scroll">
-          <!-- FIRETEAM GROUPS -->
           <div v-for="ft in activeFireteams" :key="ft.name" class="fireteam-block">
             <div class="fireteam-header">
               <span class="fireteam-title">{{ ft.name.toUpperCase() }}</span>
-              <span class="fireteam-count">{{ ft.members.length }} SLOTS</span>
+              <span class="fireteam-count">{{ ft.slots.length }} SLOTS</span>
             </div>
 
             <div class="squad-members-grid">
               <div
-                v-for="member in ft.members"
-                :key="member.id || member.name"
+                v-for="(slot, idx) in ft.slots"
+                :key="slotKey(slot, idx)"
                 class="member-card"
+                :class="{
+                  vacant: slot.status === 'VACANT',
+                  closed: slot.status === 'CLOSED'
+                }"
               >
-                <!-- Header with rank insignia -->
-                <div class="member-header">
-                  <div class="member-rank-insignia-wrapper" v-if="rankInsignia(member.rank)">
-                    <img
-                      :src="rankInsignia(member.rank)"
-                      :alt="member.rank + ' insignia'"
-                      class="member-rank-insignia"
-                    />
+                <!-- VACANT/CLOSED tile -->
+                <template v-if="slot.status === 'VACANT' || slot.status === 'CLOSED'">
+                  <div class="member-header">
+                    <div class="member-header-text">
+                      <h3>{{ slot.status }}</h3>
+                      <p class="rank-line">
+                        <span class="rank">{{ slot.role }}</span>
+                        <span class="id">UNFILLED SLOT</span>
+                      </p>
+                    </div>
                   </div>
 
-                  <div class="member-header-text">
-                    <h3>{{ (member.name || '').toUpperCase() }}</h3>
-                    <p class="rank-line">
-                      <span class="rank">{{ member.rank || 'N/A' }}</span>
-                      <span class="id">ID: {{ member.id || "N/A" }}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Body -->
-                <div class="member-body">
-                  <div class="member-column left">
-                    <p><strong>Squad:</strong> {{ member.squad || activeSquad.squad }}</p>
-                    <p><strong>Fireteam:</strong> {{ member.fireteam || ft.name }}</p>
-                    <p><strong>Role:</strong> {{ member.slot || "Unassigned" }}</p>
-                    <p><strong>Join Date:</strong> {{ member.joinDate || "Unknown" }}</p>
+                  <div class="member-body">
+                    <div class="member-column left">
+                      <p><strong>Squad:</strong> {{ activeSquad.squad }}</p>
+                      <p><strong>Fireteam:</strong> {{ ft.name }}</p>
+                      <p><strong>Role:</strong> {{ slot.role }}</p>
+                    </div>
+                    <div class="member-column right">
+                      <p><strong>Certifications:</strong></p>
+                      <span class="cert-none">N/A</span>
+                    </div>
                   </div>
 
-                  <!-- Certifications (vertical list) -->
-                  <div class="member-column right">
-                    <p><strong>Certifications:</strong></p>
-                    <div class="cert-list">
-                      <div v-for="(label, idx) in certLabels" :key="label" class="cert-row">
-                        <span class="cert-checkbox" :class="{ checked: hasCert(member, idx) }">
-                          <span v-if="hasCert(member, idx)" class="checkbox-dot"></span>
-                        </span>
-                        <span class="cert-label">{{ label }}</span>
+                  <div class="member-footer">
+                    <span>SLOT STATUS: {{ slot.status }}</span>
+                    <span>UNSC ORBAT</span>
+                  </div>
+                </template>
+
+                <!-- FILLED tile -->
+                <template v-else>
+                  <div class="member-header">
+                    <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
+                      <img
+                        :src="rankInsignia(slot.member.rank)"
+                        :alt="slot.member.rank + ' insignia'"
+                        class="member-rank-insignia"
+                      />
+                    </div>
+
+                    <div class="member-header-text">
+                      <h3>{{ (slot.member?.name || "").toUpperCase() }}</h3>
+                      <p class="rank-line">
+                        <span class="rank">{{ slot.member?.rank || "N/A" }}</span>
+                        <span class="id">ID: {{ slot.member?.id || "N/A" }}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="member-body">
+                    <div class="member-column left">
+                      <p><strong>Squad:</strong> {{ slot.member?.squad || activeSquad.squad }}</p>
+                      <p><strong>Fireteam:</strong> {{ slot.member?.fireteam || ft.name }}</p>
+                      <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || "Unassigned" }}</p>
+                      <p><strong>Join Date:</strong> {{ slot.member?.joinDate || "Unknown" }}</p>
+                    </div>
+
+                    <div class="member-column right">
+                      <p><strong>Certifications:</strong></p>
+                      <div class="cert-list">
+                        <div v-for="(label, cidx) in certLabels" :key="label" class="cert-row">
+                          <span class="cert-checkbox" :class="{ checked: hasCert(slot.member, cidx) }">
+                            <span v-if="hasCert(slot.member, cidx)" class="checkbox-dot"></span>
+                          </span>
+                          <span class="cert-label">{{ label }}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <!-- Footer -->
-                <div class="member-footer">
-                  <span>BIOMETRIC RECORD VALID</span>
-                  <span>UNSC SYSTEMS DATABASE</span>
-                </div>
+                  <div class="member-footer">
+                    <span>BIOMETRIC RECORD VALID</span>
+                    <span>UNSC SYSTEMS DATABASE</span>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
-          <!-- END FIRETEAM GROUPS -->
         </div>
+
       </div>
     </div>
-    <!-- END OVERLAY -->
   </section>
 </template>
 
@@ -225,110 +247,96 @@ export default {
     return {
       activeSquad: null,
       certLabels: [
-        "Rifleman",
-        "Machine Gunner",
-        "Anti Tank",
-        "Corpsmen",
-        "Combat Engineer",
-        "Marksman",
-        "Breacher",
-        "Grenadier",
-        "Pilot",
-        "RTO",
-        "PJ",
-        "NCO",
-        "Officer",
+        "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
+        "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
     };
   },
   computed: {
     hierarchy() {
-      const groups = {
-        chalkActual: null,
-        chalks: [],
-        support: [],
-        other: [],
-      };
+      const groups = { chalkActual: null, chalks: [], support: [], other: [] };
 
       (this.orbat || []).forEach((sq) => {
         const n = String(sq.squad || "").trim().toLowerCase();
 
-        if (n === "chalk actual") {
-          groups.chalkActual = sq;
-        } else if (n === "chalk 1" || n === "chalk 2" || n === "chalk 3" || n === "chalk 4") {
-          groups.chalks.push(sq);
-        } else if (
-          n === "broadsword command" ||
-          n === "broadsword" ||
-          n === "wyvern air wing" ||
-          n === "wyvern" ||
-          n === "caladrius" ||
-          n === "ifrit"
-        ) {
+        if (n === "chalk actual") groups.chalkActual = sq;
+        else if (["chalk 1","chalk 2","chalk 3","chalk 4"].includes(n)) groups.chalks.push(sq);
+        else if (["broadsword command","broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n))
           groups.support.push(sq);
-        } else {
-          groups.other.push(sq);
-        }
+        else groups.other.push(sq);
       });
 
-      groups.chalks.sort((a, b) => a.squad.localeCompare(b.squad, undefined, { numeric: true }));
-      groups.support.sort((a, b) => a.squad.localeCompare(b.squad));
-      groups.other.sort((a, b) => a.squad.localeCompare(b.squad));
-
+      groups.chalks.sort((a,b)=>a.squad.localeCompare(b.squad, undefined, {numeric:true}));
+      groups.support.sort((a,b)=>a.squad.localeCompare(b.squad));
+      groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
       return groups;
     },
 
     activeFireteams() {
       if (!this.activeSquad) return [];
 
-      // Group members by fireteam (fallback to "Element")
+      // Prefer structured slots (from App.vue)
+      if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
+        const sorted = this.activeSquad.fireteams.slice().map((ft) => ({
+          name: ft.name || "Element",
+          slots: (ft.slots || []).slice(),
+        }));
+
+        const orderKey = (n) => {
+          const t = String(n || "").toLowerCase();
+          if (t === "fireteam 1") return 0;
+          if (t === "fireteam 2") return 1;
+          if (t === "fireteam 3") return 2;
+          if (t === "fireteam 4") return 3;
+          if (t === "element") return 90;
+          return 50;
+        };
+
+        sorted.sort((a,b)=>{
+          const ka = orderKey(a.name), kb = orderKey(b.name);
+          if (ka !== kb) return ka - kb;
+          return String(a.name).localeCompare(String(b.name), undefined, {numeric:true});
+        });
+
+        return sorted.filter((ft) => ft.slots && ft.slots.length);
+      }
+
+      // Fallback: group members by member.fireteam
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
         map[ft] ??= [];
-        map[ft].push(m);
+        map[ft].push({ status: "FILLED", role: m.slot || "Unassigned", member: m });
       });
 
-      // Sort members inside each fireteam: try slot then name
-      const sortMembers = (a, b) => {
-        const sa = (a.slot || "").toLowerCase();
-        const sb = (b.slot || "").toLowerCase();
-        if (sa && sb && sa !== sb) return sa.localeCompare(sb);
-        return (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
-      };
-
-      const out = Object.entries(map).map(([name, members]) => ({
-        name,
-        members: members.slice().sort(sortMembers),
-      }));
-
-      // Fireteam 1/2 first, then Element, then everything else
-      const orderKey = (n) => {
-        const t = n.toLowerCase();
-        if (t === "fireteam 1") return 0;
-        if (t === "fireteam 2") return 1;
-        if (t === "fireteam 3") return 2;
-        if (t === "fireteam 4") return 3;
-        if (t === "element") return 90;
-        return 50;
-      };
-
-      out.sort((a, b) => {
-        const ka = orderKey(a.name);
-        const kb = orderKey(b.name);
-        if (ka !== kb) return ka - kb;
-        return a.name.localeCompare(b.name, undefined, { numeric: true });
-      });
-
-      return out;
+      return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
   },
   methods: {
-    openSquad(squad) {
-      this.activeSquad = squad;
+    openSquad(sq) {
+      this.activeSquad = sq;
     },
     closeSquad() {
       this.activeSquad = null;
+    },
+
+    personnelCount(sq) {
+      // count filled members (not vacant/closed)
+      if (sq.fireteams && sq.fireteams.length) {
+        let count = 0;
+        sq.fireteams.forEach((ft) => {
+          (ft.slots || []).forEach((s) => {
+            if (s.status === "FILLED" && s.member) count++;
+          });
+        });
+        return count;
+      }
+      return (sq.members || []).length;
+    },
+
+    slotKey(slot, idx) {
+      if (slot.member?.id) return slot.member.id;
+      return `${slot.status}-${slot.role}-${idx}`;
     },
 
     squadInitials(name) {
@@ -344,69 +352,42 @@ export default {
     squadDescriptor(name) {
       const n = String(name || "").toLowerCase();
       if (n.includes("chalk")) return "INFANTRY ELEMENT";
-      if (n.includes("air") || n.includes("wing")) return "AVIATION SUPPORT";
+      if (n.includes("air") || n.includes("wing") || n.includes("wyvern")) return "AVIATION SUPPORT";
       if (n.includes("command") || n.includes("actual")) return "COMMAND ELEMENT";
       return "UNSC ELEMENT";
     },
 
     hasCert(member, idx) {
-      const certs = member.certifications || [];
-      const flag = certs[idx];
-      return flag === "Y" || flag === true || flag === "1";
+      const certs = member?.certifications || [];
+      return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
     },
 
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
-
       const rankMap = {
-        RCT: "Rct",
-        PVT: "Pvt",
-        PFC: "PFC",
-        SPC: "Spc",
-        SPC2: "Spc2",
-        SPC3: "Spc3",
-        SPC4: "Spc4",
-        LCPL: "LCpl",
-        CPL: "Cpl",
-        SGT: "Sgt",
-        SSGT: "SSgt",
-
-        WO: "WO",
-        CWO2: "CWO2",
-        CWO3: "CWO3",
-        CWO4: "CWO4",
-        CWO5: "CWO5",
-
-        "2NDLT": "2ndLt",
-        "1STLT": "1stLt",
-        CAPT: "Capt",
-        MAJ: "Maj",
-
-        HR: "HR",
-        HA: "HA",
-        HN: "HN",
-        HM3: "HM3",
-        HM2: "HM2",
-        HM1: "HM1",
-        HMC: "HMC",
+        RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
+        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt",
+        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
+        "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
+        HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
       };
-
       return rankMap[key] || null;
     },
 
     rankInsignia(rank) {
       const fileBase = this.rankCode(rank);
-      if (!fileBase) return null;
-      return `/ranks/${fileBase}.png`;
+      return fileBase ? `/ranks/${fileBase}.png` : null;
     },
   },
 };
 </script>
 
 <style scoped>
-/* ===== MAIN CONTAINER ================================================= */
+/* IMPORTANT: make this view scrollable even though #app is overflow:hidden */
 .section-container {
+  height: 100vh;
+  overflow-y: auto;
   padding: 2.5rem 3rem;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
@@ -423,9 +404,9 @@ export default {
 .orbat-wrapper {
   width: 100%;
   margin-top: 0.75rem;
+  padding-bottom: 4rem; /* so bottom tiles aren’t clipped */
 }
 
-/* ===== HIERARCHY ROWS / LINES ======================================== */
 .hierarchy-container {
   width: 100%;
   margin-top: 2rem;
@@ -451,7 +432,6 @@ export default {
   gap: 2.5rem;
 }
 
-/* Responsive */
 @media (max-width: 1400px) {
   .squad-row.three {
     grid-template-columns: repeat(2, minmax(260px, 1fr));
@@ -463,7 +443,7 @@ export default {
   }
 }
 
-/* Command lines on desktop */
+/* Command lines */
 @media (min-width: 900px) {
   .actual-row {
     position: relative;
@@ -499,7 +479,7 @@ export default {
   }
 }
 
-/* ===== SQUAD TILE ===================================================== */
+/* Squad tiles */
 .squad-card {
   background: radial-gradient(circle at top left, rgba(30, 144, 255, 0.25), transparent 65%),
     rgba(0, 10, 30, 0.9);
@@ -511,19 +491,16 @@ export default {
   padding-right: 1.5rem;
   transition: 0.15s ease-in-out;
 }
-
 .squad-card:hover {
   transform: translateY(-2px);
   border-color: #5ab3ff;
 }
-
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
   padding: 1.4rem 2rem;
 }
-
 .squad-insignia {
   width: 95px;
   height: 95px;
@@ -539,28 +516,25 @@ export default {
   background: rgba(0, 0, 0, 0.7);
   text-align: center;
 }
-
 .squad-meta h2 {
   margin: 0;
   font-size: 2.3rem;
   color: #e0f0ff;
   letter-spacing: 0.05em;
 }
-
 .squad-subtitle {
   margin: 0.2rem 0 0;
   font-size: 1.1rem;
   color: #9ec5e6;
   text-transform: uppercase;
 }
-
 .squad-count {
   margin: 0.4rem 0 0;
   font-size: 1rem;
   color: #7aa7c7;
 }
 
-/* ===== FULLSCREEN MODAL ============================================== */
+/* Overlay */
 .squad-overlay {
   position: fixed;
   inset: 0;
@@ -570,39 +544,32 @@ export default {
   align-items: center;
   justify-content: center;
 }
-
 .squad-modal {
   background-color: #050811;
   color: #dce6f1;
-  font-family: "Consolas", "Courier New", monospace;
   width: 92vw;
   max-width: 1700px;
   max-height: 90vh;
   border-radius: 0.8rem;
   box-shadow: 0 0 24px rgba(0, 0, 0, 0.9);
   padding: 1.5rem 2rem 2rem 2rem;
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
-
 .squad-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.8rem;
 }
-
 .squad-header-left {
   display: flex;
   align-items: center;
 }
-
 .squad-header-left img {
   width: 48px;
   margin-right: 0.5rem;
 }
-
 .squad-close {
   background: transparent;
   border: 1px solid rgba(220, 230, 241, 0.4);
@@ -612,7 +579,6 @@ export default {
   font-size: 1rem;
   cursor: pointer;
 }
-
 .squad-modal-meta {
   display: flex;
   justify-content: space-between;
@@ -621,20 +587,17 @@ export default {
   border-bottom: 1px solid rgba(30, 144, 255, 0.6);
   padding-bottom: 0.5rem;
 }
-
 .squad-title h2 {
   margin: 0;
   font-size: 1.8rem;
   letter-spacing: 0.08em;
 }
-
 .squad-title .subtitle {
   margin: 0.25rem 0 0;
   font-size: 0.95rem;
   color: #9ec5e6;
   text-transform: uppercase;
 }
-
 .squad-tag {
   border: 2px solid #1e90ff;
   border-radius: 0.4rem;
@@ -642,7 +605,6 @@ export default {
   font-size: 0.95rem;
   color: #1e90ff;
 }
-
 .squad-modal-scroll {
   margin-top: 0.5rem;
   flex: 1;
@@ -650,11 +612,10 @@ export default {
   padding-right: 0.5rem;
 }
 
-/* ===== FIRETEAM BLOCKS =============================================== */
+/* Fireteams */
 .fireteam-block {
   margin-bottom: 1.25rem;
 }
-
 .fireteam-header {
   display: flex;
   justify-content: space-between;
@@ -665,25 +626,22 @@ export default {
   border-radius: 0.35rem;
   margin-bottom: 0.75rem;
 }
-
 .fireteam-title {
   letter-spacing: 0.12em;
   color: #e0f0ff;
   font-size: 0.95rem;
 }
-
 .fireteam-count {
   font-size: 0.8rem;
   color: #7aa7c7;
 }
 
-/* ===== MEMBER CARDS =================================================== */
+/* Member/Slot cards */
 .squad-members-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 1rem;
 }
-
 .member-card {
   background: rgba(0, 10, 30, 0.95);
   border-radius: 0.4rem;
@@ -693,39 +651,46 @@ export default {
   display: flex;
   flex-direction: column;
 }
+.member-card.vacant,
+.member-card.closed {
+  border-left-color: rgba(180, 180, 180, 0.8);
+  opacity: 0.85;
+}
+.member-card.closed {
+  opacity: 0.6;
+  filter: grayscale(0.2);
+}
 
 .member-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
-
 .member-rank-insignia {
   width: 40px;
   height: 40px;
   object-fit: contain;
 }
-
 .member-header-text h3 {
   margin: 0;
   font-size: 1.2rem;
   color: #1e90ff;
 }
-
+.member-card.vacant .member-header-text h3,
+.member-card.closed .member-header-text h3 {
+  color: #c7c7c7;
+}
 .rank-line {
   margin: 0.2rem 0 0;
   font-size: 0.9rem;
   color: #9ec5e6;
 }
-
 .rank {
   margin-right: 0.6rem;
 }
-
 .id {
   opacity: 0.8;
 }
-
 .member-body {
   display: flex;
   flex-direction: column;
@@ -733,7 +698,6 @@ export default {
   margin-top: 0.6rem;
   font-size: 0.9rem;
 }
-
 .member-column.left p,
 .member-column.right p {
   margin: 0.18rem 0;
@@ -745,13 +709,11 @@ export default {
   gap: 0.15rem;
   margin-top: 0.2rem;
 }
-
 .cert-row {
   display: flex;
   align-items: center;
   font-size: 0.8rem;
 }
-
 .cert-checkbox {
   width: 14px;
   height: 14px;
@@ -763,21 +725,22 @@ export default {
   margin-right: 0.3rem;
   box-sizing: border-box;
 }
-
 .cert-checkbox.checked {
   border-color: #1e90ff;
   background: rgba(30, 144, 255, 0.15);
 }
-
 .checkbox-dot {
   width: 8px;
   height: 8px;
   border-radius: 2px;
   background: #1e90ff;
 }
-
 .cert-label {
   white-space: nowrap;
+}
+.cert-none {
+  font-size: 0.8rem;
+  opacity: 0.75;
 }
 
 .member-footer {
