@@ -16,6 +16,7 @@
     />
   </div>
 
+  <!-- UNSC startup tone -->
   <audio autoplay>
     <source src="/startup.ogg" type="audio/ogg" />
   </audio>
@@ -40,14 +41,15 @@ export default {
       missions: [],
       events: [],
 
-      members: [],   // MembersMaster
-      orbat: [],     // built from RefData membership + slotting
-      reserves: [],  // optional later
+      members: [],   // Personnel roster (MembersMaster)
+      orbat: [],     // ORBAT generated from RefData membership + slotting
+      reserves: [],  // Optional later (kept for compatibility)
     };
   },
 
   created() {
-    this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
+    // Theme: make the browser title read more UNSC-friendly
+    this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
 
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
@@ -85,7 +87,7 @@ export default {
     },
 
     /* ===============================================================
-     *  MEMBERS MASTER
+     *  PERSONNEL ROSTER (MembersMaster)
      * =============================================================== */
     async loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
@@ -111,7 +113,7 @@ export default {
                     .slice(5, 5 + CERT_COLUMNS)
                     .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
 
-                  // filled from RefData:
+                  // Filled from RefData:
                   squad: "",
                   fireteam: "",
                   slot: "",
@@ -251,8 +253,8 @@ export default {
             };
 
             /* ==========================================================
-             * A) MEMBERSHIP (Squad Member / Squads) — ONLY source of
-             *    Reserves/Recruits/Fillers population.
+             * A) MEMBERSHIP (Squad Member / Squads)
+             *    - This is the authoritative roster assignment source.
              * ========================================================== */
             const membershipRows = rows
               .slice(membershipHeaderRowIndex + 1)
@@ -264,17 +266,15 @@ export default {
               })
               .filter(Boolean);
 
-            // Apply membership squad if member found
             membershipRows.forEach(({ label, squad }) => {
               const mem = findMemberByLabel(label);
               if (!mem) return;
-              // Only set if not slotted later; slotting will overwrite
-              if (!mem.squad) mem.squad = squad;
+              if (!mem.squad) mem.squad = squad; // slotting can overwrite later
             });
 
             /* ==========================================================
-             * B) SLOTTING (Slot + Role column) — produces fireteams, and
-             *    VACANT/CLOSED tiles.
+             * B) SLOTTING (Slot + Role column)
+             *    - Generates fireteams and VACANT/CLOSED tiles.
              * ========================================================== */
             const slotEntries = []; // { squad, fireteam, role, status, member|null }
 
@@ -289,7 +289,6 @@ export default {
               }
 
               // Single unit heading (no fireteam)
-              // Examples: Broadsword / Ifrit / Wyvern / Caladrius / Chalk Actual
               const n = this.normalize(raw);
               const singles = [
                 "broadsword",
@@ -311,13 +310,11 @@ export default {
               let currentSquad = "";
               let currentFireteam = "Element";
 
-              // Start reading right after slot header row (not hard-coded row 2)
               for (let i = slotHeaderRowIndex + 1; i < rows.length; i++) {
                 const r = rows[i] || [];
                 const slotTxt = String(r[slotCol] || "").trim(); // member / VACANT / CLOSED
                 const roleTxt = String(r[roleCol] || "").trim(); // heading OR role
 
-                // Heading rows live in role column
                 const heading = parseHeading(roleTxt);
                 if (heading) {
                   currentSquad = heading.squad;
@@ -329,23 +326,20 @@ export default {
 
                 const slotNorm = this.normalize(slotTxt);
 
-                // vacant/closed
                 if (slotNorm === "vacant" || slotNorm === "closed") {
                   slotEntries.push({
                     squad: currentSquad,
                     fireteam: currentFireteam,
                     role: roleTxt,
-                    status: slotNorm.toUpperCase(), // VACANT / CLOSED
+                    status: slotNorm.toUpperCase(),
                     member: null,
                   });
                   continue;
                 }
 
-                // filled
                 const mem = slotTxt ? findMemberByLabel(slotTxt) : null;
                 if (!mem) continue;
 
-                // Slotting overwrites membership details
                 mem.squad = currentSquad;
                 mem.fireteam = currentFireteam;
                 mem.slot = roleTxt;
@@ -363,10 +357,7 @@ export default {
             console.log("Parsed slot entries:", slotEntries.length);
 
             /* ==========================================================
-             * C) BUILD ORBAT
-             *    - always show squads, even if empty
-             *    - populate members from member.squad (membership+slotting)
-             *    - populate fireteams/slots from slotEntries + slotted members
+             * C) BUILD ORBAT (always include all squads)
              * ========================================================== */
             const ALWAYS_SQUADS = [
               "Chalk Actual",
@@ -387,7 +378,7 @@ export default {
               orbatMap[s] = { squad: s, members: [], fireteams: {} };
             });
 
-            // 1) Add members to squads (from membership or slotting)
+            // Add members to squads
             this.members.forEach((m) => {
               if (!m.squad) return;
 
@@ -397,27 +388,20 @@ export default {
 
               orbatMap[m.squad].members.push(m);
 
-              // If they have fireteam/slot info, add as FILLED slot
               const ft = (m.fireteam || "").trim();
               const role = (m.slot || "").trim();
               if (ft && role) {
                 orbatMap[m.squad].fireteams[ft] ??= { name: ft, slots: [] };
-                // Avoid duplicates if we already added this via slotEntries
-                // (slotEntries may be missing if parsing fails; this is safe)
                 const exists = orbatMap[m.squad].fireteams[ft].slots.some(
                   (s) => s.status === "FILLED" && s.member?.id && s.member.id === m.id && s.role === role
                 );
                 if (!exists) {
-                  orbatMap[m.squad].fireteams[ft].slots.push({
-                    role,
-                    status: "FILLED",
-                    member: m,
-                  });
+                  orbatMap[m.squad].fireteams[ft].slots.push({ role, status: "FILLED", member: m });
                 }
               }
             });
 
-            // 2) Add VACANT/CLOSED (and any FILLED from slotEntries) into fireteams
+            // Add VACANT/CLOSED + any extra slotEntries
             slotEntries.forEach((e) => {
               if (!orbatMap[e.squad]) {
                 orbatMap[e.squad] = { squad: e.squad, members: [], fireteams: {} };
@@ -425,7 +409,6 @@ export default {
               const ftName = e.fireteam || "Element";
               orbatMap[e.squad].fireteams[ftName] ??= { name: ftName, slots: [] };
 
-              // Prevent duplicate FILLED entries (member+role)
               if (e.status === "FILLED" && e.member?.id) {
                 const exists = orbatMap[e.squad].fireteams[ftName].slots.some(
                   (s) => s.status === "FILLED" && s.member?.id === e.member.id && s.role === e.role
@@ -440,17 +423,14 @@ export default {
               });
             });
 
-            // 3) IMPORTANT: DO NOT dump unassigned members into Reserves.
-            // Reserves/Recruits/Fillers are determined only by membership columns N/O.
-            // So: nothing else to do here.
+            // Important: we DO NOT auto-dump unassigned into Reserves.
+            // Reserves/Recruit/Fillers are determined only by membership columns N/O.
 
-            // 4) Finalize structure
             this.orbat = Object.values(orbatMap).map((s) => ({
               squad: s.squad,
               members: (s.members || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")),
               fireteams: Object.values(s.fireteams || {}).map((ft) => ({
                 name: ft.name,
-                // Sort so CLOSED/VACANT don't jump around
                 slots: (ft.slots || []).slice(),
               })),
             }));
