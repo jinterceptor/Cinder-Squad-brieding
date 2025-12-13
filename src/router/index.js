@@ -1,7 +1,7 @@
 import { createMemoryHistory, createWebHistory, createRouter } from "vue-router";
 
 import Status from "@/views/StatusView.vue";
-import Roster from "@/views/PilotsView.vue";
+import Pilots from "@/views/PilotsView.vue";
 import Events from "@/views/EventsView.vue";
 import Config from "@/assets/info/general-config.json";
 
@@ -20,18 +20,18 @@ const routes = [
     meta: { title: `${DEFAULT_TITLE} BRIEFING SYSTEM` },
   },
   {
-    path: "/roster",
-    name: "Roster",
-    component: Roster,
+    path: "/pilots",
+    name: "Unit Roster",
+    component: Pilots,
     props: true,
     meta: { title: `${DEFAULT_TITLE} UNIT ROSTER` },
   },
   {
     path: "/events",
-    name: "Operation Log",
+    name: "Operations Log",
     component: Events,
     props: true,
-    meta: { title: `${DEFAULT_TITLE} OPERATION LOG` },
+    meta: { title: `${DEFAULT_TITLE} OPERATIONS LOG` },
   },
 ];
 
