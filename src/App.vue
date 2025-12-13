@@ -40,26 +40,17 @@ export default {
       missions: [],
       events: [],
 
-      // Primary dataset (MembersMaster)
-      members: [],
-
-      // What PilotsView uses (classic structure: { squad, members: [] })
-      orbat: [],
-
-      // Convenience bucket (optional; kept for compatibility)
-      reserves: [],
+      members: [],   // from MembersMaster
+      orbat: [],     // built from RefData slotting + fallback membership
+      reserves: [],  // optional later
     };
   },
 
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
-    this.importMissions(
-      import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" })
-    );
-    this.importEvents(
-      import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" })
-    );
+    this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
+    this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
     const membersUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv";
@@ -67,7 +58,6 @@ export default {
     const refDataUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
 
-    // Load MembersMaster first (so RefData can match to real member records)
     this.loadMembersCSV(membersUrl).then(() => {
       this.loadRefDataCSV(refDataUrl);
     });
@@ -78,9 +68,6 @@ export default {
   },
 
   methods: {
-    /* ===============================================================
-     * Utilities
-     * =============================================================== */
     normalize(str) {
       return String(str || "")
         .replace(/"/g, "")
@@ -98,7 +85,7 @@ export default {
     },
 
     /* ===============================================================
-     * MEMBERS MASTER (MembersMaster CSV)
+     *  MEMBERS MASTER
      * =============================================================== */
     async loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
@@ -107,326 +94,228 @@ export default {
           skipEmptyLines: true,
           header: false,
           complete: (results) => {
-            // Row 0 = title row, Row 1 = header row, data starts at row 2
-            const rows = (results.data || []).slice(2);
-
+            const rows = results.data.slice(2); // skip title + header rows
             const CERT_COLUMNS = 13;
 
-            const members = rows
+            this.members = rows
               .map((row) => {
                 const name = row[1]?.trim();
                 if (!name) return null;
 
-                const rank = row[0]?.trim() || "";
-                const joinDate = row[3]?.trim() || "";
-                const id = row[4]?.trim() || "";
-
-                const certifications = row
-                  .slice(5, 5 + CERT_COLUMNS)
-                  .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N"));
-
                 return {
-                  rank,
+                  rank: row[0]?.trim() || "",
                   name,
-                  joinDate,
-                  id,
-                  certifications,
+                  joinDate: row[3]?.trim() || "",
+                  id: row[4]?.trim() || "",
+                  certifications: row
+                    .slice(5, 5 + CERT_COLUMNS)
+                    .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
 
-                  // These get filled/overridden by RefData:
+                  // filled from RefData slotting
                   squad: "",
                   fireteam: "",
                   slot: "",
-                  slotStatus: "", // "VACANT" / "CLOSED" / ""
                 };
               })
               .filter(Boolean);
 
-            this.members = members;
             console.log("Members loaded:", this.members.length);
-            resolve(members);
+            resolve(this.members);
           },
-          error: (err) => {
-            console.error("Error loading MembersMaster:", err);
-            reject(err);
-          },
+          error: reject,
         });
       });
     },
 
     /* ===============================================================
-     * REFDATA (RefData CSV)
-     * - Part A: "Squad Member" + "Squads" sets general membership
-     * - Part B: "Squad Slots/Slot" + "Squad Roles/Role" sets fireteam + role
+     *  REFDATA — Slotting + fallback squad membership
      * =============================================================== */
     async loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
-          // Keep blanks so section headers / spacing don’t break context
-          skipEmptyLines: false,
+          skipEmptyLines: false, // KEEP empties; headings rely on them
           header: false,
           complete: (results) => {
-            const rows = results.data || [];
+            const rows = results.data;
 
-            // ----------- Find a usable header row (row 0 or row 1 typically) -----------
+            // Try first 2 rows as header candidates
             const headerCandidates = [
               { idx: 0, row: rows[0] || [] },
               { idx: 1, row: rows[1] || [] },
-              { idx: 2, row: rows[2] || [] },
             ];
 
             const findCol = (row, names) => {
-              const want = names.map((n) => this.normalize(n));
-              return row.findIndex((cell) => want.includes(this.normalize(cell)));
+              const wanted = names.map((n) => this.normalize(n));
+              return row.findIndex((c) => wanted.includes(this.normalize(c)));
             };
 
             let headerRowIndex = -1;
-            let colMember = -1; // "Squad Member"
-            let colSquad = -1; // "Squads"
-            let colSlotName = -1; // "Squad Slots" or "Slot"
-            let colRole = -1; // "Squad Roles" or "Role"
+            let col = { m: -1, s: -1, sl: -1, r: -1 };
 
             for (const cand of headerCandidates) {
-              const row = cand.row;
+              const r = cand.row;
 
-              const m = findCol(row, ["Squad Member"]);
-              const s = findCol(row, ["Squads"]);
-              const sl = findCol(row, ["Squad Slots", "Slot"]);
-              const r = findCol(row, ["Squad Roles", "Role"]);
+              const m = findCol(r, ["Squad Member"]);
+              const s = findCol(r, ["Squads"]);
+              const sl = findCol(r, ["Squad Slots", "Slot"]);
+              const role = findCol(r, ["Squad Roles", "Role"]);
 
-              // Accept if we have at least the slots+roles OR member+squads.
-              // In practice we usually have all four.
-              if ((m !== -1 && s !== -1) || (sl !== -1 && r !== -1)) {
+              // We accept if we can do at least membership matching, and preferably slotting too.
+              if (m !== -1 && s !== -1) {
                 headerRowIndex = cand.idx;
-                colMember = m;
-                colSquad = s;
-                colSlotName = sl;
-                colRole = r;
+                col = { m, s, sl, r: role };
                 break;
               }
             }
 
             if (headerRowIndex === -1) {
-              console.error("RefData headings not found (checked rows 0–2).");
+              console.error("RefData headers not found (Squad Member / Squads)");
               resolve([]);
               return;
             }
 
-            console.log("RefData header row used:", headerRowIndex, {
-              colMember,
-              colSquad,
-              colSlotName,
-              colRole,
-            });
+            console.log("RefData header row used:", headerRowIndex, col);
 
-            // Helpers
-            const isVacantOrClosed = (txt) => {
-              const t = this.normalize(txt);
-              if (t === "vacant") return "VACANT";
-              if (t === "closed") return "CLOSED";
-              return "";
-            };
+            // ---------- 1) FALLBACK MEMBERSHIP: Squad Member + Squads ----------
+            // This ensures Chalk Actual / Wyvern / Caladrius etc can still populate even if not in slotting.
+            const membership = rows
+              .slice(headerRowIndex + 1)
+              .map((row) => {
+                const memberLabel = String(row[col.m] || "").trim();
+                const squadName = String(row[col.s] || "").trim();
+                if (!memberLabel || !squadName) return null;
+                return { memberLabel, squad: squadName, normLabel: this.normalize(memberLabel) };
+              })
+              .filter(Boolean);
 
-            const matchMemberFromLabel = (label) => {
-              const s = this.normalize(label);
-              if (!s) return null;
-
-              // Try direct inclusion of full member.name
-              const direct = this.members.find((mem) => s.includes(this.normalize(mem.name)));
+            // Helper: find member by label (rank + name strings)
+            const findMemberByLabel = (labelNorm) => {
+              // 1) direct contains normalized full name
+              const direct = this.members.find((mem) => labelNorm.includes(this.normalize(mem.name)));
               if (direct) return direct;
 
-              // Try surname + initial approach
-              const parts = s.split(" ");
+              // 2) initial + surname heuristic
+              const parts = labelNorm.split(" ");
               const surname = parts[parts.length - 1] || "";
-              const initialMatch = s.match(/\b([a-z])\./i);
+              const initialMatch = labelNorm.match(/\b([a-z])\./i);
               const initial = initialMatch ? initialMatch[1].toLowerCase() : "";
 
-              // Match by surname + initial (if available)
-              const bySurname = this.members.find((mem) => {
-                const n = this.normalize(mem.name);
-                const np = n.split(" ");
-                const memSurname = np[np.length - 1] || "";
-                const memInitial = (np[0] || "").charAt(0);
-                if (!surname || memSurname !== surname) return false;
-                if (initial && memInitial !== initial) return false;
-                return true;
-              });
-              if (bySurname) return bySurname;
-
-              // Last resort: surname-only
               return (
                 this.members.find((mem) => {
                   const n = this.normalize(mem.name);
                   const np = n.split(" ");
                   const memSurname = np[np.length - 1] || "";
-                  return surname && memSurname === surname;
+                  const memInitial = (np[0] || "").charAt(0);
+                  if (!surname || memSurname !== surname) return false;
+                  if (initial && memInitial !== initial) return false;
+                  return true;
                 }) || null
               );
             };
 
-            // ==========================================================
-            // PART A: General squad membership (Squad Member + Squads)
-            // ==========================================================
-            if (colMember !== -1 && colSquad !== -1) {
-              const assignments = rows
-                .slice(headerRowIndex + 1)
-                .map((row) => {
-                  const memberLabel = row[colMember];
-                  const squadName = row[colSquad];
-                  if (!memberLabel || !squadName) return null;
+            // Apply fallback squad if present
+            membership.forEach((m) => {
+              const mem = findMemberByLabel(m.normLabel);
+              if (!mem) return;
+              if (!mem.squad) mem.squad = m.squad; // don't overwrite slotting later
+            });
 
-                  const label = String(memberLabel).trim();
-                  const squad = String(squadName).trim();
-                  if (!label || !squad) return null;
+            // ---------- 2) SLOT PARSING: Slot + Role columns ----------
+            const KNOWN_SQUADS = [
+              "Chalk Actual",
+              "Chalk 1",
+              "Chalk 2",
+              "Chalk 3",
+              "Chalk 4",
+              "Broadsword",
+              "Broadsword Command",
+              "Ifrit",
+              "Wyvern",
+              "Wyvern Air Wing",
+              "Caladrius",
+              "Reserves",
+              "Recruit",
+              "Recruits",
+              "Fillers",
+            ].map((s) => this.normalize(s));
 
-                  return { label, squad };
-                })
-                .filter(Boolean);
+            const parseHeading = (txt) => {
+              const raw = String(txt || "").trim();
+              if (!raw) return null;
 
-              // Apply membership squads (non-slot baseline)
-              this.members = this.members.map((m) => {
-                // only set if not already set later; slotting will override
-                const fullLabelGuess = `${m.rank} ${m.name}`.trim();
+              // Fireteam heading
+              const ft = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
+              if (ft) {
+                return { squad: ft[1].trim(), fireteam: `Fireteam ${ft[2].trim()}` };
+              }
 
-                const hit =
-                  assignments.find((a) => this.normalize(a.label) === this.normalize(fullLabelGuess)) ||
-                  assignments.find((a) => this.normalize(a.label).includes(this.normalize(m.name)));
+              // Non-fireteam unit heading (Broadsword, Wyvern, Caladrius, etc.)
+              if (KNOWN_SQUADS.includes(this.normalize(raw))) {
+                return { squad: raw.trim(), fireteam: "Element" };
+              }
 
-                return {
-                  ...m,
-                  squad: hit ? hit.squad : m.squad,
-                };
-              });
+              return null;
+            };
 
-              console.log("General squad assignments applied:", assignments.length);
-            }
+            // If slotting columns not found, we still build ORBAT from membership
+            const canSlot = col.sl !== -1 && col.r !== -1;
 
-            // ==========================================================
-            // PART B: Slotting + fireteams/roles (Squad Slots + Squad Roles)
-            // ==========================================================
-            // This is what adds: squad + fireteam + slot + vacant/closed
             const slotRows = [];
-            const discoveredSquads = new Set();
+            let currentSquad = "";
+            let currentFireteam = "Element";
 
-            if (colSlotName !== -1 && colRole !== -1) {
-              let currentSquad = "";
-              let currentFireteam = "";
-
-              const parseFireteamHeading = (text) => {
-                const raw = String(text || "").trim();
-                if (!raw) return null;
-                // "<SQUAD> Fireteam <N>"
-                const m = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
-                if (!m) return null;
-                return { squad: m[1].trim(), fireteam: `Fireteam ${m[2].trim()}` };
-              };
-
-              // Also allow headings like "Broadsword", "Ifrit", etc (no fireteam)
-              const parseUnitHeading = (text) => {
-                const raw = String(text || "").trim();
-                if (!raw) return null;
-
-                // reject if it's obviously a role label (too short/too generic would be ambiguous)
-                // We'll only accept as a unit heading if it matches known unit names,
-                // or if it's a single word / title-cased and not "Squad Lead" etc.
-                const n = this.normalize(raw);
-
-                const known = [
-                  "chalk actual",
-                  "chalk 1",
-                  "chalk 2",
-                  "chalk 3",
-                  "chalk 4",
-                  "broadsword",
-                  "broadsword command",
-                  "ifrit",
-                  "wyvern",
-                  "wyvern air wing",
-                  "caladrius",
-                  "fillers",
-                  "reserves",
-                  "recruit",
-                  "recruits",
-                ];
-
-                if (known.includes(n)) {
-                  return { squad: raw.trim(), fireteam: "Element" };
-                }
-
-                return null;
-              };
-
+            if (canSlot) {
               for (let i = headerRowIndex + 1; i < rows.length; i++) {
                 const row = rows[i] || [];
-                const slotName = String(row[colSlotName] || "").trim(); // name / vacant / closed
-                const roleText = String(row[colRole] || "").trim(); // heading OR role
 
-                // Headings live in the role column
-                const ft = parseFireteamHeading(roleText);
-                if (ft) {
-                  currentSquad = ft.squad;
-                  currentFireteam = ft.fireteam;
-                  discoveredSquads.add(currentSquad);
+                const slotTxt = String(row[col.sl] || "").trim(); // member name, or VACANT/CLOSED
+                const roleTxt = String(row[col.r] || "").trim();  // role, OR heading text
+
+                const heading = parseHeading(roleTxt);
+                if (heading) {
+                  currentSquad = heading.squad;
+                  currentFireteam = heading.fireteam || "Element";
                   continue;
                 }
 
-                const unit = parseUnitHeading(roleText);
-                if (unit) {
-                  currentSquad = unit.squad;
-                  currentFireteam = unit.fireteam;
-                  discoveredSquads.add(currentSquad);
-                  continue;
-                }
+                if (!currentSquad || !roleTxt) continue;
 
-                // If we don't have a current squad context, skip.
-                if (!currentSquad) continue;
+                const lowerSlot = this.normalize(slotTxt);
 
-                // If row doesn't contain a role, it's probably spacing -> skip
-                if (!roleText) continue;
-
-                // Vacant / Closed tiles
-                const status = isVacantOrClosed(slotName);
-                if (status) {
+                // Vacant / Closed slots
+                if (lowerSlot === "vacant" || lowerSlot === "closed") {
                   slotRows.push({
                     squad: currentSquad,
                     fireteam: currentFireteam || "Element",
-                    slot: roleText,
-                    status,
+                    role: roleTxt,
+                    status: lowerSlot.toUpperCase(), // VACANT / CLOSED
                     member: null,
                   });
                   continue;
                 }
 
-                // A real member in a slot
-                if (slotName) {
-                  const member = matchMemberFromLabel(slotName);
+                // Filled slot
+                const mem = slotTxt ? findMemberByLabel(this.normalize(slotTxt)) : null;
+                if (!mem) continue;
 
-                  slotRows.push({
-                    squad: currentSquad,
-                    fireteam: currentFireteam || "Element",
-                    slot: roleText,
-                    status: member ? "FILLED" : "UNKNOWN",
-                    member: member || { name: slotName }, // placeholder if not matched
-                  });
+                mem.squad = currentSquad;
+                mem.fireteam = currentFireteam;
+                mem.slot = roleTxt;
 
-                  // Overlay onto real member record if matched
-                  if (member) {
-                    member.squad = currentSquad;
-                    member.fireteam = currentFireteam || "Element";
-                    member.slot = roleText;
-                    member.slotStatus = "";
-                  }
-                }
+                slotRows.push({
+                  squad: currentSquad,
+                  fireteam: currentFireteam || "Element",
+                  role: roleTxt,
+                  status: "FILLED",
+                  member: mem,
+                });
               }
-
-              console.log("Parsed slot rows:", slotRows.length);
-            } else {
-              console.warn("No slotting columns found in RefData (Slot/Role).");
             }
 
-            // ==========================================================
-            // Ensure squads are represented (even if empty)
-            // ==========================================================
+            console.log("Parsed slot rows:", slotRows.length);
+
+            // ---------- 3) BUILD ORBAT: always include squads even if empty ----------
             const ALWAYS_SQUADS = [
               "Chalk Actual",
               "Chalk 1",
@@ -436,60 +325,89 @@ export default {
               "Broadsword Command",
               "Broadsword",
               "Ifrit",
-              "Wyvern Air Wing",
               "Wyvern",
               "Caladrius",
               "Fillers",
-              "Reserves",
               "Recruit",
+              "Reserves",
             ];
 
-            // Build classic ORBAT map from member.squad
             const orbatMap = {};
-            const ensureSquad = (s) => {
-              if (!s) return;
-              if (!orbatMap[s]) orbatMap[s] = [];
-            };
+            ALWAYS_SQUADS.forEach((s) => {
+              orbatMap[s] = {
+                squad: s,
+                members: [],
+                // used by the view to group / show vacant slots
+                fireteams: {}, // { [name]: { name, slots: [] } }
+              };
+            });
 
-            ALWAYS_SQUADS.forEach(ensureSquad);
-            discoveredSquads.forEach(ensureSquad);
-
-            // Put members into their squads (from either baseline or slotting override)
+            // Put filled members into squad members list
             this.members.forEach((m) => {
               if (!m.squad) return;
-              ensureSquad(m.squad);
-              orbatMap[m.squad].push(m);
+
+              // normalize squad keys to your canonical labels if needed
+              let squadKey = m.squad;
+              if (!orbatMap[squadKey]) {
+                orbatMap[squadKey] = { squad: squadKey, members: [], fireteams: {} };
+              }
+
+              orbatMap[squadKey].members.push(m);
+
+              const ftName = m.fireteam || "Element";
+              orbatMap[squadKey].fireteams[ftName] ??= { name: ftName, slots: [] };
+              orbatMap[squadKey].fireteams[ftName].slots.push({
+                role: m.slot || "Unassigned",
+                status: "FILLED",
+                member: m,
+              });
             });
 
-            // Sort members inside each squad (stable + nice)
-            Object.keys(orbatMap).forEach((k) => {
-              orbatMap[k] = orbatMap[k].slice().sort((a, b) =>
-                (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
-              );
+            // Add vacant/closed slots into fireteams too (so the UI can show them)
+            slotRows
+              .filter((s) => s.status === "VACANT" || s.status === "CLOSED")
+              .forEach((s) => {
+                if (!orbatMap[s.squad]) {
+                  orbatMap[s.squad] = { squad: s.squad, members: [], fireteams: {} };
+                }
+                const ft = s.fireteam || "Element";
+                orbatMap[s.squad].fireteams[ft] ??= { name: ft, slots: [] };
+                orbatMap[s.squad].fireteams[ft].slots.push({
+                  role: s.role,
+                  status: s.status,
+                  member: null,
+                });
+              });
+
+            // Any unassigned members -> drop into Reserves by default (you can change later)
+            this.members.forEach((m) => {
+              if (m.squad) return;
+              orbatMap["Reserves"].members.push(m);
+              orbatMap["Reserves"].fireteams["Element"] ??= { name: "Element", slots: [] };
+              orbatMap["Reserves"].fireteams["Element"].slots.push({
+                role: "Unassigned",
+                status: "FILLED",
+                member: m,
+              });
             });
 
-            // Output format PilotsView expects
-            this.orbat = Object.entries(orbatMap).map(([squad, members]) => ({
-              squad,
-              members,
+            // Finalize orbat array
+            this.orbat = Object.values(orbatMap).map((s) => ({
+              squad: s.squad,
+              members: (s.members || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+              fireteams: Object.values(s.fireteams || {}),
             }));
-
-            // Convenience reserves list (optional)
-            this.reserves = (orbatMap["Reserves"] || []).slice();
 
             console.log("ORBAT built:", this.orbat.length);
             resolve(this.orbat);
           },
-          error: (err) => {
-            console.error("Error loading RefData:", err);
-            reject(err);
-          },
+          error: reject,
         });
       });
     },
 
     /* ===============================================================
-     * MISSIONS / EVENTS (unchanged)
+     *  MISSIONS / EVENTS
      * =============================================================== */
     async importMissions(files) {
       const contents = await Promise.all(Object.values(files).map((f) => f()));
@@ -502,7 +420,6 @@ export default {
           content: l.slice(3).join("\n"),
         });
       });
-      this.missions.sort((a, b) => b.slug - a.slug);
     },
 
     async importEvents(files) {
@@ -517,7 +434,6 @@ export default {
           content: l.slice(4).join("\n"),
         });
       });
-      this.events.reverse();
     },
   },
 };
@@ -526,6 +442,6 @@ export default {
 <style>
 #app {
   min-height: 100vh;
-  overflow: hidden !important;
+  overflow: hidden !important; /* KEEP as-is; PilotsView will be scroll container */
 }
 </style>
