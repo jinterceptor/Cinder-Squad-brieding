@@ -110,7 +110,8 @@ export default {
           header: false,
           complete: (results) => {
             const rows = results.data;
-            const dataRows = rows.slice(2);
+            const dataStart = headerRowIndex + 1; // data begins right after whichever header row we used
+            const assignments = rows.slice(dataStart)
 
             const CERT_COLUMNS = 13;
 
@@ -178,16 +179,68 @@ export default {
                 .trim()
                 .toLowerCase();
 
-            // Find the columns by header row (row index 1)
-            const headerRow = rows[1] || [];
-            const slotColIndex = headerRow.findIndex((c) => normalize(c) === "squad slots");
-            const roleColIndex = headerRow.findIndex((c) => normalize(c) === "squad roles");
+            // --- Find headers robustly (they might be on CSV row 0 or row 1) ---
+const headerCandidates = [
+  { rowIndex: 0, row: rows[0] || [] },
+  { rowIndex: 1, row: rows[1] || [] },
+];
 
-            if (slotColIndex === -1 || roleColIndex === -1) {
-              console.error("Could not find 'Squad Slots' / 'Squad Roles' in RefData headers:", headerRow);
-              resolve([]);
-              return;
-            }
+// Helper: find first column index matching any of the provided normalized names
+const findCol = (row, names) => {
+  const normNames = names.map((n) => normalize(n));
+  return row.findIndex((cell) => normNames.includes(normalize(cell)));
+};
+
+// We want these columns (support both naming schemes)
+let headerRowIndex = -1;
+let headerRow = [];
+let memberColIndex = -1;   // "Squad Member" (N)
+let squadColIndex = -1;    // "Squads" (O)
+let slotNameColIndex = -1; // "Squad Slots" OR "Slot" (P)
+let roleColIndex = -1;     // "Squad Roles" OR "Role" (Q)
+
+for (const cand of headerCandidates) {
+  const row = cand.row;
+
+  const mIdx = findCol(row, ["Squad Member"]);
+  const sIdx = findCol(row, ["Squads"]);
+
+  // Slots/Roles may be labeled either way:
+  const slotIdx = findCol(row, ["Squad Slots", "Slot"]);
+  const roleIdx = findCol(row, ["Squad Roles", "Role"]);
+
+  // We accept this header row if it contains member+squads at minimum.
+  // (slots/roles optional — but if present we record them)
+  if (mIdx !== -1 && sIdx !== -1) {
+    headerRowIndex = cand.rowIndex;
+    headerRow = row;
+    memberColIndex = mIdx;
+    squadColIndex = sIdx;
+    slotNameColIndex = slotIdx;
+    roleColIndex = roleIdx;
+    break;
+  }
+}
+
+if (headerRowIndex === -1) {
+  console.error(
+    "Could not find 'Squad Member' / 'Squads' in RefData headers:",
+    rows[0] || [],
+    rows[1] || []
+  );
+  resolve([]);
+  return;
+}
+
+// Debug
+console.log("RefData header row used:", headerRowIndex, headerRow);
+console.log("RefData indices:", {
+  memberColIndex,
+  squadColIndex,
+  slotNameColIndex,
+  roleColIndex,
+});
+
 
             let currentSquad = "";
             let currentFireteam = "";
