@@ -16,16 +16,6 @@
     />
   </div>
 
-  <svg style="visibility: hidden; position: absolute" width="0" height="0" xmlns="http://www.w3.org/2000/svg" version="1.1">
-    <defs>
-      <filter id="round">
-        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -5" result="goo" />
-        <feComposite in="SourceGraphic" in2="goo" operator="atop" />
-      </filter>
-    </defs>
-  </svg>
-
   <audio autoplay>
     <source src="/startup.ogg" type="audio/ogg" />
   </audio>
@@ -46,13 +36,17 @@ export default {
       initialSlug: Config.initialSlug,
       planetPath: Config.planetPath,
       header: Config.header,
-      pilotSpecialInfo: Config.pilotSpecialInfo,
 
       missions: [],
       events: [],
 
-      members: [], // MembersMaster: rank, name, joinDate, id, certifications, squad
-      orbat: [],   // [{ squad, members: [] }]
+      // Primary dataset (MembersMaster)
+      members: [],
+
+      // What PilotsView uses (classic structure: { squad, members: [] })
+      orbat: [],
+
+      // Convenience bucket (optional; kept for compatibility)
       reserves: [],
     };
   },
@@ -60,18 +54,20 @@ export default {
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
-    // Local content
-    this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
-    this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
+    this.importMissions(
+      import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" })
+    );
+    this.importEvents(
+      import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" })
+    );
 
-    // Google Sheets CSVs
     const membersUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv";
 
     const refDataUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
 
-    // Load MembersMaster first, then merge squad assignments from RefData
+    // Load MembersMaster first (so RefData can match to real member records)
     this.loadMembersCSV(membersUrl).then(() => {
       this.loadRefDataCSV(refDataUrl);
     });
@@ -82,214 +78,444 @@ export default {
   },
 
   methods: {
-    setTitleFavicon(title, favicon) {
-      document.title = title;
-      const headEl = document.querySelector("head");
-      const faviconEl = document.createElement("link");
-      faviconEl.setAttribute("rel", "shortcut icon");
-      faviconEl.setAttribute("href", favicon);
-      headEl.appendChild(faviconEl);
-    },
-
+    /* ===============================================================
+     * Utilities
+     * =============================================================== */
     normalize(str) {
       return String(str || "")
-        .replace(/"/g, "")        // remove quotes
+        .replace(/"/g, "")
         .replace(/\s+/g, " ")
         .trim()
         .toLowerCase();
     },
 
-    // ---- MembersMaster ----
-    async loadMembersCSV(csvUrl) {
-      return new Promise((resolve, reject) => {
-        Papa.parse(csvUrl, {
-          download: true,
-          skipEmptyLines: true,
-          header: false, // handle manually (sheet has merged/title rows)
-          complete: (results) => {
-            const rows = results.data;
-
-            // Row 0 = big title row; Row 1 = headers; data starts row index 2
-            const dataRows = rows.slice(2);
-
-            // Fixed 13 cert columns
-            const CERT_COLUMNS = 13;
-
-            const members = dataRows
-              .map((row) => {
-                const rank = row[0]?.trim() || "";
-                const name = row[1]?.trim() || "";
-                const joinDate = row[3]?.trim() || "";
-                const id = row[4]?.trim() || "";
-
-                // Keep cert flags as Y/N in fixed order
-                const certs = row
-                  .slice(5, 5 + CERT_COLUMNS)
-                  .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N"));
-
-                if (!name) return null;
-
-                return {
-                  rank,
-                  name,
-                  joinDate,
-                  id,
-                  certifications: certs,
-                  squad: "", // filled from RefData
-                };
-              })
-              .filter(Boolean);
-
-            console.log("Members loaded:", members.length);
-            this.members = members;
-            resolve(members);
-          },
-          error: (err) => {
-            console.error("Error loading Members CSV:", err);
-            reject(err);
-          },
-        });
-      });
+    setTitleFavicon(title, favicon) {
+      document.title = title;
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.href = favicon;
+      document.head.appendChild(link);
     },
 
-    // ---- RefData: squad assignments (Squad Member / Squads) ----
-    async loadRefDataCSV(csvUrl) {
+    /* ===============================================================
+     * MEMBERS MASTER (MembersMaster CSV)
+     * =============================================================== */
+    async loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
           skipEmptyLines: true,
           header: false,
           complete: (results) => {
-            const rows = results.data;
+            // Row 0 = title row, Row 1 = header row, data starts at row 2
+            const rows = (results.data || []).slice(2);
 
-            // You told me Row 2 in the sheet has: "Squad Member" and "Squads"
-            // In CSV export, we were reliably finding them on rows[1] (index 1).
-            const headerRow = rows[1] || [];
+            const CERT_COLUMNS = 13;
 
-            const memberColIndex = headerRow.findIndex(
-              (cell) => this.normalize(cell) === "squad member"
-            );
-            const squadColIndex = headerRow.findIndex(
-              (cell) => this.normalize(cell) === "squads"
-            );
-
-            if (memberColIndex === -1 || squadColIndex === -1) {
-              console.error("Could not find 'Squad Member' or 'Squads' columns in RefData.", headerRow);
-              resolve([]);
-              return;
-            }
-
-            // Assignments begin after header row: index 2 onwards
-            const assignments = rows
-              .slice(2)
+            const members = rows
               .map((row) => {
-                const memberLabel = row[memberColIndex];
-                const squadName = row[squadColIndex];
-                if (!memberLabel || !squadName) return null;
+                const name = row[1]?.trim();
+                if (!name) return null;
+
+                const rank = row[0]?.trim() || "";
+                const joinDate = row[3]?.trim() || "";
+                const id = row[4]?.trim() || "";
+
+                const certifications = row
+                  .slice(5, 5 + CERT_COLUMNS)
+                  .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N"));
 
                 return {
-                  memberLabel: String(memberLabel).trim(),
-                  squad: String(squadName).trim(),
-                  normLabel: this.normalize(memberLabel),
+                  rank,
+                  name,
+                  joinDate,
+                  id,
+                  certifications,
+
+                  // These get filled/overridden by RefData:
+                  squad: "",
+                  fireteam: "",
+                  slot: "",
+                  slotStatus: "", // "VACANT" / "CLOSED" / ""
                 };
               })
               .filter(Boolean);
 
-            console.log("Raw squad assignments:", assignments.length);
-
-            // Match members by name (robust-ish against quotes)
-            const getMemberMatchInfo = (m) => {
-              const normName = this.normalize(m.name); // 'm. jinter'
-              const parts = normName.split(" ");
-              const surname = parts[parts.length - 1] || "";
-              const initial = (parts[0] || "").charAt(0); // 'm'
-              return { normName, surname, initial };
-            };
-
-            this.members = this.members.map((m) => {
-              const { normName, surname, initial } = getMemberMatchInfo(m);
-
-              const match = assignments.find((a) => {
-                const label = a.normLabel;
-
-                // 1) contains full normalized name
-                if (label.includes(normName)) return true;
-
-                // 2) contains surname + initial.
-                const initialPattern = `${initial}.`;
-                if (label.includes(surname) && label.includes(initialPattern)) return true;
-
-                // 3) fallback surname only
-                const labelParts = label.split(" ");
-                const labelSurname = labelParts[labelParts.length - 1] || "";
-                if (labelSurname === surname) return true;
-
-                return false;
-              });
-
-              return {
-                ...m,
-                squad: match ? match.squad : "",
-              };
-            });
-
-            // Build ORBAT structure
-            const orbatMap = {};
-            this.members.forEach((m) => {
-              if (!m.squad) return;
-              if (!orbatMap[m.squad]) orbatMap[m.squad] = [];
-              orbatMap[m.squad].push(m);
-            });
-
-            this.orbat = Object.entries(orbatMap).map(([squad, members]) => ({
-              squad,
-              members,
-            }));
-
-            // Reserves convenience: anyone without a squad
-            this.reserves = this.members.filter((m) => !m.squad);
-
-            console.log("Squads in ORBAT:", this.orbat.length);
-            resolve(this.orbat);
+            this.members = members;
+            console.log("Members loaded:", this.members.length);
+            resolve(members);
           },
           error: (err) => {
-            console.error("Error loading RefData CSV:", err);
+            console.error("Error loading MembersMaster:", err);
             reject(err);
           },
         });
       });
     },
 
-    // ---- Missions / Events ----
+    /* ===============================================================
+     * REFDATA (RefData CSV)
+     * - Part A: "Squad Member" + "Squads" sets general membership
+     * - Part B: "Squad Slots/Slot" + "Squad Roles/Role" sets fireteam + role
+     * =============================================================== */
+    async loadRefDataCSV(csvUrl) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(csvUrl, {
+          download: true,
+          // Keep blanks so section headers / spacing don’t break context
+          skipEmptyLines: false,
+          header: false,
+          complete: (results) => {
+            const rows = results.data || [];
+
+            // ----------- Find a usable header row (row 0 or row 1 typically) -----------
+            const headerCandidates = [
+              { idx: 0, row: rows[0] || [] },
+              { idx: 1, row: rows[1] || [] },
+              { idx: 2, row: rows[2] || [] },
+            ];
+
+            const findCol = (row, names) => {
+              const want = names.map((n) => this.normalize(n));
+              return row.findIndex((cell) => want.includes(this.normalize(cell)));
+            };
+
+            let headerRowIndex = -1;
+            let colMember = -1; // "Squad Member"
+            let colSquad = -1; // "Squads"
+            let colSlotName = -1; // "Squad Slots" or "Slot"
+            let colRole = -1; // "Squad Roles" or "Role"
+
+            for (const cand of headerCandidates) {
+              const row = cand.row;
+
+              const m = findCol(row, ["Squad Member"]);
+              const s = findCol(row, ["Squads"]);
+              const sl = findCol(row, ["Squad Slots", "Slot"]);
+              const r = findCol(row, ["Squad Roles", "Role"]);
+
+              // Accept if we have at least the slots+roles OR member+squads.
+              // In practice we usually have all four.
+              if ((m !== -1 && s !== -1) || (sl !== -1 && r !== -1)) {
+                headerRowIndex = cand.idx;
+                colMember = m;
+                colSquad = s;
+                colSlotName = sl;
+                colRole = r;
+                break;
+              }
+            }
+
+            if (headerRowIndex === -1) {
+              console.error("RefData headings not found (checked rows 0–2).");
+              resolve([]);
+              return;
+            }
+
+            console.log("RefData header row used:", headerRowIndex, {
+              colMember,
+              colSquad,
+              colSlotName,
+              colRole,
+            });
+
+            // Helpers
+            const isVacantOrClosed = (txt) => {
+              const t = this.normalize(txt);
+              if (t === "vacant") return "VACANT";
+              if (t === "closed") return "CLOSED";
+              return "";
+            };
+
+            const matchMemberFromLabel = (label) => {
+              const s = this.normalize(label);
+              if (!s) return null;
+
+              // Try direct inclusion of full member.name
+              const direct = this.members.find((mem) => s.includes(this.normalize(mem.name)));
+              if (direct) return direct;
+
+              // Try surname + initial approach
+              const parts = s.split(" ");
+              const surname = parts[parts.length - 1] || "";
+              const initialMatch = s.match(/\b([a-z])\./i);
+              const initial = initialMatch ? initialMatch[1].toLowerCase() : "";
+
+              // Match by surname + initial (if available)
+              const bySurname = this.members.find((mem) => {
+                const n = this.normalize(mem.name);
+                const np = n.split(" ");
+                const memSurname = np[np.length - 1] || "";
+                const memInitial = (np[0] || "").charAt(0);
+                if (!surname || memSurname !== surname) return false;
+                if (initial && memInitial !== initial) return false;
+                return true;
+              });
+              if (bySurname) return bySurname;
+
+              // Last resort: surname-only
+              return (
+                this.members.find((mem) => {
+                  const n = this.normalize(mem.name);
+                  const np = n.split(" ");
+                  const memSurname = np[np.length - 1] || "";
+                  return surname && memSurname === surname;
+                }) || null
+              );
+            };
+
+            // ==========================================================
+            // PART A: General squad membership (Squad Member + Squads)
+            // ==========================================================
+            if (colMember !== -1 && colSquad !== -1) {
+              const assignments = rows
+                .slice(headerRowIndex + 1)
+                .map((row) => {
+                  const memberLabel = row[colMember];
+                  const squadName = row[colSquad];
+                  if (!memberLabel || !squadName) return null;
+
+                  const label = String(memberLabel).trim();
+                  const squad = String(squadName).trim();
+                  if (!label || !squad) return null;
+
+                  return { label, squad };
+                })
+                .filter(Boolean);
+
+              // Apply membership squads (non-slot baseline)
+              this.members = this.members.map((m) => {
+                // only set if not already set later; slotting will override
+                const fullLabelGuess = `${m.rank} ${m.name}`.trim();
+
+                const hit =
+                  assignments.find((a) => this.normalize(a.label) === this.normalize(fullLabelGuess)) ||
+                  assignments.find((a) => this.normalize(a.label).includes(this.normalize(m.name)));
+
+                return {
+                  ...m,
+                  squad: hit ? hit.squad : m.squad,
+                };
+              });
+
+              console.log("General squad assignments applied:", assignments.length);
+            }
+
+            // ==========================================================
+            // PART B: Slotting + fireteams/roles (Squad Slots + Squad Roles)
+            // ==========================================================
+            // This is what adds: squad + fireteam + slot + vacant/closed
+            const slotRows = [];
+            const discoveredSquads = new Set();
+
+            if (colSlotName !== -1 && colRole !== -1) {
+              let currentSquad = "";
+              let currentFireteam = "";
+
+              const parseFireteamHeading = (text) => {
+                const raw = String(text || "").trim();
+                if (!raw) return null;
+                // "<SQUAD> Fireteam <N>"
+                const m = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
+                if (!m) return null;
+                return { squad: m[1].trim(), fireteam: `Fireteam ${m[2].trim()}` };
+              };
+
+              // Also allow headings like "Broadsword", "Ifrit", etc (no fireteam)
+              const parseUnitHeading = (text) => {
+                const raw = String(text || "").trim();
+                if (!raw) return null;
+
+                // reject if it's obviously a role label (too short/too generic would be ambiguous)
+                // We'll only accept as a unit heading if it matches known unit names,
+                // or if it's a single word / title-cased and not "Squad Lead" etc.
+                const n = this.normalize(raw);
+
+                const known = [
+                  "chalk actual",
+                  "chalk 1",
+                  "chalk 2",
+                  "chalk 3",
+                  "chalk 4",
+                  "broadsword",
+                  "broadsword command",
+                  "ifrit",
+                  "wyvern",
+                  "wyvern air wing",
+                  "caladrius",
+                  "fillers",
+                  "reserves",
+                  "recruit",
+                  "recruits",
+                ];
+
+                if (known.includes(n)) {
+                  return { squad: raw.trim(), fireteam: "Element" };
+                }
+
+                return null;
+              };
+
+              for (let i = headerRowIndex + 1; i < rows.length; i++) {
+                const row = rows[i] || [];
+                const slotName = String(row[colSlotName] || "").trim(); // name / vacant / closed
+                const roleText = String(row[colRole] || "").trim(); // heading OR role
+
+                // Headings live in the role column
+                const ft = parseFireteamHeading(roleText);
+                if (ft) {
+                  currentSquad = ft.squad;
+                  currentFireteam = ft.fireteam;
+                  discoveredSquads.add(currentSquad);
+                  continue;
+                }
+
+                const unit = parseUnitHeading(roleText);
+                if (unit) {
+                  currentSquad = unit.squad;
+                  currentFireteam = unit.fireteam;
+                  discoveredSquads.add(currentSquad);
+                  continue;
+                }
+
+                // If we don't have a current squad context, skip.
+                if (!currentSquad) continue;
+
+                // If row doesn't contain a role, it's probably spacing -> skip
+                if (!roleText) continue;
+
+                // Vacant / Closed tiles
+                const status = isVacantOrClosed(slotName);
+                if (status) {
+                  slotRows.push({
+                    squad: currentSquad,
+                    fireteam: currentFireteam || "Element",
+                    slot: roleText,
+                    status,
+                    member: null,
+                  });
+                  continue;
+                }
+
+                // A real member in a slot
+                if (slotName) {
+                  const member = matchMemberFromLabel(slotName);
+
+                  slotRows.push({
+                    squad: currentSquad,
+                    fireteam: currentFireteam || "Element",
+                    slot: roleText,
+                    status: member ? "FILLED" : "UNKNOWN",
+                    member: member || { name: slotName }, // placeholder if not matched
+                  });
+
+                  // Overlay onto real member record if matched
+                  if (member) {
+                    member.squad = currentSquad;
+                    member.fireteam = currentFireteam || "Element";
+                    member.slot = roleText;
+                    member.slotStatus = "";
+                  }
+                }
+              }
+
+              console.log("Parsed slot rows:", slotRows.length);
+            } else {
+              console.warn("No slotting columns found in RefData (Slot/Role).");
+            }
+
+            // ==========================================================
+            // Ensure squads are represented (even if empty)
+            // ==========================================================
+            const ALWAYS_SQUADS = [
+              "Chalk Actual",
+              "Chalk 1",
+              "Chalk 2",
+              "Chalk 3",
+              "Chalk 4",
+              "Broadsword Command",
+              "Broadsword",
+              "Ifrit",
+              "Wyvern Air Wing",
+              "Wyvern",
+              "Caladrius",
+              "Fillers",
+              "Reserves",
+              "Recruit",
+            ];
+
+            // Build classic ORBAT map from member.squad
+            const orbatMap = {};
+            const ensureSquad = (s) => {
+              if (!s) return;
+              if (!orbatMap[s]) orbatMap[s] = [];
+            };
+
+            ALWAYS_SQUADS.forEach(ensureSquad);
+            discoveredSquads.forEach(ensureSquad);
+
+            // Put members into their squads (from either baseline or slotting override)
+            this.members.forEach((m) => {
+              if (!m.squad) return;
+              ensureSquad(m.squad);
+              orbatMap[m.squad].push(m);
+            });
+
+            // Sort members inside each squad (stable + nice)
+            Object.keys(orbatMap).forEach((k) => {
+              orbatMap[k] = orbatMap[k].slice().sort((a, b) =>
+                (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+              );
+            });
+
+            // Output format PilotsView expects
+            this.orbat = Object.entries(orbatMap).map(([squad, members]) => ({
+              squad,
+              members,
+            }));
+
+            // Convenience reserves list (optional)
+            this.reserves = (orbatMap["Reserves"] || []).slice();
+
+            console.log("ORBAT built:", this.orbat.length);
+            resolve(this.orbat);
+          },
+          error: (err) => {
+            console.error("Error loading RefData:", err);
+            reject(err);
+          },
+        });
+      });
+    },
+
+    /* ===============================================================
+     * MISSIONS / EVENTS (unchanged)
+     * =============================================================== */
     async importMissions(files) {
-      const filePromises = Object.keys(files).map((path) => files[path]());
-      const fileContents = await Promise.all(filePromises);
-      fileContents.forEach((content) => {
-        const lines = content.split("\n");
-        const mission = {
-          slug: lines[0],
-          name: lines[1],
-          status: lines[2],
-          content: lines.slice(3).join("\n"),
-        };
-        this.missions.push(mission);
+      const contents = await Promise.all(Object.values(files).map((f) => f()));
+      contents.forEach((c) => {
+        const l = c.split("\n");
+        this.missions.push({
+          slug: l[0],
+          name: l[1],
+          status: l[2],
+          content: l.slice(3).join("\n"),
+        });
       });
       this.missions.sort((a, b) => b.slug - a.slug);
     },
 
     async importEvents(files) {
-      const filePromises = Object.keys(files).map((path) => files[path]());
-      const fileContents = await Promise.all(filePromises);
-      fileContents.forEach((content) => {
-        const lines = content.split("\n");
-        const event = {
-          title: lines[0],
-          location: lines[1],
-          time: lines[2],
-          thumbnail: lines[3],
-          content: lines.slice(4).join("\n"),
-        };
-        this.events.push(event);
+      const contents = await Promise.all(Object.values(files).map((f) => f()));
+      contents.forEach((c) => {
+        const l = c.split("\n");
+        this.events.push({
+          title: l[0],
+          location: l[1],
+          time: l[2],
+          thumbnail: l[3],
+          content: l.slice(4).join("\n"),
+        });
       });
       this.events.reverse();
     },
