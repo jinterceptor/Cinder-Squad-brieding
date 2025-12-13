@@ -16,11 +16,22 @@
     />
   </div>
 
-  <svg style="visibility: hidden; position: absolute" width="0" height="0" xmlns="http://www.w3.org/2000/svg" version="1.1">
+  <svg
+    style="visibility: hidden; position: absolute"
+    width="0"
+    height="0"
+    xmlns="http://www.w3.org/2000/svg"
+    version="1.1"
+  >
     <defs>
       <filter id="round">
         <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -5" result="goo" />
+        <feColorMatrix
+          in="blur"
+          mode="matrix"
+          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -5"
+          result="goo"
+        />
         <feComposite in="SourceGraphic" in2="goo" operator="atop" />
       </filter>
     </defs>
@@ -51,8 +62,8 @@ export default {
       missions: [],
       events: [],
 
-      members: [], // MembersMaster: rank, name, joinDate, id, certifications, squad
-      orbat: [],   // squads + members
+      members: [], // MembersMaster: rank, name, joinDate, id, certifications, squad/fireteam/slot filled from RefData
+      orbat: [],   // squads + members (built from slotting table)
       reserves: [],
     };
   },
@@ -64,13 +75,13 @@ export default {
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
-    // Load sheets: RefData AFTER members so we can match names
     const membersUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv";
 
     const refDataUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
 
+    // Load MembersMaster first, then overlay slotting from RefData
     this.loadMembersCSV(membersUrl).then(() => {
       this.loadRefDataCSV(refDataUrl);
     });
@@ -96,14 +107,12 @@ export default {
         Papa.parse(csvUrl, {
           download: true,
           skipEmptyLines: true,
-          header: false,         // we'll handle rows manually
+          header: false,
           complete: (results) => {
             const rows = results.data;
-
-            // Row 0: title row (Member Details / Certifications etc.) -> ignore
-            // Row 1: actual headers -> we already know their positions
-            // Data starts at row index 2
             const dataRows = rows.slice(2);
+
+            const CERT_COLUMNS = 13;
 
             const members = dataRows
               .map((row) => {
@@ -112,11 +121,6 @@ export default {
                 const joinDate = row[3]?.trim() || "";
                 const id = row[4]?.trim() || "";
 
-                // Columns 5–17 (inclusive) = 13 certification flags in fixed order:
-                // Rifleman, Machine Gunner, Anti Tank, Corpsmen,
-                // Combat Engineer, Marksman, Breacher, Grenadier,
-                // Pilot, RTO, PJ, NCO, Officer
-                const CERT_COLUMNS = 13;
                 const certs = row
                   .slice(5, 5 + CERT_COLUMNS)
                   .map((c) => {
@@ -131,8 +135,13 @@ export default {
                   name,
                   joinDate,
                   id,
-                  certifications: certs, // ordered flags
-                  squad: "", // will be filled from RefData
+                  certifications: certs,
+
+                  // Filled from RefData slotting table:
+                  squad: "",
+                  fireteam: "",
+                  slot: "",
+                  squadAssignments: "",
                 };
               })
               .filter(Boolean);
@@ -149,100 +158,154 @@ export default {
       });
     },
 
-    // ---- RefData: squad assignments ----
+    // ---- RefData: Slotting table (Squad Slots + Squad Roles) ----
     async loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
-          skipEmptyLines: true,
-          header: false,      // we'll find "Squad Member" / "Squads" ourselves
+
+          // IMPORTANT: keep blanks so headings + spacing don't break context parsing
+          skipEmptyLines: false,
+
+          header: false,
           complete: (results) => {
             const rows = results.data;
 
             const normalize = (str) =>
               String(str || "")
-                .replace(/"/g, "")        // remove quotes
+                .replace(/"/g, "")
                 .replace(/\s+/g, " ")
                 .trim()
                 .toLowerCase();
 
-            // Row 1 (index 1) should contain "Squad Member" and "Squads" in columns N/O
+            // Find the columns by header row (row index 1)
             const headerRow = rows[1] || [];
-            const memberColIndex = headerRow.findIndex(
-              (cell) => normalize(cell) === "squad member"
-            );
-            const squadColIndex = headerRow.findIndex(
-              (cell) => normalize(cell) === "squads"
-            );
+            const slotColIndex = headerRow.findIndex((c) => normalize(c) === "squad slots");
+            const roleColIndex = headerRow.findIndex((c) => normalize(c) === "squad roles");
 
-            if (memberColIndex === -1 || squadColIndex === -1) {
-              console.error("Could not find 'Squad Member' or 'Squads' columns in RefData.", headerRow);
+            if (slotColIndex === -1 || roleColIndex === -1) {
+              console.error("Could not find 'Squad Slots' / 'Squad Roles' in RefData headers:", headerRow);
               resolve([]);
               return;
             }
 
-            // Data rows start after headerRow -> index 2 onwards
-            const assignments = rows
-              .slice(2)
-              .map((row) => {
-                const memberLabel = row[memberColIndex];
-                const squadName = row[squadColIndex];
-                if (!memberLabel || !squadName) return null;
+            let currentSquad = "";
+            let currentFireteam = "";
 
-                return {
-                  memberLabel: String(memberLabel).trim(),
-                  squad: String(squadName).trim(),
-                  normLabel: normalize(memberLabel), // e.g. 'pfc m. jinter'
-                };
-              })
-              .filter(Boolean);
+            // Parse heading: "Chalk 1 Fireteam 1"
+            const parseHeading = (text) => {
+              const raw = String(text || "").trim();
+              if (!raw) return null;
 
-            console.log("Raw squad assignments:", assignments.length);
+              // matches "<SQUAD NAME> Fireteam <number>"
+              const m = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
+              if (!m) return null;
 
-            // Helper to extract "core" info from MembersMaster name
-            const getMemberMatchInfo = (m) => {
-              const normName = normalize(m.name);          // 'm. jinter'
-              const parts = normName.split(" ");
-              const surname = parts[parts.length - 1] || "";
-              const initial = (parts[0] || "").charAt(0);  // 'm'
-              return { normName, surname, initial };
+              const squad = m[1].trim();
+              const ftNum = m[2].trim();
+              if (!squad || !ftNum) return null;
+
+              return { squad, fireteam: `Fireteam ${ftNum}` };
             };
 
-            // Apply squad to members
-            this.members = this.members.map((m) => {
-              const { normName, surname, initial } = getMemberMatchInfo(m);
+            // Match slot-name to MembersMaster member (robust-ish)
+            const findMemberFromSlotName = (slotName) => {
+              const s = normalize(slotName);
+              if (!s) return null;
 
-              const match = assignments.find((a) => {
-                const label = a.normLabel; // e.g. 'pfc m. jinter' or 'sgt t. thy tyrsson'
+              // Extract surname + optional initial
+              const parts = s.split(" ");
+              const surname = parts[parts.length - 1] || "";
+              const initialMatch = s.match(/\b([a-z])\./i);
+              const initial = initialMatch ? initialMatch[1].toLowerCase() : "";
 
-                // 1) Contains full "initial.surname" string, e.g. 'm. jinter'
-                if (label.includes(normName)) return true;
-
-                // 2) Contains surname and initial with dot, e.g. 'm.' + 'jinter'
-                const initialPattern = `${initial}.`;
-                if (label.includes(surname) && label.includes(initialPattern)) return true;
-
-                // 3) Fallback: last word of label matches surname
-                const labelParts = label.split(" ");
-                const labelSurname = labelParts[labelParts.length - 1] || "";
-                if (labelSurname === surname) return true;
-
-                return false;
+              // Try direct inclusion of member name
+              let m = this.members.find((mem) => {
+                const n = normalize(mem.name);
+                return s.includes(n);
               });
+              if (m) return m;
 
+              // Try surname + initial match
+              m = this.members.find((mem) => {
+                const n = normalize(mem.name);
+                const nParts = n.split(" ");
+                const memSurname = nParts[nParts.length - 1] || "";
+                const memInitial = (nParts[0] || "").charAt(0);
+
+                if (!surname || memSurname !== surname) return false;
+                if (initial && memInitial !== initial) return false;
+                return true;
+              });
+              if (m) return m;
+
+              // Last resort: surname-only (can be ambiguous)
+              return this.members.find((mem) => {
+                const n = normalize(mem.name);
+                const nParts = n.split(" ");
+                const memSurname = nParts[nParts.length - 1] || "";
+                return surname && memSurname === surname;
+              }) || null;
+            };
+
+            const slotAssignments = [];
+
+            // Walk rows after header row
+            for (let i = 2; i < rows.length; i++) {
+              const row = rows[i] || [];
+              const slotCell = row[slotColIndex];
+              const roleCell = row[roleColIndex];
+
+              const slotText = String(slotCell || "").trim();
+              const roleText = String(roleCell || "").trim();
+
+              // 1) Heading rows live in Role column
+              const heading = parseHeading(roleText);
+              if (heading) {
+                currentSquad = heading.squad;
+                currentFireteam = heading.fireteam;
+                continue;
+              }
+
+              // 2) Slot rows: slotText is the member, roleText is the role
+              if (currentSquad && currentFireteam && slotText && roleText) {
+                const member = findMemberFromSlotName(slotText);
+                if (!member) continue;
+
+                slotAssignments.push({
+                  id: member.id,
+                  squad: currentSquad,
+                  fireteam: currentFireteam,
+                  slot: roleText,
+                });
+              }
+            }
+
+            console.log("Slot assignments parsed:", slotAssignments.length);
+
+            // Apply assignments to members
+            const byId = new Map(slotAssignments.map((a) => [a.id, a]));
+
+            this.members = this.members.map((m) => {
+              const a = byId.get(m.id);
+              if (!a) return m;
               return {
                 ...m,
-                squad: match ? match.squad : "",
+                squad: a.squad,
+                fireteam: a.fireteam,
+                slot: a.slot,
+                squadAssignments: a.slot,
               };
             });
 
-            // Build ORBAT structure (only squads with members)
+            // Build ORBAT from assigned members only
             const orbatMap = {};
             this.members.forEach((m) => {
               if (!m.squad) return;
               if (!orbatMap[m.squad]) orbatMap[m.squad] = [];
               orbatMap[m.squad].push(m);
             });
+
             this.orbat = Object.entries(orbatMap).map(([squad, members]) => ({
               squad,
               members,
