@@ -375,8 +375,6 @@ export default {
               "Chalk 3",
               "Chalk 4",
               "Broadsword Command",
-              "Broadsword",
-              "Ifrit",
               "Wyvern",
               "Caladrius",
               "Fillers",
