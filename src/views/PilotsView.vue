@@ -128,12 +128,15 @@
               {{ personnelCount(activeSquad) }} PERSONNEL
             </p>
 
-            <!-- LOADOUT STATUS -->
             <div class="loadout-status">
               <span class="points">
                 LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS
               </span>
-              <span v-if="!squadLoadoutStatus.valid" class="warn" :title="squadLoadoutStatus.errors.join(' • ')">
+              <span
+                v-if="!squadLoadoutStatus.valid"
+                class="warn"
+                :title="squadLoadoutStatus.errors.join(' • ')"
+              >
                 ⚠ LOADOUT INVALID
               </span>
               <span v-else class="ok">✓ VALID</span>
@@ -157,10 +160,7 @@
                 v-for="(slot, idx) in ft.slots"
                 :key="slotKey(slot, idx)"
                 class="member-card"
-                :class="{
-                  vacant: slot.status === 'VACANT',
-                  closed: slot.status === 'CLOSED'
-                }"
+                :class="{ vacant: slot.status === 'VACANT', closed: slot.status === 'CLOSED' }"
               >
                 <!-- VACANT/CLOSED tile -->
                 <template v-if="slot.status === 'VACANT' || slot.status === 'CLOSED'">
@@ -204,10 +204,10 @@
                     </div>
 
                     <div class="member-header-text">
-                      <h3>{{ (slot.member?.name || "").toUpperCase() }}</h3>
+                      <h3>{{ (slot.member?.name || '').toUpperCase() }}</h3>
                       <p class="rank-line">
-                        <span class="rank">{{ slot.member?.rank || "N/A" }}</span>
-                        <span class="id">ID: {{ slot.member?.id || "N/A" }}</span>
+                        <span class="rank">{{ slot.member?.rank || 'N/A' }}</span>
+                        <span class="id">ID: {{ slot.member?.id || 'N/A' }}</span>
                       </p>
                     </div>
                   </div>
@@ -216,8 +216,8 @@
                     <div class="member-column left">
                       <p><strong>Squad:</strong> {{ slot.member?.squad || activeSquad.squad }}</p>
                       <p><strong>Fireteam:</strong> {{ slot.member?.fireteam || ft.name }}</p>
-                      <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || "Unassigned" }}</p>
-                      <p><strong>Join Date:</strong> {{ slot.member?.joinDate || "Unknown" }}</p>
+                      <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
+                      <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
                       <!-- DISPOSABLE CHECKBOX -->
                       <div class="loadout-row">
@@ -290,16 +290,13 @@ export default {
     return {
       activeSquad: null,
 
-      // existing
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
 
-      // NEW: per-soldier local state
       loadouts: {},
 
-      // NEW: loadout definitions
       loadoutOptions: {
         grenadier: { label: "Grenadier", points: 2, explosive: true },
         antitank: { label: "Anti-Tank", points: 3, explosive: true },
@@ -368,18 +365,15 @@ export default {
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
 
-    // NEW: per-squad validation + points
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
 
       let points = 0;
       const errors = [];
-      const explosiveTaken = new Set(); // includes disposable, grenadier, antitank
+      const explosiveTaken = new Set(); // disposable/grenadier/antitank (no duplicates)
 
       const slots = [];
-      this.activeFireteams.forEach((ft) => {
-        (ft.slots || []).forEach((s) => slots.push(s));
-      });
+      this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((s) => slots.push(s)));
 
       slots.forEach((slot) => {
         const member = slot.member;
@@ -387,23 +381,19 @@ export default {
 
         const l = this.getLoadout(member);
 
-        // Disposable (1 pt) + counts as explosive for duplication rule
         if (l.disposable) {
           points += 1;
           if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable");
           explosiveTaken.add("disposable");
         }
 
-        // Primary
         if (l.primary) {
           const def = this.loadoutOptions[l.primary];
           if (def) {
             points += def.points;
 
             if (def.explosive) {
-              if (explosiveTaken.has(l.primary)) {
-                errors.push(`Duplicate explosive weapon: ${def.label}`);
-              }
+              if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`);
               explosiveTaken.add(l.primary);
             }
           }
@@ -426,11 +416,9 @@ export default {
     personnelCount(sq) {
       if (sq.fireteams && sq.fireteams.length) {
         let count = 0;
-        sq.fireteams.forEach((ft) => {
-          (ft.slots || []).forEach((s) => {
-            if (s.status === "FILLED" && s.member) count++;
-          });
-        });
+        sq.fireteams.forEach((ft) => (ft.slots || []).forEach((s) => {
+          if (s.status === "FILLED" && s.member) count++;
+        }));
         return count;
       }
       return (sq.members || []).length;
@@ -464,31 +452,35 @@ export default {
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
     },
 
-    // ===== NEW: loadout helpers =====
+    // ===== Vue 3-safe loadout helpers =====
     getLoadout(member) {
       const id = member?.id;
       if (!id) return { primary: "", disposable: false };
 
       if (!this.loadouts[id]) {
-        this.$set(this.loadouts, id, { primary: "", disposable: false });
+        // Vue 3: direct assignment is reactive
+        this.loadouts[id] = { primary: "", disposable: false };
       }
       return this.loadouts[id];
     },
 
     toggleDisposable(member) {
-      const l = this.getLoadout(member);
-      l.disposable = !l.disposable;
+      const id = member?.id;
+      if (!id) return;
+      const curr = this.getLoadout(member);
+      this.loadouts[id] = { ...curr, disposable: !curr.disposable };
     },
 
     setPrimary(member, value) {
-      const l = this.getLoadout(member);
-      l.primary = value || "";
+      const id = member?.id;
+      if (!id) return;
+      const curr = this.getLoadout(member);
+      this.loadouts[id] = { ...curr, primary: value || "" };
     },
 
     loadoutLabel(key) {
       const def = this.loadoutOptions[key];
-      if (!def) return key;
-      return `${def.label} (${def.points}pt)`;
+      return def ? `${def.label} (${def.points}pt)` : key;
     },
 
     availableLoadouts(member) {
@@ -508,7 +500,6 @@ export default {
       return opts;
     },
 
-    // ===== Rank insignia =====
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
@@ -531,7 +522,7 @@ export default {
 </script>
 
 <style scoped>
-/* IMPORTANT: make this view scrollable even though #app is overflow:hidden */
+/* keep your existing styles exactly as-is */
 .section-container {
   height: 100vh;
   overflow-y: auto;
@@ -544,34 +535,21 @@ export default {
   box-sizing: border-box;
 }
 
-.section-content-container {
-  width: 100% !important;
-}
+.section-content-container { width: 100% !important; }
 
 .orbat-wrapper {
   width: 100%;
   margin-top: 0.75rem;
-  padding-bottom: 4rem; /* so bottom tiles aren’t clipped */
+  padding-bottom: 4rem;
 }
 
-.hierarchy-container {
-  width: 100%;
-  margin-top: 2rem;
-}
+.hierarchy-container { width: 100%; margin-top: 2rem; }
 
-.orbat-row {
-  margin-bottom: 3rem;
-}
+.orbat-row { margin-bottom: 3rem; }
 
-.center-row {
-  display: flex;
-  justify-content: center;
-}
+.center-row { display: flex; justify-content: center; }
 
-.squad-row.single {
-  display: flex;
-  justify-content: center;
-}
+.squad-row.single { display: flex; justify-content: center; }
 
 .squad-row.three {
   display: grid;
@@ -580,21 +558,14 @@ export default {
 }
 
 @media (max-width: 1400px) {
-  .squad-row.three {
-    grid-template-columns: repeat(2, minmax(260px, 1fr));
-  }
+  .squad-row.three { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
 }
 @media (max-width: 900px) {
-  .squad-row.three {
-    grid-template-columns: 1fr;
-  }
+  .squad-row.three { grid-template-columns: 1fr; }
 }
 
-/* Command lines */
 @media (min-width: 900px) {
-  .actual-row {
-    position: relative;
-  }
+  .actual-row { position: relative; }
   .actual-row::after {
     content: "";
     position: absolute;
@@ -626,7 +597,6 @@ export default {
   }
 }
 
-/* Squad tiles */
 .squad-card {
   background: radial-gradient(circle at top left, rgba(30, 144, 255, 0.25), transparent 65%),
     rgba(0, 10, 30, 0.9);
@@ -638,10 +608,7 @@ export default {
   padding-right: 1.5rem;
   transition: 0.15s ease-in-out;
 }
-.squad-card:hover {
-  transform: translateY(-2px);
-  border-color: #5ab3ff;
-}
+.squad-card:hover { transform: translateY(-2px); border-color: #5ab3ff; }
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -663,25 +630,10 @@ export default {
   background: rgba(0, 0, 0, 0.7);
   text-align: center;
 }
-.squad-meta h2 {
-  margin: 0;
-  font-size: 2.3rem;
-  color: #e0f0ff;
-  letter-spacing: 0.05em;
-}
-.squad-subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 1.1rem;
-  color: #9ec5e6;
-  text-transform: uppercase;
-}
-.squad-count {
-  margin: 0.4rem 0 0;
-  font-size: 1rem;
-  color: #7aa7c7;
-}
+.squad-meta h2 { margin: 0; font-size: 2.3rem; color: #e0f0ff; letter-spacing: 0.05em; }
+.squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
+.squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
 
-/* Overlay */
 .squad-overlay {
   position: fixed;
   inset: 0;
@@ -709,14 +661,8 @@ export default {
   align-items: center;
   margin-bottom: 0.8rem;
 }
-.squad-header-left {
-  display: flex;
-  align-items: center;
-}
-.squad-header-left img {
-  width: 48px;
-  margin-right: 0.5rem;
-}
+.squad-header-left { display: flex; align-items: center; }
+.squad-header-left img { width: 48px; margin-right: 0.5rem; }
 .squad-close {
   background: transparent;
   border: 1px solid rgba(220, 230, 241, 0.4);
@@ -734,9 +680,7 @@ export default {
   border-bottom: 1px solid rgba(30, 144, 255, 0.6);
   padding-bottom: 0.5rem;
 }
-.squad-modal-meta.invalid {
-  border-bottom-color: rgba(255, 190, 80, 0.9);
-}
+.squad-modal-meta.invalid { border-bottom-color: rgba(255, 190, 80, 0.9); }
 .loadout-status {
   margin-top: 0.35rem;
   display: flex;
@@ -745,27 +689,12 @@ export default {
   font-size: 0.85rem;
   text-transform: uppercase;
 }
-.loadout-status .points {
-  color: #9ec5e6;
-}
-.loadout-status .warn {
-  color: rgba(255, 190, 80, 0.95);
-}
-.loadout-status .ok {
-  color: rgba(120, 255, 170, 0.9);
-}
+.loadout-status .points { color: #9ec5e6; }
+.loadout-status .warn { color: rgba(255, 190, 80, 0.95); }
+.loadout-status .ok { color: rgba(120, 255, 170, 0.9); }
 
-.squad-title h2 {
-  margin: 0;
-  font-size: 1.8rem;
-  letter-spacing: 0.08em;
-}
-.squad-title .subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.95rem;
-  color: #9ec5e6;
-  text-transform: uppercase;
-}
+.squad-title h2 { margin: 0; font-size: 1.8rem; letter-spacing: 0.08em; }
+.squad-title .subtitle { margin: 0.25rem 0 0; font-size: 0.95rem; color: #9ec5e6; text-transform: uppercase; }
 .squad-tag {
   border: 2px solid #1e90ff;
   border-radius: 0.4rem;
@@ -773,17 +702,9 @@ export default {
   font-size: 0.95rem;
   color: #1e90ff;
 }
-.squad-modal-scroll {
-  margin-top: 0.5rem;
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 0.5rem;
-}
+.squad-modal-scroll { margin-top: 0.5rem; flex: 1; overflow-y: auto; padding-right: 0.5rem; }
 
-/* Fireteams */
-.fireteam-block {
-  margin-bottom: 1.25rem;
-}
+.fireteam-block { margin-bottom: 1.25rem; }
 .fireteam-header {
   display: flex;
   justify-content: space-between;
@@ -794,17 +715,9 @@ export default {
   border-radius: 0.35rem;
   margin-bottom: 0.75rem;
 }
-.fireteam-title {
-  letter-spacing: 0.12em;
-  color: #e0f0ff;
-  font-size: 0.95rem;
-}
-.fireteam-count {
-  font-size: 0.8rem;
-  color: #7aa7c7;
-}
+.fireteam-title { letter-spacing: 0.12em; color: #e0f0ff; font-size: 0.95rem; }
+.fireteam-count { font-size: 0.8rem; color: #7aa7c7; }
 
-/* Member/Slot cards */
 .squad-members-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -824,64 +737,23 @@ export default {
   border-left-color: rgba(180, 180, 180, 0.8);
   opacity: 0.85;
 }
-.member-card.closed {
-  opacity: 0.6;
-  filter: grayscale(0.2);
-}
+.member-card.closed { opacity: 0.6; filter: grayscale(0.2); }
 
-.member-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.member-rank-insignia {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-}
-.member-header-text h3 {
-  margin: 0;
-  font-size: 1.2rem;
-  color: #1e90ff;
-}
+.member-header { display: flex; align-items: center; gap: 0.75rem; }
+.member-rank-insignia { width: 40px; height: 40px; object-fit: contain; }
+.member-header-text h3 { margin: 0; font-size: 1.2rem; color: #1e90ff; }
 .member-card.vacant .member-header-text h3,
-.member-card.closed .member-header-text h3 {
-  color: #c7c7c7;
-}
-.rank-line {
-  margin: 0.2rem 0 0;
-  font-size: 0.9rem;
-  color: #9ec5e6;
-}
-.rank {
-  margin-right: 0.6rem;
-}
-.id {
-  opacity: 0.8;
-}
-.member-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
-  font-size: 0.9rem;
-}
-.member-column.left p,
-.member-column.right p {
-  margin: 0.18rem 0;
-}
+.member-card.closed .member-header-text h3 { color: #c7c7c7; }
+.rank-line { margin: 0.2rem 0 0; font-size: 0.9rem; color: #9ec5e6; }
+.rank { margin-right: 0.6rem; }
+.id { opacity: 0.8; }
 
-.loadout-row {
-  margin-top: 0.55rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.primary-label {
-  font-size: 0.75rem;
-  opacity: 0.85;
-  text-transform: uppercase;
-}
+.member-body { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.6rem; font-size: 0.9rem; }
+.member-column.left p,
+.member-column.right p { margin: 0.18rem 0; }
+
+.loadout-row { margin-top: 0.55rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.primary-label { font-size: 0.75rem; opacity: 0.85; text-transform: uppercase; }
 .loadout-select {
   background: rgba(0, 0, 0, 0.35);
   color: #dce6f1;
@@ -890,28 +762,11 @@ export default {
   padding: 0.35rem 0.45rem;
   outline: none;
 }
-.disposable {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: #9ec5e6;
-}
-.disposable input {
-  transform: translateY(1px);
-}
+.disposable { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: #9ec5e6; }
+.disposable input { transform: translateY(1px); }
 
-.cert-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  margin-top: 0.2rem;
-}
-.cert-row {
-  display: flex;
-  align-items: center;
-  font-size: 0.8rem;
-}
+.cert-list { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.2rem; }
+.cert-row { display: flex; align-items: center; font-size: 0.8rem; }
 .cert-checkbox {
   width: 14px;
   height: 14px;
@@ -923,29 +778,10 @@ export default {
   margin-right: 0.3rem;
   box-sizing: border-box;
 }
-.cert-checkbox.checked {
-  border-color: #1e90ff;
-  background: rgba(30, 144, 255, 0.15);
-}
-.checkbox-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: #1e90ff;
-}
-.cert-label {
-  white-space: nowrap;
-}
-.cert-none {
-  font-size: 0.8rem;
-  opacity: 0.75;
-}
+.cert-checkbox.checked { border-color: #1e90ff; background: rgba(30, 144, 255, 0.15); }
+.checkbox-dot { width: 8px; height: 8px; border-radius: 2px; background: #1e90ff; }
+.cert-label { white-space: nowrap; }
+.cert-none { font-size: 0.8rem; opacity: 0.75; }
 
-.member-footer {
-  margin-top: 0.6rem;
-  font-size: 0.75rem;
-  color: #7aa7c7;
-  display: flex;
-  justify-content: space-between;
-}
+.member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
 </style>
