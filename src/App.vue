@@ -1,319 +1,365 @@
 <template>
-  <section id="members" class="section-container">
-    <!-- Header -->
-    <div style="height: 52px; overflow: hidden">
-      <div class="section-header clipped-medium-backward-pilot">
-        <img src="/icons/license.svg" />
-        <h1>UNIT ORBAT</h1>
-      </div>
-      <div class="rhombus-back">&nbsp;</div>
-    </div>
+  <div class="page-wrapper">
+    <Header
+      :planet-path="planetPath"
+      :class="{ animate: animate }"
+      :header="header"
+    />
+    <Sidebar :animate="animate" :class="{ animate: animate }" />
+  </div>
 
-    <!-- ================= ORBAT GRID ================= -->
-    <div class="section-content-container">
-      <div v-if="!orbat.length" class="loading">
-        Loading ORBAT...
-      </div>
+  <div id="router-view-container">
+    <router-view
+      :animate="animate"
+      :initial-slug="initialSlug"
+      :missions="missions"
+      :events="events"
+      :members="members"
+      :orbat="orbat"
+      :reserves="reserves"
+    />
+  </div>
 
-      <div v-else class="squad-grid">
-        <div
-          v-for="sq in orbat"
-          :key="sq.squad"
-          class="squad-card"
-          @click="openSquad(sq)"
-        >
-          <div class="squad-header">
-            <div class="squad-insignia">
-              {{ squadInitials(sq.squad) }}
-            </div>
-
-            <div class="squad-meta">
-              <h2>{{ sq.squad }}</h2>
-              <p class="squad-subtitle">
-                {{ squadDescriptor(sq.squad) }}
-              </p>
-              <p class="squad-count">
-                {{ slotCount(sq) }} SLOTS
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= FULLSCREEN SQUAD MODAL ================= -->
-    <div
-      v-if="activeSquad"
-      class="squad-overlay"
-      @click.self="closeSquad"
-    >
-      <div class="squad-modal">
-        <!-- Header -->
-        <div class="squad-modal-header">
-          <div class="section-header clipped-medium-backward-bio">
-            <img src="/icons/license.svg" />
-            <h1>{{ activeSquad.squad }}</h1>
-          </div>
-          <button class="squad-close" @click="closeSquad">✕</button>
-        </div>
-
-        <!-- Fireteams -->
-        <div class="squad-modal-scroll">
-          <div
-            v-for="ft in activeSquad.fireteams"
-            :key="ft.name"
-            class="fireteam-block"
-          >
-            <h3 class="fireteam-title">{{ ft.name }}</h3>
-
-            <div class="slot-grid">
-              <div
-                v-for="slot in ft.slots"
-                :key="slot.role + (slot.member?.id || slot.status)"
-                class="slot-card"
-                :class="slot.status.toLowerCase()"
-              >
-                <div class="slot-role">
-                  {{ slot.role }}
-                </div>
-
-                <!-- FILLED -->
-                <template v-if="slot.status === 'FILLED' && slot.member">
-                  <div class="slot-name">
-                    {{ slot.member.rank }} {{ slot.member.name }}
-                  </div>
-                  <div class="slot-meta">
-                    ID: {{ slot.member.id || "N/A" }}
-                  </div>
-                </template>
-
-                <!-- VACANT -->
-                <template v-else-if="slot.status === 'VACANT'">
-                  <div class="slot-status">VACANT</div>
-                </template>
-
-                <!-- CLOSED -->
-                <template v-else-if="slot.status === 'CLOSED'">
-                  <div class="slot-status">CLOSED</div>
-                </template>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </section>
+  <audio autoplay>
+    <source src="/startup.ogg" type="audio/ogg" />
+  </audio>
 </template>
 
 <script>
+import Header from "./components/layout/Header.vue";
+import Sidebar from "./components/layout/Sidebar.vue";
+import Config from "@/assets/info/general-config.json";
+import Papa from "papaparse";
+
 export default {
-  name: "PilotsView",
-  props: {
-    orbat: {
-      type: Array,
-      default: () => [],
-    },
-  },
+  components: { Header, Sidebar },
+
   data() {
     return {
-      activeSquad: null,
+      animate: Config.animate,
+      initialSlug: Config.initialSlug,
+      planetPath: Config.planetPath,
+      header: Config.header,
+
+      missions: [],
+      events: [],
+
+      members: [],
+      orbat: [],
+      reserves: [],
     };
   },
+
+  created() {
+    this.setTitleFavicon(
+      Config.defaultTitle + " MISSION BRIEFING",
+      Config.icon
+    );
+
+    this.importMissions(
+      import.meta.glob("@/assets/missions/*.md", {
+        query: "?raw",
+        import: "default",
+      })
+    );
+    this.importEvents(
+      import.meta.glob("@/assets/events/*.md", {
+        query: "?raw",
+        import: "default",
+      })
+    );
+
+    const membersUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv";
+
+    const refDataUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
+
+    this.loadMembersCSV(membersUrl).then(() => {
+      this.loadRefDataCSV(refDataUrl);
+    });
+  },
+
+  mounted() {
+    this.$router.push("/status");
+  },
+
   methods: {
-    openSquad(sq) {
-      this.activeSquad = sq;
-    },
-    closeSquad() {
-      this.activeSquad = null;
-    },
-
-    squadInitials(name) {
-      if (!name) return "UNSC";
-      const p = name.split(" ");
-      if (p.length === 1) return p[0].slice(0, 3).toUpperCase();
-      return p.map((x) => x[0]).join("").toUpperCase();
+    /* ===============================================================
+     *  Utilities
+     * =============================================================== */
+    normalize(str) {
+      return String(str || "")
+        .replace(/"/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
     },
 
-    squadDescriptor(name) {
-      const n = name.toLowerCase();
-      if (n.includes("chalk")) return "INFANTRY ELEMENT";
-      if (n.includes("command")) return "COMMAND ELEMENT";
-      if (n.includes("air") || n.includes("wyvern"))
-        return "AVIATION ELEMENT";
-      return "UNSC ELEMENT";
+    setTitleFavicon(title, favicon) {
+      document.title = title;
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.href = favicon;
+      document.head.appendChild(link);
     },
 
-    slotCount(sq) {
-      return sq.fireteams.reduce(
-        (acc, ft) => acc + ft.slots.length,
-        0
+    /* ===============================================================
+     *  MEMBERS MASTER
+     * =============================================================== */
+    async loadMembersCSV(csvUrl) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(csvUrl, {
+          download: true,
+          skipEmptyLines: true,
+          header: false,
+          complete: (results) => {
+            const rows = results.data.slice(2); // skip title + headers
+            const CERT_COLUMNS = 13;
+
+            this.members = rows
+              .map((row) => {
+                const name = row[1]?.trim();
+                if (!name) return null;
+
+                return {
+                  rank: row[0]?.trim() || "",
+                  name,
+                  joinDate: row[3]?.trim() || "",
+                  id: row[4]?.trim() || "",
+                  certifications: row
+                    .slice(5, 5 + CERT_COLUMNS)
+                    .map((c) =>
+                      String(c || "")
+                        .trim()
+                        .toUpperCase() === "Y"
+                        ? "Y"
+                        : "N"
+                    ),
+
+                  squad: "",
+                  fireteam: "",
+                  slot: "",
+                };
+              })
+              .filter(Boolean);
+
+            console.log("Members loaded:", this.members.length);
+            resolve(this.members);
+          },
+          error: reject,
+        });
+      });
+    },
+
+    /* ===============================================================
+     *  REFDATA — SLOT-BASED ORBAT
+     * =============================================================== */
+    async loadRefDataCSV(csvUrl) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(csvUrl, {
+          download: true,
+          skipEmptyLines: false,
+          header: false,
+          complete: (results) => {
+            const rows = results.data;
+
+            /* ---------- Find header row ---------- */
+            let headerRowIndex = -1;
+            let col = {};
+
+            const findCol = (row, names) =>
+              row.findIndex((c) =>
+                names.includes(this.normalize(c))
+              );
+
+            for (let i = 0; i < 2; i++) {
+              const row = rows[i] || [];
+              const m = findCol(row, ["squad member"]);
+              const s = findCol(row, ["squads"]);
+              const sl = findCol(row, ["squad slots", "slot"]);
+              const r = findCol(row, ["squad roles", "role"]);
+
+              if (m !== -1 && s !== -1 && sl !== -1 && r !== -1) {
+                headerRowIndex = i;
+                col = { m, s, sl, r };
+                break;
+              }
+            }
+
+            if (headerRowIndex === -1) {
+              console.error("RefData headers not found");
+              resolve([]);
+              return;
+            }
+
+            /* ---------- Slot parsing ---------- */
+            const parseHeading = (txt) => {
+              const m = String(txt || "")
+                .trim()
+                .match(/^(.*?)(?:\s+)?fireteam\s*(\d+)/i);
+              if (!m) return null;
+              return {
+                squad: m[1].trim(),
+                fireteam: `Fireteam ${m[2]}`,
+              };
+            };
+
+            const findMember = (label) => {
+              const n = this.normalize(label);
+              return (
+                this.members.find((m) =>
+                  n.includes(this.normalize(m.name))
+                ) || null
+              );
+            };
+
+            const slots = [];
+            let currentSquad = "";
+            let currentFireteam = "";
+
+            for (let i = headerRowIndex + 1; i < rows.length; i++) {
+              const row = rows[i] || [];
+              const slotTxt = String(row[col.sl] || "").trim();
+              const roleTxt = String(row[col.r] || "").trim();
+
+              const heading = parseHeading(roleTxt);
+              if (heading) {
+                currentSquad = heading.squad;
+                currentFireteam = heading.fireteam;
+                continue;
+              }
+
+              if (!currentSquad || !roleTxt) continue;
+
+              const lower = slotTxt.toLowerCase();
+
+              if (lower === "vacant" || lower === "closed") {
+                slots.push({
+                  squad: currentSquad,
+                  fireteam: currentFireteam || "Element",
+                  role: roleTxt,
+                  status: lower.toUpperCase(),
+                  member: null,
+                });
+                continue;
+              }
+
+              const member = findMember(slotTxt);
+              if (!member) continue;
+
+              slots.push({
+                squad: currentSquad,
+                fireteam: currentFireteam || "Element",
+                role: roleTxt,
+                status: "FILLED",
+                member,
+              });
+
+              member.squad = currentSquad;
+              member.fireteam = currentFireteam;
+              member.slot = roleTxt;
+            }
+
+            /* ---------- Build ORBAT ---------- */
+            const ALWAYS = [
+              "Chalk Actual",
+              "Chalk 1",
+              "Chalk 2",
+              "Chalk 3",
+              "Chalk 4",
+              "Broadsword",
+              "Ifrit",
+              "Wyvern",
+              "Caladrius",
+              "Reserves",
+              "Recruit",
+            ];
+
+            const orbatMap = {};
+            ALWAYS.forEach(
+              (s) => (orbatMap[s] = { squad: s, fireteams: {} })
+            );
+
+            slots.forEach((s) => {
+              const sq = orbatMap[s.squad];
+              sq.fireteams[s.fireteam] ??= {
+                name: s.fireteam,
+                slots: [],
+              };
+              sq.fireteams[s.fireteam].slots.push(s);
+            });
+
+            /* ---------- Unassigned → Reserves ---------- */
+            this.members.forEach((m) => {
+              if (!m.squad) {
+                orbatMap["Reserves"].fireteams["Element"] ??= {
+                  name: "Element",
+                  slots: [],
+                };
+                orbatMap["Reserves"].fireteams["Element"].slots.push(
+                  {
+                    role: "Unassigned",
+                    status: "FILLED",
+                    member: m,
+                  }
+                );
+              }
+            });
+
+            this.orbat = Object.values(orbatMap).map((s) => ({
+              squad: s.squad,
+              fireteams: Object.values(s.fireteams),
+            }));
+
+            console.log("ORBAT built:", this.orbat.length);
+            resolve(this.orbat);
+          },
+          error: reject,
+        });
+      });
+    },
+
+    /* ===============================================================
+     *  MISSIONS / EVENTS
+     * =============================================================== */
+    async importMissions(files) {
+      const contents = await Promise.all(
+        Object.values(files).map((f) => f())
       );
+      contents.forEach((c) => {
+        const l = c.split("\n");
+        this.missions.push({
+          slug: l[0],
+          name: l[1],
+          status: l[2],
+          content: l.slice(3).join("\n"),
+        });
+      });
+    },
+
+    async importEvents(files) {
+      const contents = await Promise.all(
+        Object.values(files).map((f) => f())
+      );
+      contents.forEach((c) => {
+        const l = c.split("\n");
+        this.events.push({
+          title: l[0],
+          location: l[1],
+          time: l[2],
+          thumbnail: l[3],
+          content: l.slice(4).join("\n"),
+        });
+      });
     },
   },
 };
 </script>
 
-<style scoped>
-/* ===== LAYOUT ======================================================= */
-.section-container {
-  padding: 2.5rem 3rem;
-  font-family: Consolas, "Courier New", monospace;
-  color: #dce6f1;
-  max-width: 2200px;
-  margin: 0 auto;
-}
-
-.loading {
-  margin-top: 2rem;
-  opacity: 0.7;
-}
-
-/* ===== SQUAD GRID =================================================== */
-.squad-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 2.5rem;
-  margin-top: 2rem;
-}
-
-.squad-card {
-  cursor: pointer;
-  background: rgba(0, 10, 30, 0.9);
-  border: 2px solid #1e90ff;
-  border-radius: 0.8rem;
-  padding: 1.4rem 2rem;
-  transition: 0.15s ease;
-}
-
-.squad-card:hover {
-  transform: translateY(-3px);
-  border-color: #5ab3ff;
-}
-
-.squad-header {
-  display: flex;
-  gap: 1.4rem;
-  align-items: center;
-}
-
-.squad-insignia {
-  width: 80px;
-  height: 80px;
-  border: 3px solid #1e90ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.8rem;
-  font-weight: bold;
-}
-
-.squad-meta h2 {
-  margin: 0;
-  font-size: 2rem;
-}
-
-.squad-subtitle {
-  font-size: 0.95rem;
-  color: #9ec5e6;
-}
-
-.squad-count {
-  font-size: 0.85rem;
-  color: #7aa7c7;
-}
-
-/* ===== MODAL ======================================================== */
-.squad-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  z-index: 9999;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.squad-modal {
-  background: #050811;
-  width: 90vw;
-  max-width: 1600px;
-  max-height: 90vh;
-  border-radius: 0.8rem;
-  padding: 1.5rem 2rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.squad-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.squad-close {
-  background: none;
-  border: 1px solid #7aa7c7;
-  color: #dce6f1;
-  padding: 0.3rem 0.8rem;
-  cursor: pointer;
-}
-
-.squad-modal-scroll {
-  margin-top: 1rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-/* ===== FIRETEAMS ==================================================== */
-.fireteam-block {
-  margin-bottom: 2rem;
-}
-
-.fireteam-title {
-  margin-bottom: 0.6rem;
-  font-size: 1.2rem;
-  border-bottom: 1px solid #1e90ff;
-  padding-bottom: 0.3rem;
-}
-
-/* ===== SLOTS ======================================================== */
-.slot-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 0.8rem;
-}
-
-.slot-card {
-  background: rgba(0, 10, 30, 0.95);
-  border-left: 4px solid #1e90ff;
-  padding: 0.6rem 0.8rem;
-  font-size: 0.85rem;
-}
-
-.slot-card.vacant {
-  opacity: 0.6;
-  border-left-color: #999;
-}
-
-.slot-card.closed {
-  opacity: 0.4;
-  border-left-color: #555;
-  text-decoration: line-through;
-}
-
-.slot-role {
-  font-weight: bold;
-  color: #1e90ff;
-}
-
-.slot-name {
-  margin-top: 0.2rem;
-}
-
-.slot-meta,
-.slot-status {
-  font-size: 0.75rem;
-  opacity: 0.75;
+<style>
+#app {
+  min-height: 100vh;
+  overflow: hidden !important;
 }
 </style>
