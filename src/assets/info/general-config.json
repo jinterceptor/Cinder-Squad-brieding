@@ -2,18 +2,18 @@
   "initialSlug": "001",
   "planetPath": "/planet.webm",
   "animate": true,
-  "defaultTitle": "LANCER |",
+  "defaultTitle": "150TH ORBAT |",
   "icon": "/faction-logos/union.svg",
   "header": {
-    "planet": "Cressidium",
-    "year": "5016u",
-    "system": "Kalkhas",
-    "gate": "Lassen",
-    "ring": "Cascade-Line",
-    "headerTitle": "Union",
-    "headerSubtitle": "Lancer Squad",
-    "subheaderTitle": "Designation",
-    "subheaderSubtitle": "Unknown"
+    "planet": "Unknown",
+    "year": "Unknown",
+    "system": "Unknown",
+    "gate": "Unknown",
+    "ring": "Unknown",
+    "headerTitle": "FILE TYPE",
+    "headerSubtitle": "ORBAT",
+    "subheaderTitle": "SECURITY CODE",
+    "subheaderSubtitle": "LU5-Z"
   },
   "pilotSpecialInfo": {}
 }
