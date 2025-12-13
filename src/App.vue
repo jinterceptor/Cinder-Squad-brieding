@@ -63,7 +63,7 @@ export default {
       events: [],
 
       members: [], // MembersMaster + slotting overlay
-      orbat: [],   // squads + members
+      orbat: [], // squads + members
       reserves: [],
     };
   },
@@ -71,6 +71,7 @@ export default {
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
+    // Local content
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
@@ -80,6 +81,7 @@ export default {
     const refDataUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
 
+    // Load MembersMaster first, then overlay slotting from RefData
     this.loadMembersCSV(membersUrl).then(() => {
       this.loadRefDataCSV(refDataUrl);
     });
@@ -115,6 +117,7 @@ export default {
             // row 2+ = data
             const dataRows = rows.slice(2);
 
+            // 13 cert flags fixed order
             const CERT_COLUMNS = 13;
 
             const members = dataRows
@@ -124,14 +127,14 @@ export default {
                 const joinDate = row[3]?.trim() || "";
                 const id = row[4]?.trim() || "";
 
+                if (!name) return null;
+
                 const certs = row
                   .slice(5, 5 + CERT_COLUMNS)
                   .map((c) => {
                     const v = (c || "").toString().trim().toUpperCase();
                     return v === "Y" ? "Y" : "N";
                   });
-
-                if (!name) return null;
 
                 return {
                   rank,
@@ -140,7 +143,7 @@ export default {
                   id,
                   certifications: certs,
 
-                  // Will be filled by RefData slotting:
+                  // Filled by RefData slotting:
                   squad: "",
                   fireteam: "",
                   slot: "",
@@ -166,7 +169,7 @@ export default {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
-          skipEmptyLines: false, // keep blanks so headings stay aligned
+          skipEmptyLines: false, // keep blanks so headings don't break alignment
           header: false,
           complete: (results) => {
             const rows = results.data;
@@ -178,6 +181,7 @@ export default {
                 .trim()
                 .toLowerCase();
 
+            // Header row might be CSV row 0 or 1
             const headerCandidates = [
               { rowIndex: 0, row: rows[0] || [] },
               { rowIndex: 1, row: rows[1] || [] },
@@ -188,11 +192,10 @@ export default {
               return row.findIndex((cell) => normNames.includes(normalize(cell)));
             };
 
-            // Find columns for slotting table
             let headerRowIndex = -1;
             let headerRow = [];
             let slotNameColIndex = -1; // "Squad Slots" OR "Slot"
-            let roleColIndex = -1;     // "Squad Roles" OR "Role" OR (fallback) any "Chalk 1 Fireteam 1" style col
+            let roleColIndex = -1; // "Squad Roles" OR "Role" OR any "Fireteam" column
 
             for (const cand of headerCandidates) {
               const row = cand.row;
@@ -200,18 +203,15 @@ export default {
               const slotIdx = findCol(row, ["Squad Slots", "Slot"]);
               const roleIdx = findCol(row, ["Squad Roles", "Role"]);
 
-              // We accept the header row if we at least found slots column.
-              // Role column might be "Squad Roles" or could be a specific fireteam header column.
               if (slotIdx !== -1) {
                 headerRowIndex = cand.rowIndex;
                 headerRow = row;
                 slotNameColIndex = slotIdx;
 
-                // Prefer explicit Squad Roles / Role column…
                 if (roleIdx !== -1) {
                   roleColIndex = roleIdx;
                 } else {
-                  // …otherwise try fallback: find first column containing "fireteam"
+                  // fallback: first column that contains "fireteam"
                   roleColIndex = row.findIndex((cell) => normalize(cell).includes("fireteam"));
                 }
 
@@ -222,8 +222,10 @@ export default {
             if (headerRowIndex === -1 || slotNameColIndex === -1 || roleColIndex === -1) {
               console.error(
                 "Could not find slotting columns in RefData headers:",
-                "row0=", rows[0] || [],
-                "row1=", rows[1] || []
+                "row0=",
+                rows[0] || [],
+                "row1=",
+                rows[1] || []
               );
               resolve([]);
               return;
@@ -235,30 +237,49 @@ export default {
             let currentSquad = "";
             let currentFireteam = "";
 
+            // Parse heading:
+            // 1) "Chalk 1 Fireteam 1" -> squad="Chalk 1", fireteam="Fireteam 1"
+            // 2) "Broadsword"         -> squad="Broadsword", fireteam=""
             const parseHeading = (text) => {
               const raw = String(text || "").trim();
               if (!raw) return null;
 
-              // "<SQUAD NAME> Fireteam <number>"
+              // Fireteam pattern
               const m = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
-              if (!m) return null;
+              if (m) {
+                const squad = m[1].trim();
+                const ftNum = m[2].trim();
+                if (!squad || !ftNum) return null;
+                return { squad, fireteam: `Fireteam ${ftNum}` };
+              }
 
-              const squad = m[1].trim();
-              const ftNum = m[2].trim();
-              if (!squad || !ftNum) return null;
+              // Single-unit headings (no fireteam)
+              const singleUnits = new Set([
+                "broadsword",
+                "ifrit",
+                "wyvern",
+                "caladrius",
+                "chalk actual",
+                "broadsword command",
+              ]);
 
-              return { squad, fireteam: `Fireteam ${ftNum}` };
+              if (singleUnits.has(raw.toLowerCase())) {
+                return { squad: raw, fireteam: "" };
+              }
+
+              return null;
             };
 
+            // Match slot-name to MembersMaster entry
             const findMemberFromSlotName = (slotName) => {
               const s = normalize(slotName);
               if (!s) return null;
 
-              // Try direct inclusion of member name (best case)
+              // direct inclusion of name
               let m = this.members.find((mem) => s.includes(normalize(mem.name)));
               if (m) return m;
 
-              // surname + initial (good for "PFC M. Jinter")
+              // surname + initial
               const parts = s.split(" ");
               const surname = parts[parts.length - 1] || "";
               const initialMatch = s.match(/\b([a-z])\./i);
@@ -275,7 +296,7 @@ export default {
               });
               if (m) return m;
 
-              // last resort: surname-only
+              // last resort: surname only
               return (
                 this.members.find((mem) => {
                   const n = normalize(mem.name);
@@ -295,23 +316,23 @@ export default {
               const slotText = String(row[slotNameColIndex] || "").trim();
               const roleText = String(row[roleColIndex] || "").trim();
 
-              // Heading rows live in role column (e.g., "Chalk 1 Fireteam 1")
+              // headings live in role column
               const heading = parseHeading(roleText);
               if (heading) {
                 currentSquad = heading.squad;
-                currentFireteam = heading.fireteam;
+                currentFireteam = heading.fireteam || "";
                 continue;
               }
 
-              // Slot rows
-              if (currentSquad && currentFireteam && slotText && roleText) {
+              // slot row: allow empty fireteam for single-unit squads
+              if (currentSquad && slotText && roleText) {
                 const member = findMemberFromSlotName(slotText);
                 if (!member) continue;
 
                 slotAssignments.push({
                   id: member.id,
                   squad: currentSquad,
-                  fireteam: currentFireteam,
+                  fireteam: currentFireteam || "",
                   slot: roleText,
                 });
               }
@@ -319,6 +340,7 @@ export default {
 
             console.log("Slot assignments parsed:", slotAssignments.length);
 
+            // Apply assignments
             const byId = new Map(slotAssignments.map((a) => [a.id, a]));
 
             this.members = this.members.map((m) => {
@@ -333,7 +355,7 @@ export default {
               };
             });
 
-            // Build ORBAT from assigned members only
+            // Build ORBAT from assigned members
             const orbatMap = {};
             this.members.forEach((m) => {
               if (!m.squad) return;
