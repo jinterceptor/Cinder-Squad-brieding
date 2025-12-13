@@ -18,15 +18,9 @@
 
         <div v-else class="hierarchy-container">
           <!-- TOP: CHALK ACTUAL -->
-          <div
-            v-if="hierarchy.chalkActual"
-            class="orbat-row center-row actual-row"
-          >
+          <div v-if="hierarchy.chalkActual" class="orbat-row center-row actual-row">
             <div class="squad-row single">
-              <div
-                class="squad-card"
-                @click="openSquad(hierarchy.chalkActual)"
-              >
+              <div class="squad-card" @click="openSquad(hierarchy.chalkActual)">
                 <div class="squad-header">
                   <div class="squad-insignia">
                     <span>{{ squadInitials(hierarchy.chalkActual.squad) }}</span>
@@ -47,10 +41,7 @@
           </div>
 
           <!-- MIDDLE: CHALKS 1–3 -->
-          <div
-            v-if="hierarchy.chalks.length"
-            class="orbat-row chalk-row"
-          >
+          <div v-if="hierarchy.chalks.length" class="orbat-row chalk-row">
             <div class="squad-row three">
               <div
                 v-for="sq in hierarchy.chalks"
@@ -119,7 +110,8 @@
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
                     <p class="squad-subtitle">
-                      {{ squadDescriptor(sq.squad) }}</p>
+                      {{ squadDescriptor(sq.squad) }}
+                    </p>
                     <p class="squad-count">
                       {{ sq.members.length }} PERSONNEL
                     </p>
@@ -134,11 +126,7 @@
     </div>
 
     <!-- ================= FULLSCREEN SQUAD ROSTER OVERLAY ================= -->
-    <div
-      v-if="activeSquad"
-      class="squad-overlay"
-      @click.self="closeSquad"
-    >
+    <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
       <div class="squad-modal">
         <!-- Top bar -->
         <div class="squad-modal-header">
@@ -169,76 +157,90 @@
 
         <!-- Scrollable content -->
         <div class="squad-modal-scroll">
-          <div class="squad-members-grid">
+          <div class="fireteam-stack">
             <div
-              v-for="member in activeSquad.members"
-              :key="member.id || member.name"
-              class="member-card"
+              v-for="ft in fireteamsForActiveSquad"
+              :key="ft.name"
+              class="fireteam-block"
             >
-              <!-- Header with rank insignia -->
-              <div class="member-header">
-                <div
-                  class="member-rank-insignia-wrapper"
-                  v-if="rankInsignia(member.rank)"
-                >
-                  <img
-                    :src="rankInsignia(member.rank)"
-                    :alt="member.rank + ' insignia'"
-                    class="member-rank-insignia"
-                  />
-                </div>
-
-                <div class="member-header-text">
-                  <h3>{{ member.name.toUpperCase() }}</h3>
-                  <p class="rank-line">
-                    <span class="rank">{{ member.rank }}</span>
-                    <span class="id">ID: {{ member.id || 'N/A' }}</span>
-                  </p>
-                </div>
+              <div class="fireteam-header">
+                <h3>{{ ft.name }}</h3>
+                <span class="fireteam-count">{{ ft.members.length }} ASSIGNED</span>
               </div>
 
-              <!-- Body -->
-              <div class="member-body">
-                <div class="member-column left">
-                  <p><strong>Squad:</strong> {{ member.squad || activeSquad.squad }}</p>
-                  <p><strong>Join Date:</strong> {{ member.joinDate || 'Unknown' }}</p>
-                  <p><strong>Status:</strong> {{ member.status || 'Active' }}</p>
-                  <p><strong>Slot:</strong> {{ member.squadAssignments || 'N/A' }}</p>
-                </div>
-
-                <!-- Certifications (vertical list) -->
-                <div class="member-column right">
-                  <p><strong>Certifications:</strong></p>
-                  <div class="cert-list">
+              <div class="squad-members-grid">
+                <div
+                  v-for="member in ft.members"
+                  :key="member.id || member.name"
+                  class="member-card"
+                >
+                  <!-- Header with rank insignia -->
+                  <div class="member-header">
                     <div
-                      v-for="(label, idx) in certLabels"
-                      :key="label"
-                      class="cert-row"
+                      class="member-rank-insignia-wrapper"
+                      v-if="rankInsignia(member.rank)"
                     >
-                      <span
-                        class="cert-checkbox"
-                        :class="{ checked: hasCert(member, idx) }"
-                      >
-                        <span
-                          v-if="hasCert(member, idx)"
-                          class="checkbox-dot"
-                        ></span>
-                      </span>
-                      <span class="cert-label">{{ label }}</span>
+                      <img
+                        :src="rankInsignia(member.rank)"
+                        :alt="member.rank + ' insignia'"
+                        class="member-rank-insignia"
+                      />
                     </div>
+
+                    <div class="member-header-text">
+                      <h3>{{ member.name.toUpperCase() }}</h3>
+                      <p class="rank-line">
+                        <span class="rank">{{ member.rank }}</span>
+                        <span class="id">ID: {{ member.id || 'N/A' }}</span>
+                      </p>
+                      <p class="slot-line">
+                        <span class="slot-pill">
+                          {{ member.slot || member.squadAssignments || "UNSLOTTED" }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Body -->
+                  <div class="member-body">
+                    <div class="member-column left">
+                      <p><strong>Squad:</strong> {{ member.squad || activeSquad.squad }}</p>
+                      <p><strong>Fireteam:</strong> {{ member.fireteam || ft.name }}</p>
+                      <p><strong>Join Date:</strong> {{ member.joinDate || 'Unknown' }}</p>
+                      <p><strong>Status:</strong> {{ member.status || 'Active' }}</p>
+                    </div>
+
+                    <!-- Certifications (vertical list) -->
+                    <div class="member-column right">
+                      <p><strong>Certifications:</strong></p>
+                      <div class="cert-list">
+                        <div
+                          v-for="(label, idx) in certLabels"
+                          :key="label"
+                          class="cert-row"
+                        >
+                          <span
+                            class="cert-checkbox"
+                            :class="{ checked: hasCert(member, idx) }"
+                          >
+                            <span v-if="hasCert(member, idx)" class="checkbox-dot"></span>
+                          </span>
+                          <span class="cert-label">{{ label }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Footer -->
+                  <div class="member-footer">
+                    <span>BIOMETRIC RECORD VALID</span>
+                    <span>UNSC SYSTEMS DATABASE</span>
                   </div>
                 </div>
               </div>
-
-              <!-- Footer -->
-              <div class="member-footer">
-                <span>BIOMETRIC RECORD VALID</span>
-                <span>UNSC SYSTEMS DATABASE</span>
-              </div>
             </div>
-          </div>
+          </div> <!-- /fireteam-stack -->
         </div>
-
       </div>
     </div>
     <!-- END OVERLAY -->
@@ -300,11 +302,7 @@ export default {
           n === "caladrius"
         ) {
           groups.support.push(sq);
-        } else if (
-          n === "fillers" ||
-          n === "recruit" ||
-          n === "reserves"
-        ) {
+        } else if (n === "fillers" || n === "recruit" || n === "reserves") {
           groups.other.push(sq);
         } else {
           groups.other.push(sq);
@@ -316,6 +314,60 @@ export default {
       groups.other.sort((a, b) => a.squad.localeCompare(b.squad));
 
       return groups;
+    },
+
+    fireteamsForActiveSquad() {
+      if (!this.activeSquad?.members?.length) return [];
+
+      // Group by fireteam name (fallback: Unassigned)
+      const map = {};
+      this.activeSquad.members.forEach((m) => {
+        const ft = (m.fireteam && String(m.fireteam).trim()) || "Unassigned";
+        if (!map[ft]) map[ft] = [];
+        map[ft].push(m);
+      });
+
+      // Role ordering inside fireteams
+      const ROLE_ORDER = [
+        "Squad Lead",
+        "Fireteam Lead",
+        "Corpsman",
+        "RTO",
+        "Machine Gunner",
+        "Anti Tank",
+        "Grenadier",
+        "Marksman",
+        "Combat Engineer",
+        "Breacher",
+        "Rifleman",
+      ];
+
+      const scoreRole = (role) => {
+        const r = String(role || "").trim().toLowerCase();
+        const idx = ROLE_ORDER.findIndex((x) => x.toLowerCase() === r);
+        return idx === -1 ? 999 : idx;
+      };
+
+      const sortMembers = (arr) =>
+        arr.slice().sort((a, b) => {
+          const ar = scoreRole(a.slot || a.squadAssignments);
+          const br = scoreRole(b.slot || b.squadAssignments);
+          if (ar !== br) return ar - br;
+          return (a.name || "").localeCompare(b.name || "");
+        });
+
+      // Sort fireteams by number if possible (Fireteam 1, Fireteam 2, ...)
+      const fireteamNames = Object.keys(map).sort((a, b) => {
+        const na = parseInt(String(a).match(/\d+/)?.[0] || "999", 10);
+        const nb = parseInt(String(b).match(/\d+/)?.[0] || "999", 10);
+        if (na !== nb) return na - nb;
+        return a.localeCompare(b);
+      });
+
+      return fireteamNames.map((name) => ({
+        name,
+        members: sortMembers(map[name]),
+      }));
     },
   },
   methods: {
@@ -460,7 +512,6 @@ export default {
 
 /* Command lines on desktop */
 @media (min-width: 900px) {
-  /* vertical line from Chalk Actual downwards */
   .actual-row {
     position: relative;
   }
@@ -477,7 +528,6 @@ export default {
     pointer-events: none;
   }
 
-  /* horizontal line above Chalks 1–3 */
   .chalk-row {
     position: relative;
     margin-top: 2.5rem;
@@ -498,11 +548,7 @@ export default {
 
 /* ===== SQUAD TILE ===================================================== */
 .squad-card {
-  background: radial-gradient(
-      circle at top left,
-      rgba(30, 144, 255, 0.25),
-      transparent 65%
-    ),
+  background: radial-gradient(circle at top left, rgba(30, 144, 255, 0.25), transparent 65%),
     rgba(0, 10, 30, 0.9);
   border: 2px solid rgba(30, 144, 255, 0.85);
   border-radius: 0.8rem;
@@ -525,7 +571,6 @@ export default {
   padding: 1.4rem 2rem;
 }
 
-/* Insignia */
 .squad-insignia {
   width: 95px;
   height: 95px;
@@ -651,6 +696,34 @@ export default {
   overflow-y: auto;
 }
 
+.fireteam-block {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(30, 144, 255, 0.35);
+}
+
+.fireteam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 0.6rem 0;
+}
+
+.fireteam-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  color: #e0f0ff;
+  text-transform: uppercase;
+}
+
+.fireteam-count {
+  font-size: 0.85rem;
+  color: #9ec5e6;
+  opacity: 0.9;
+  text-transform: uppercase;
+}
+
 .squad-members-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
@@ -691,6 +764,22 @@ export default {
   margin: 0.2rem 0 0;
   font-size: 0.9rem;
   color: #9ec5e6;
+}
+
+.slot-line {
+  margin: 0.3rem 0 0;
+}
+
+.slot-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid rgba(30, 144, 255, 0.65);
+  border-radius: 0.25rem;
+  color: #1e90ff;
+  background: rgba(30, 144, 255, 0.08);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .rank {
