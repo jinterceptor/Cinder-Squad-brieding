@@ -4,6 +4,19 @@
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Inconsolata&display=swap");
 
+/* ===================================================== */
+/*  ADD: LOCAL FONT (Conduit.ttf)                         */
+/*  File: src/assets/fonts/Conduit.ttf                    */
+/*  This CSS file: src/assets/styles/_base.css             */
+/* ===================================================== */
+@font-face {
+	font-family: "Conduit";
+	src: url("../fonts/Conduit.ttf") format("truetype");
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+}
+
 /*-------------------------------------*/
 /*--       Theme Customization       --*/
 /*-------------------------------------*/
@@ -39,6 +52,18 @@
 	/* For Firefox */
 	scrollbar-color: var(--primary-color) transparent !important;
 	scrollbar-width: thin;
+}
+
+/* ===================================================== */
+/*  ADD: GLOBAL FONT DEFAULTS (doesn't change layout)     */
+/*  Explicit font-family declarations below still win.    */
+/* ===================================================== */
+body,
+button,
+input,
+select,
+textarea {
+	font-family: "Conduit", "Roboto", sans-serif;
 }
 
 html {
@@ -284,6 +309,9 @@ div.location-info {
 	width: 48px;
 	height: 48px;
 }
+
+/* ...everything below remains exactly as you pasted... */
+
 
 .sidebar-layout a,
 .sidebar-layout a:visited {
