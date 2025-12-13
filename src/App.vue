@@ -1,6 +1,10 @@
 <template>
   <div class="page-wrapper">
-    <Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
+    <Header
+      :planet-path="planetPath"
+      :class="{ animate: animate }"
+      :header="header"
+    />
     <Sidebar :animate="animate" :class="{ animate: animate }" />
   </div>
 
@@ -15,27 +19,6 @@
       :reserves="reserves"
     />
   </div>
-
-  <svg
-    style="visibility: hidden; position: absolute"
-    width="0"
-    height="0"
-    xmlns="http://www.w3.org/2000/svg"
-    version="1.1"
-  >
-    <defs>
-      <filter id="round">
-        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-        <feColorMatrix
-          in="blur"
-          mode="matrix"
-          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -5"
-          result="goo"
-        />
-        <feComposite in="SourceGraphic" in2="goo" operator="atop" />
-      </filter>
-    </defs>
-  </svg>
 
   <audio autoplay>
     <source src="/startup.ogg" type="audio/ogg" />
@@ -57,23 +40,34 @@ export default {
       initialSlug: Config.initialSlug,
       planetPath: Config.planetPath,
       header: Config.header,
-      pilotSpecialInfo: Config.pilotSpecialInfo,
 
       missions: [],
       events: [],
 
-      members: [], // MembersMaster + slotting overlay
-      orbat: [], // squads + members
+      members: [],
+      orbat: [],
       reserves: [],
     };
   },
 
   created() {
-    this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
+    this.setTitleFavicon(
+      Config.defaultTitle + " MISSION BRIEFING",
+      Config.icon
+    );
 
-    // Local content
-    this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
-    this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
+    this.importMissions(
+      import.meta.glob("@/assets/missions/*.md", {
+        query: "?raw",
+        import: "default",
+      })
+    );
+    this.importEvents(
+      import.meta.glob("@/assets/events/*.md", {
+        query: "?raw",
+        import: "default",
+      })
+    );
 
     const membersUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=1185035639&single=true&output=csv";
@@ -81,7 +75,6 @@ export default {
     const refDataUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
 
-    // Load MembersMaster first, then overlay slotting from RefData
     this.loadMembersCSV(membersUrl).then(() => {
       this.loadRefDataCSV(refDataUrl);
     });
@@ -92,16 +85,28 @@ export default {
   },
 
   methods: {
-    setTitleFavicon(title, favicon) {
-      document.title = title;
-      const headEl = document.querySelector("head");
-      const faviconEl = document.createElement("link");
-      faviconEl.setAttribute("rel", "shortcut icon");
-      faviconEl.setAttribute("href", favicon);
-      headEl.appendChild(faviconEl);
+    /* ===============================================================
+     *  Utilities
+     * =============================================================== */
+    normalize(str) {
+      return String(str || "")
+        .replace(/"/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
     },
 
-    // ---------------- MembersMaster ----------------
+    setTitleFavicon(title, favicon) {
+      document.title = title;
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.href = favicon;
+      document.head.appendChild(link);
+    },
+
+    /* ===============================================================
+     *  MEMBERS MASTER
+     * =============================================================== */
     async loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
@@ -109,308 +114,244 @@ export default {
           skipEmptyLines: true,
           header: false,
           complete: (results) => {
-            const rows = results.data;
-
-            // MembersMaster:
-            // row 0 = title row
-            // row 1 = header row
-            // row 2+ = data
-            const dataRows = rows.slice(2);
-
-            // 13 cert flags fixed order
+            const rows = results.data.slice(2); // skip title + headers
             const CERT_COLUMNS = 13;
 
-            const members = dataRows
+            this.members = rows
               .map((row) => {
-                const rank = row[0]?.trim() || "";
-                const name = row[1]?.trim() || "";
-                const joinDate = row[3]?.trim() || "";
-                const id = row[4]?.trim() || "";
-
+                const name = row[1]?.trim();
                 if (!name) return null;
 
-                const certs = row
-                  .slice(5, 5 + CERT_COLUMNS)
-                  .map((c) => {
-                    const v = (c || "").toString().trim().toUpperCase();
-                    return v === "Y" ? "Y" : "N";
-                  });
-
                 return {
-                  rank,
+                  rank: row[0]?.trim() || "",
                   name,
-                  joinDate,
-                  id,
-                  certifications: certs,
+                  joinDate: row[3]?.trim() || "",
+                  id: row[4]?.trim() || "",
+                  certifications: row
+                    .slice(5, 5 + CERT_COLUMNS)
+                    .map((c) =>
+                      String(c || "")
+                        .trim()
+                        .toUpperCase() === "Y"
+                        ? "Y"
+                        : "N"
+                    ),
 
-                  // Filled by RefData slotting:
                   squad: "",
                   fireteam: "",
                   slot: "",
-                  squadAssignments: "",
                 };
               })
               .filter(Boolean);
 
-            console.log("Members loaded:", members.length);
-            this.members = members;
-            resolve(members);
+            console.log("Members loaded:", this.members.length);
+            resolve(this.members);
           },
-          error: (err) => {
-            console.error("Error loading Members CSV:", err);
-            reject(err);
-          },
+          error: reject,
         });
       });
     },
 
-    // ---------------- RefData: Slotting (Squad Slots + Squad Roles) ----------------
+    /* ===============================================================
+     *  REFDATA — SLOT-BASED ORBAT
+     * =============================================================== */
     async loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
-          skipEmptyLines: false, // keep blanks so headings don't break alignment
+          skipEmptyLines: false,
           header: false,
           complete: (results) => {
             const rows = results.data;
 
-            const normalize = (str) =>
-              String(str || "")
-                .replace(/"/g, "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-
-            // Header row might be CSV row 0 or 1
-            const headerCandidates = [
-              { rowIndex: 0, row: rows[0] || [] },
-              { rowIndex: 1, row: rows[1] || [] },
-            ];
-
-            const findCol = (row, names) => {
-              const normNames = names.map((n) => normalize(n));
-              return row.findIndex((cell) => normNames.includes(normalize(cell)));
-            };
-
+            /* ---------- Find header row ---------- */
             let headerRowIndex = -1;
-            let headerRow = [];
-            let slotNameColIndex = -1; // "Squad Slots" OR "Slot"
-            let roleColIndex = -1; // "Squad Roles" OR "Role" OR any "Fireteam" column
+            let col = {};
 
-            for (const cand of headerCandidates) {
-              const row = cand.row;
+            const findCol = (row, names) =>
+              row.findIndex((c) =>
+                names.includes(this.normalize(c))
+              );
 
-              const slotIdx = findCol(row, ["Squad Slots", "Slot"]);
-              const roleIdx = findCol(row, ["Squad Roles", "Role"]);
+            for (let i = 0; i < 2; i++) {
+              const row = rows[i] || [];
+              const m = findCol(row, ["squad member"]);
+              const s = findCol(row, ["squads"]);
+              const sl = findCol(row, ["squad slots", "slot"]);
+              const r = findCol(row, ["squad roles", "role"]);
 
-              if (slotIdx !== -1) {
-                headerRowIndex = cand.rowIndex;
-                headerRow = row;
-                slotNameColIndex = slotIdx;
-
-                if (roleIdx !== -1) {
-                  roleColIndex = roleIdx;
-                } else {
-                  // fallback: first column that contains "fireteam"
-                  roleColIndex = row.findIndex((cell) => normalize(cell).includes("fireteam"));
-                }
-
+              if (m !== -1 && s !== -1 && sl !== -1 && r !== -1) {
+                headerRowIndex = i;
+                col = { m, s, sl, r };
                 break;
               }
             }
 
-            if (headerRowIndex === -1 || slotNameColIndex === -1 || roleColIndex === -1) {
-              console.error(
-                "Could not find slotting columns in RefData headers:",
-                "row0=",
-                rows[0] || [],
-                "row1=",
-                rows[1] || []
-              );
+            if (headerRowIndex === -1) {
+              console.error("RefData headers not found");
               resolve([]);
               return;
             }
 
-            console.log("RefData header row used:", headerRowIndex, headerRow);
-            console.log("RefData slotting indices:", { slotNameColIndex, roleColIndex });
-
-            let currentSquad = "";
-            let currentFireteam = "";
-
-            // Parse heading:
-            // 1) "Chalk 1 Fireteam 1" -> squad="Chalk 1", fireteam="Fireteam 1"
-            // 2) "Broadsword"         -> squad="Broadsword", fireteam=""
-            const parseHeading = (text) => {
-              const raw = String(text || "").trim();
-              if (!raw) return null;
-
-              // Fireteam pattern
-              const m = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
-              if (m) {
-                const squad = m[1].trim();
-                const ftNum = m[2].trim();
-                if (!squad || !ftNum) return null;
-                return { squad, fireteam: `Fireteam ${ftNum}` };
-              }
-
-              // Single-unit headings (no fireteam)
-              const singleUnits = new Set([
-                "broadsword",
-                "ifrit",
-                "wyvern",
-                "caladrius",
-                "chalk actual",
-                "broadsword command",
-              ]);
-
-              if (singleUnits.has(raw.toLowerCase())) {
-                return { squad: raw, fireteam: "" };
-              }
-
-              return null;
+            /* ---------- Slot parsing ---------- */
+            const parseHeading = (txt) => {
+              const m = String(txt || "")
+                .trim()
+                .match(/^(.*?)(?:\s+)?fireteam\s*(\d+)/i);
+              if (!m) return null;
+              return {
+                squad: m[1].trim(),
+                fireteam: `Fireteam ${m[2]}`,
+              };
             };
 
-            // Match slot-name to MembersMaster entry
-            const findMemberFromSlotName = (slotName) => {
-              const s = normalize(slotName);
-              if (!s) return null;
-
-              // direct inclusion of name
-              let m = this.members.find((mem) => s.includes(normalize(mem.name)));
-              if (m) return m;
-
-              // surname + initial
-              const parts = s.split(" ");
-              const surname = parts[parts.length - 1] || "";
-              const initialMatch = s.match(/\b([a-z])\./i);
-              const initial = initialMatch ? initialMatch[1].toLowerCase() : "";
-
-              m = this.members.find((mem) => {
-                const n = normalize(mem.name);
-                const nParts = n.split(" ");
-                const memSurname = nParts[nParts.length - 1] || "";
-                const memInitial = (nParts[0] || "").charAt(0);
-                if (!surname || memSurname !== surname) return false;
-                if (initial && memInitial !== initial) return false;
-                return true;
-              });
-              if (m) return m;
-
-              // last resort: surname only
+            const findMember = (label) => {
+              const n = this.normalize(label);
               return (
-                this.members.find((mem) => {
-                  const n = normalize(mem.name);
-                  const nParts = n.split(" ");
-                  const memSurname = nParts[nParts.length - 1] || "";
-                  return surname && memSurname === surname;
-                }) || null
+                this.members.find((m) =>
+                  n.includes(this.normalize(m.name))
+                ) || null
               );
             };
 
-            const slotAssignments = [];
+            const slots = [];
+            let currentSquad = "";
+            let currentFireteam = "";
 
-            const dataStart = headerRowIndex + 1;
-
-            for (let i = dataStart; i < rows.length; i++) {
+            for (let i = headerRowIndex + 1; i < rows.length; i++) {
               const row = rows[i] || [];
-              const slotText = String(row[slotNameColIndex] || "").trim();
-              const roleText = String(row[roleColIndex] || "").trim();
+              const slotTxt = String(row[col.sl] || "").trim();
+              const roleTxt = String(row[col.r] || "").trim();
 
-              // headings live in role column
-              const heading = parseHeading(roleText);
+              const heading = parseHeading(roleTxt);
               if (heading) {
                 currentSquad = heading.squad;
-                currentFireteam = heading.fireteam || "";
+                currentFireteam = heading.fireteam;
                 continue;
               }
 
-              // slot row: allow empty fireteam for single-unit squads
-              if (currentSquad && slotText && roleText) {
-                const member = findMemberFromSlotName(slotText);
-                if (!member) continue;
+              if (!currentSquad || !roleTxt) continue;
 
-                slotAssignments.push({
-                  id: member.id,
+              const lower = slotTxt.toLowerCase();
+
+              if (lower === "vacant" || lower === "closed") {
+                slots.push({
                   squad: currentSquad,
-                  fireteam: currentFireteam || "",
-                  slot: roleText,
+                  fireteam: currentFireteam || "Element",
+                  role: roleTxt,
+                  status: lower.toUpperCase(),
+                  member: null,
                 });
+                continue;
               }
+
+              const member = findMember(slotTxt);
+              if (!member) continue;
+
+              slots.push({
+                squad: currentSquad,
+                fireteam: currentFireteam || "Element",
+                role: roleTxt,
+                status: "FILLED",
+                member,
+              });
+
+              member.squad = currentSquad;
+              member.fireteam = currentFireteam;
+              member.slot = roleTxt;
             }
 
-            console.log("Slot assignments parsed:", slotAssignments.length);
+            /* ---------- Build ORBAT ---------- */
+            const ALWAYS = [
+              "Chalk Actual",
+              "Chalk 1",
+              "Chalk 2",
+              "Chalk 3",
+              "Chalk 4",
+              "Broadsword",
+              "Ifrit",
+              "Wyvern",
+              "Caladrius",
+              "Reserves",
+              "Recruit",
+            ];
 
-            // Apply assignments
-            const byId = new Map(slotAssignments.map((a) => [a.id, a]));
-
-            this.members = this.members.map((m) => {
-              const a = byId.get(m.id);
-              if (!a) return m;
-              return {
-                ...m,
-                squad: a.squad,
-                fireteam: a.fireteam,
-                slot: a.slot,
-                squadAssignments: a.slot,
-              };
-            });
-
-            // Build ORBAT from assigned members
             const orbatMap = {};
-            this.members.forEach((m) => {
-              if (!m.squad) return;
-              if (!orbatMap[m.squad]) orbatMap[m.squad] = [];
-              orbatMap[m.squad].push(m);
+            ALWAYS.forEach(
+              (s) => (orbatMap[s] = { squad: s, fireteams: {} })
+            );
+
+            slots.forEach((s) => {
+              const sq = orbatMap[s.squad];
+              sq.fireteams[s.fireteam] ??= {
+                name: s.fireteam,
+                slots: [],
+              };
+              sq.fireteams[s.fireteam].slots.push(s);
             });
 
-            this.orbat = Object.entries(orbatMap).map(([squad, members]) => ({
-              squad,
-              members,
+            /* ---------- Unassigned → Reserves ---------- */
+            this.members.forEach((m) => {
+              if (!m.squad) {
+                orbatMap["Reserves"].fireteams["Element"] ??= {
+                  name: "Element",
+                  slots: [],
+                };
+                orbatMap["Reserves"].fireteams["Element"].slots.push(
+                  {
+                    role: "Unassigned",
+                    status: "FILLED",
+                    member: m,
+                  }
+                );
+              }
+            });
+
+            this.orbat = Object.values(orbatMap).map((s) => ({
+              squad: s.squad,
+              fireteams: Object.values(s.fireteams),
             }));
 
-            console.log("Squads in ORBAT:", this.orbat.length);
+            console.log("ORBAT built:", this.orbat.length);
             resolve(this.orbat);
           },
-          error: (err) => {
-            console.error("Error loading RefData CSV:", err);
-            reject(err);
-          },
+          error: reject,
         });
       });
     },
 
-    // ---------------- Missions / Events (unchanged) ----------------
+    /* ===============================================================
+     *  MISSIONS / EVENTS
+     * =============================================================== */
     async importMissions(files) {
-      const filePromises = Object.keys(files).map((path) => files[path]());
-      const fileContents = await Promise.all(filePromises);
-      fileContents.forEach((content) => {
-        const lines = content.split("\n");
-        const mission = {
-          slug: lines[0],
-          name: lines[1],
-          status: lines[2],
-          content: lines.slice(3).join("\n"),
-        };
-        this.missions.push(mission);
+      const contents = await Promise.all(
+        Object.values(files).map((f) => f())
+      );
+      contents.forEach((c) => {
+        const l = c.split("\n");
+        this.missions.push({
+          slug: l[0],
+          name: l[1],
+          status: l[2],
+          content: l.slice(3).join("\n"),
+        });
       });
-      this.missions.sort((a, b) => b.slug - a.slug);
     },
 
     async importEvents(files) {
-      const filePromises = Object.keys(files).map((path) => files[path]());
-      const fileContents = await Promise.all(filePromises);
-      fileContents.forEach((content) => {
-        const lines = content.split("\n");
-        const event = {
-          title: lines[0],
-          location: lines[1],
-          time: lines[2],
-          thumbnail: lines[3],
-          content: lines.slice(4).join("\n"),
-        };
-        this.events.push(event);
+      const contents = await Promise.all(
+        Object.values(files).map((f) => f())
+      );
+      contents.forEach((c) => {
+        const l = c.split("\n");
+        this.events.push({
+          title: l[0],
+          location: l[1],
+          time: l[2],
+          thumbnail: l[3],
+          content: l.slice(4).join("\n"),
+        });
       });
-      this.events.reverse();
     },
   },
 };
