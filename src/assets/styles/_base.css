@@ -1,344 +1,216 @@
 @import url("https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@400;600;800&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Raleway:wght@700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;700&?family=Big+Shoulders+Display:wght@400;600;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Inconsolata&display=swap");
 
 /* ===================================================== */
-/*  UNSC FONT (LOCAL)                                    */
-/*  Put your .ttf in: src/assets/fonts/YourFont.ttf      */
+/*  UNSC LOCAL FONT                                      */
+/*  File: src/assets/fonts/Conduit.ttf                  */
 /* ===================================================== */
 @font-face {
-	font-family: "UNSCFont";
-	src: url("src/assets/fonts/Conduit.ttf") format("truetype");
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
+  font-family: "UNSCFont";
+  src: url("../fonts/Conduit.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
 /*-------------------------------------*/
 /*--       Theme Customization       --*/
 /*-------------------------------------*/
 :root {
-	/* NEW: global font tokens */
-	--font-main: "UNSCFont", "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
-	--font-mono: "UNSCFont", "Inconsolata", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  /* Global fonts */
+  --font-main: "UNSCFont", "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: "UNSCFont", "Inconsolata", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
-	/* Primary Colors */
-	--primary-color: #7dbbbb;
-	--secondary-color: #161c1dcc;
-	--highlight-hover: rgba(255, 255, 255, 0.3);
-	--highlight-active: rgba(255, 255, 255, 0.1);
-	/* Primary Text */
-	--text-headers: rgba(0, 0, 0, 1);
-	--text-location: rgba(255, 255, 255, 0.87);
-	/* Location Information */
-	--location-separator: rgba(255, 255, 255, 0.24);
-	/* Mission Pane */
-	--text-mission-title: rgba(255, 255, 255, 0.67);
-	--text-mission-status: rgba(255, 255, 255, 0.87);
-	--mission-start: rgba(109, 109, 109, 1);
-	--mission-partial: rgba(88, 34, 102, 1);
-	--mission-success: #226662;
-	--mission-failure: rgba(176, 45, 45, 1);
-	--primary-logo: #0C3C40;
-	--secondary-logo: #146464;
-	/* Pilot Roster Text */
-	--text-pilot-header: rgba(255, 255, 255, 0.67);
-	--text-pilot-value: rgba(255, 255, 255, 0.87);
-	--text-pilot-code: rgba(255, 255, 255, 0.47);
-	/* Markdown (Current Assignment, Events Log, Pilot Biography) */
-	--text-markdown-p: rgba(255, 255, 255, 0.87);
-	--text-markdown-h1: rgba(255, 255, 255, 0.67);
-	--text-markdown-h2: rgba(255, 255, 255, 0.87);
+  /* Primary Colors */
+  --primary-color: #7dbbbb;
+  --secondary-color: #161c1dcc;
+  --highlight-hover: rgba(255, 255, 255, 0.3);
+  --highlight-active: rgba(255, 255, 255, 0.1);
 
-	/* For Firefox */
-	scrollbar-color: var(--primary-color) transparent !important;
-	scrollbar-width: thin;
+  /* Primary Text */
+  --text-headers: rgba(0, 0, 0, 1);
+  --text-location: rgba(255, 255, 255, 0.87);
+
+  /* Location Information */
+  --location-separator: rgba(255, 255, 255, 0.24);
+
+  /* Mission Pane */
+  --text-mission-title: rgba(255, 255, 255, 0.67);
+  --text-mission-status: rgba(255, 255, 255, 0.87);
+  --mission-start: rgba(109, 109, 109, 1);
+  --mission-partial: rgba(88, 34, 102, 1);
+  --mission-success: #226662;
+  --mission-failure: rgba(176, 45, 45, 1);
+
+  /* Pilot / Roster */
+  --text-pilot-header: rgba(255, 255, 255, 0.67);
+  --text-pilot-value: rgba(255, 255, 255, 0.87);
+  --text-pilot-code: rgba(255, 255, 255, 0.47);
+
+  /* Markdown */
+  --text-markdown-p: rgba(255, 255, 255, 0.87);
+  --text-markdown-h1: rgba(255, 255, 255, 0.67);
+  --text-markdown-h2: rgba(255, 255, 255, 0.87);
+
+  /* Firefox scrollbar */
+  scrollbar-color: var(--primary-color) transparent !important;
+  scrollbar-width: thin;
 }
 
-/* NEW: set global default font everywhere */
+/* ===================================================== */
+/*  GLOBAL FONT APPLICATION                              */
+/* ===================================================== */
 html,
 body,
 #app {
-	font-family: var(--font-main);
+  font-family: var(--font-main);
 }
 
 html {
-	overflow: overlay;
+  overflow: overlay;
 }
 
-/* Scroll bar stylings */
+/* Scrollbars */
 ::-webkit-scrollbar {
-	overflow: overlay;
-	width: 8px;
-	height: 8px;
+  width: 8px;
+  height: 8px;
 }
-
-::-webkit-scrollbar:hover {
-	background-color: var(--highlight-color);
-	scrollbar-color: var(--highlight-color) transparent !important;
-}
-
-/* Track */
 ::-webkit-scrollbar-track {
-	background-color: transparent;
+  background-color: transparent;
 }
-
-/* Handle */
 ::-webkit-scrollbar-thumb {
-	background-color: var(--primary-color);
-	scrollbar-color: var(--primary-color);
-	border-radius: 6px;
-	border: 0px transparent;
+  background-color: var(--primary-color);
+  border-radius: 6px;
 }
 
-header {
-	background-color: var(--secondary-color);
-	border-color: var(--secondary-color);
-	height: 96px;
-	display: flex;
-	align-items: center;
-	position: relative;
-	flex-direction: row;
-}
-
-.title {
-	z-index: 1;
-	background-color: var(--primary-color);
-	border-color: var(--primary-color);
-	width: 700px;
-	height: 100%;
-	display: inline-flex;
-	align-items: center;
-	-moz-column-gap: 1em;
-	column-gap: 1em;
-}
-
-.title .title-container {
-	display: flex;
-	flex-direction: column;
-}
-
-.title #title-header {
-	font-size: 32px;
-	margin: 0%;
-	align-self: center;
-	font-family: var(--font-main);
-	font-weight: 800;
-	text-transform: uppercase;
-	letter-spacing: 0.15em;
-}
-
-.title #title-subheader {
-	font-size: 32px;
-	margin: 0%;
-	align-self: center;
-	font-family: var(--font-main);
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.12em;
-	padding-left: 0.32em;
-}
-
-.title #subtitle-header {
-	font-size: 24px;
-	margin: 0%;
-	align-self: center;
-	font-family: var(--font-main);
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-}
-
-.title #subtitle-subheader {
-	font-size: 24px;
-	margin: 0%;
-	align-self: center;
-	font-family: var(--font-main);
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.02em;
-}
-
-.logo {
-	width: 50px;
-	height: 80px;
-	margin-left: 15px;
-}
-
-.title-row {
-	width: 100%;
-}
-
-#title-first-line {
-	border-bottom: 1px solid #000;
-}
-
-.rhombus {
-	z-index: 0;
-	transform: skew(-0.785398rad);
-	background-color: var(--primary-color);
-	border-color: var(--primary-color);
-	width: 40px;
-	height: 100%;
-	display: inline-flex;
-	margin-left: -30px;
-}
-
-.rhombus-back {
-	transform: skew(0.785398rad) !important;
-	background-color: var(--primary-color);
-	border-color: var(--primary-color);
-	width: 40px;
-	height: 52px;
-	display: inline-block;
-	position: relative;
-	left: -2.5em;
-}
-
-.planet-location-container {
-	display: flex;
-	flex-direction: row;
-	position: absolute;
-	right: 25px;
-}
-
-header video {
-	width: 86px;
-	height: 86px;
-	align-self: center;
-}
-
-div .location-info {
-	padding: 10px;
-	margin-left: 20px;
-	display: flex;
-	align-items: flex-end;
-	justify-content: space-between;
-	flex-direction: column;
-	color: var(--text-location);
-}
-
-header video,
-div.location-info {
-	opacity: 1;
-}
-
-.location-row {
-	height: 40px;
-	width: 100%;
-	display: flex;
-	flex-direction: row-reverse;
-}
-
-.location-row h4 {
-	margin: 0px;
-	line-height: 1.5em;
-	font-family: var(--font-main);
-	font-size: 10px;
-	font-weight: 800;
-	text-transform: uppercase;
-	letter-spacing: 3px;
-}
-
-.location-row .subtitle {
-	font-size: 18px;
-	margin: 0%;
-	align-self: center;
-	font-family: var(--font-main);
-	font-weight: 800;
-	text-transform: uppercase;
-	letter-spacing: 0.1em;
-}
-
-.location-row div {
-	padding: 0px 15px;
-}
-
-.location-row #planet {
-	flex-grow: 1;
-}
-
-.location-row #year {
-	width: 75px;
-	border-left: 1px solid var(--location-separator);
-	padding-right: 0px;
-	height: 100;
-}
-
-.location-row #gate {
-	border-left: 1px solid var(--location-separator);
-}
-
-.location-row #ring {
-	border-left: 1px solid var(--highlight-hover);
-	padding-right: 0px;
-}
+/* ===================================================== */
+/*  LAYOUT                                               */
+/* ===================================================== */
 
 .page-wrapper {
-	display: flex;
-	flex-direction: column;
-	height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 .sidebar-page {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .sidebar-layout {
-	display: flex;
-	flex-direction: row;
-	min-height: 100%;
+  display: flex;
+  flex-direction: row;
+  min-height: 100%;
 }
 
 .o-side__content {
-	background-color: var(--primary-color);
-	height: 100%;
-	width: 90px;
-	padding-right: 0.5em;
-	padding-top: 1em;
-	text-align: center;
+  background-color: var(--primary-color);
+  height: 100%;
+  width: 90px;
+  padding-top: 1em;
+  text-align: center;
 }
 
 .sidebar-layout img {
-	width: 48px;
-	height: 48px;
+  width: 48px;
+  height: 48px;
 }
 
 .sidebar-layout a,
 .sidebar-layout a:visited {
-	font-family: var(--font-main);
-	letter-spacing: 0.5px;
-	text-transform: uppercase;
-	font-size: 12px;
-	padding-top: 0.5em;
-	padding-bottom: 0.5em;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	margin-bottom: 1em;
-	text-decoration: none;
-	color: var(--text-headers);
+  font-family: var(--font-main);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1em;
+  text-decoration: none;
+  color: var(--text-headers);
 }
 
 .sidebar-layout a.router-link-exact-active {
-	font-family: var(--font-main);
-	letter-spacing: 0.5px;
-	text-transform: uppercase;
-	font-size: 12px;
-	padding-top: 0.5em;
-	padding-bottom: 0.5em;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	background: white;
-	margin-bottom: 1em;
-	text-decoration: none;
+  background: white;
 }
 
-/* --- everything below here is unchanged except for any font-family swaps above --- */
+/* ===================================================== */
+/*  ROUTER VIEW (CRITICAL – DO NOT REMOVE)               */
+/* ===================================================== */
+div#router-view-container {
+  position: absolute;
+  top: 95px;
+  left: 90px;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
 
-/* (keep the rest of your file exactly as-is after this point) */
+/* ===================================================== */
+/*  SECTIONS                                             */
+/* ===================================================== */
+
+.section-container {
+  display: flex;
+  flex-direction: column;
+  margin: 50px 30px;
+  width: 100%;
+  height: 100%;
+}
+
+.section-header {
+  background-color: var(--primary-color);
+  height: 52px;
+  display: inline-flex;
+  gap: 15px;
+  padding-left: 16px;
+}
+
+.section-header h1 {
+  font-family: var(--font-main);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 26px;
+  margin: 0;
+}
+
+.section-content-container {
+  height: 100%;
+  background: var(--secondary-color);
+  border: 1px solid var(--primary-color);
+  margin-top: -1px;
+  overflow: auto;
+}
+
+/* ===================================================== */
+/*  TEXT OVERRIDES                                       */
+/* ===================================================== */
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-main);
+}
+
+code,
+pre,
+.pilot-code {
+  font-family: var(--font-mono);
+}
+
+/* ===================================================== */
+/*  MARKDOWN                                             */
+/* ===================================================== */
+
+.markdown {
+  font-family: var(--font-main);
+  color: var(--text-markdown-p);
+}
+
+/* ===================================================== */
+/*  END FILE                                             */
+/* ===================================================== */
