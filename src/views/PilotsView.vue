@@ -120,14 +120,26 @@
           <button class="squad-close" @click="closeSquad">✕</button>
         </div>
 
-        <div class="squad-modal-meta">
+        <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
           <div class="squad-title">
             <h2>{{ activeSquad.squad }}</h2>
             <p class="subtitle">
               {{ squadDescriptor(activeSquad.squad) }} ·
               {{ personnelCount(activeSquad) }} PERSONNEL
             </p>
+
+            <!-- LOADOUT STATUS -->
+            <div class="loadout-status">
+              <span class="points">
+                LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS
+              </span>
+              <span v-if="!squadLoadoutStatus.valid" class="warn" :title="squadLoadoutStatus.errors.join(' • ')">
+                ⚠ LOADOUT INVALID
+              </span>
+              <span v-else class="ok">✓ VALID</span>
+            </div>
           </div>
+
           <div class="squad-tag">
             <span>{{ squadInitials(activeSquad.squad) }}</span>
           </div>
@@ -206,6 +218,37 @@
                       <p><strong>Fireteam:</strong> {{ slot.member?.fireteam || ft.name }}</p>
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || "Unassigned" }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || "Unknown" }}</p>
+
+                      <!-- DISPOSABLE CHECKBOX -->
+                      <div class="loadout-row">
+                        <label class="disposable">
+                          <input
+                            type="checkbox"
+                            :checked="getLoadout(slot.member).disposable"
+                            @change="toggleDisposable(slot.member)"
+                          />
+                          Disposable Rocket (1pt)
+                        </label>
+                      </div>
+
+                      <!-- PRIMARY LOADOUT SELECT -->
+                      <div class="loadout-row">
+                        <label class="primary-label">Assigned Loadout</label>
+                        <select
+                          class="loadout-select"
+                          :value="getLoadout(slot.member).primary"
+                          @change="setPrimary(slot.member, $event.target.value)"
+                        >
+                          <option value="">None / Standard</option>
+                          <option
+                            v-for="opt in availableLoadouts(slot.member)"
+                            :key="opt"
+                            :value="opt"
+                          >
+                            {{ loadoutLabel(opt) }}
+                          </option>
+                        </select>
+                      </div>
                     </div>
 
                     <div class="member-column right">
@@ -246,10 +289,25 @@ export default {
   data() {
     return {
       activeSquad: null,
+
+      // existing
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
+
+      // NEW: per-soldier local state
+      loadouts: {},
+
+      // NEW: loadout definitions
+      loadoutOptions: {
+        grenadier: { label: "Grenadier", points: 2, explosive: true },
+        antitank: { label: "Anti-Tank", points: 3, explosive: true },
+        m247: { label: "M247 SAW", points: 3 },
+        m247_50: { label: "M247 .50", points: 5 },
+        engineer: { label: "Combat Engineer", points: 2 },
+        marksman: { label: "Marksman", points: 2 },
+      },
     };
   },
   computed: {
@@ -275,7 +333,6 @@ export default {
     activeFireteams() {
       if (!this.activeSquad) return [];
 
-      // Prefer structured slots (from App.vue)
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
         const sorted = this.activeSquad.fireteams.slice().map((ft) => ({
           name: ft.name || "Element",
@@ -301,7 +358,6 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
-      // Fallback: group members by member.fireteam
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -310,6 +366,53 @@ export default {
       });
 
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
+    },
+
+    // NEW: per-squad validation + points
+    squadLoadoutStatus() {
+      if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
+
+      let points = 0;
+      const errors = [];
+      const explosiveTaken = new Set(); // includes disposable, grenadier, antitank
+
+      const slots = [];
+      this.activeFireteams.forEach((ft) => {
+        (ft.slots || []).forEach((s) => slots.push(s));
+      });
+
+      slots.forEach((slot) => {
+        const member = slot.member;
+        if (!member) return;
+
+        const l = this.getLoadout(member);
+
+        // Disposable (1 pt) + counts as explosive for duplication rule
+        if (l.disposable) {
+          points += 1;
+          if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable");
+          explosiveTaken.add("disposable");
+        }
+
+        // Primary
+        if (l.primary) {
+          const def = this.loadoutOptions[l.primary];
+          if (def) {
+            points += def.points;
+
+            if (def.explosive) {
+              if (explosiveTaken.has(l.primary)) {
+                errors.push(`Duplicate explosive weapon: ${def.label}`);
+              }
+              explosiveTaken.add(l.primary);
+            }
+          }
+        }
+      });
+
+      if (points > 10) errors.push("Exceeds 10 point maximum");
+
+      return { valid: errors.length === 0, points, errors };
     },
   },
   methods: {
@@ -321,7 +424,6 @@ export default {
     },
 
     personnelCount(sq) {
-      // count filled members (not vacant/closed)
       if (sq.fireteams && sq.fireteams.length) {
         let count = 0;
         sq.fireteams.forEach((ft) => {
@@ -362,6 +464,51 @@ export default {
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
     },
 
+    // ===== NEW: loadout helpers =====
+    getLoadout(member) {
+      const id = member?.id;
+      if (!id) return { primary: "", disposable: false };
+
+      if (!this.loadouts[id]) {
+        this.$set(this.loadouts, id, { primary: "", disposable: false });
+      }
+      return this.loadouts[id];
+    },
+
+    toggleDisposable(member) {
+      const l = this.getLoadout(member);
+      l.disposable = !l.disposable;
+    },
+
+    setPrimary(member, value) {
+      const l = this.getLoadout(member);
+      l.primary = value || "";
+    },
+
+    loadoutLabel(key) {
+      const def = this.loadoutOptions[key];
+      if (!def) return key;
+      return `${def.label} (${def.points}pt)`;
+    },
+
+    availableLoadouts(member) {
+      const has = (label) => this.hasCert(member, this.certLabels.indexOf(label));
+      const opts = [];
+
+      if (has("Grenadier")) opts.push("grenadier");
+      if (has("Anti Tank")) opts.push("antitank");
+
+      if (has("Machine Gunner")) {
+        opts.push("m247", "m247_50");
+      }
+
+      if (has("Combat Engineer")) opts.push("engineer");
+      if (has("Marksman")) opts.push("marksman");
+
+      return opts;
+    },
+
+    // ===== Rank insignia =====
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
@@ -587,6 +734,27 @@ export default {
   border-bottom: 1px solid rgba(30, 144, 255, 0.6);
   padding-bottom: 0.5rem;
 }
+.squad-modal-meta.invalid {
+  border-bottom-color: rgba(255, 190, 80, 0.9);
+}
+.loadout-status {
+  margin-top: 0.35rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+.loadout-status .points {
+  color: #9ec5e6;
+}
+.loadout-status .warn {
+  color: rgba(255, 190, 80, 0.95);
+}
+.loadout-status .ok {
+  color: rgba(120, 255, 170, 0.9);
+}
+
 .squad-title h2 {
   margin: 0;
   font-size: 1.8rem;
@@ -701,6 +869,36 @@ export default {
 .member-column.left p,
 .member-column.right p {
   margin: 0.18rem 0;
+}
+
+.loadout-row {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.primary-label {
+  font-size: 0.75rem;
+  opacity: 0.85;
+  text-transform: uppercase;
+}
+.loadout-select {
+  background: rgba(0, 0, 0, 0.35);
+  color: #dce6f1;
+  border: 1px solid rgba(122, 167, 199, 0.55);
+  border-radius: 0.3rem;
+  padding: 0.35rem 0.45rem;
+  outline: none;
+}
+.disposable {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #9ec5e6;
+}
+.disposable input {
+  transform: translateY(1px);
 }
 
 .cert-list {
