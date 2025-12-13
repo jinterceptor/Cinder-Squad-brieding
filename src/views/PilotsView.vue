@@ -12,9 +12,7 @@
     <!-- MAIN CONTENT -->
     <div class="section-content-container">
       <div class="orbat-wrapper">
-        <div v-if="!orbat || !orbat.length">
-          Loading squads and members...
-        </div>
+        <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
 
         <div v-else class="hierarchy-container">
           <!-- TOP: CHALK ACTUAL -->
@@ -40,7 +38,7 @@
             </div>
           </div>
 
-          <!-- MIDDLE: CHALKS 1–3 -->
+          <!-- MIDDLE: CHALKS 1–4 -->
           <div v-if="hierarchy.chalks.length" class="orbat-row chalk-row">
             <div class="squad-row three">
               <div
@@ -55,19 +53,15 @@
                   </div>
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle">
-                      {{ squadDescriptor(sq.squad) }}
-                    </p>
-                    <p class="squad-count">
-                      {{ sq.members.length }} PERSONNEL
-                    </p>
+                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
+                    <p class="squad-count">{{ sq.members.length }} PERSONNEL</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- SUPPORT -->
+          <!-- SUPPORT ELEMENTS -->
           <div v-if="hierarchy.support.length" class="orbat-row">
             <div class="squad-row three">
               <div
@@ -82,12 +76,8 @@
                   </div>
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle">
-                      {{ squadDescriptor(sq.squad) }}
-                    </p>
-                    <p class="squad-count">
-                      {{ sq.members.length }} PERSONNEL
-                    </p>
+                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
+                    <p class="squad-count">{{ sq.members.length }} PERSONNEL</p>
                   </div>
                 </div>
               </div>
@@ -109,18 +99,15 @@
                   </div>
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle">
-                      {{ squadDescriptor(sq.squad) }}
-                    </p>
-                    <p class="squad-count">
-                      {{ sq.members.length }} PERSONNEL
-                    </p>
+                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
+                    <p class="squad-count">{{ sq.members.length }} PERSONNEL</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div><!-- /hierarchy-container -->
+          <!-- END HIERARCHY -->
+        </div>
       </div>
     </div>
 
@@ -156,69 +143,70 @@
 
         <!-- Scrollable content -->
         <div class="squad-modal-scroll">
-          <div class="squad-members-grid">
-            <div
-              v-for="member in sortedMembers(activeSquad.members)"
-              :key="member.id || member.name"
-              class="member-card"
-            >
-              <!-- Header with rank insignia -->
-              <div class="member-header">
-                <div
-                  class="member-rank-insignia-wrapper"
-                  v-if="rankInsignia(member.rank)"
-                >
-                  <img
-                    :src="rankInsignia(member.rank)"
-                    :alt="member.rank + ' insignia'"
-                    class="member-rank-insignia"
-                  />
+          <!-- FIRETEAM GROUPS -->
+          <div v-for="ft in activeFireteams" :key="ft.name" class="fireteam-block">
+            <div class="fireteam-header">
+              <span class="fireteam-title">{{ ft.name.toUpperCase() }}</span>
+              <span class="fireteam-count">{{ ft.members.length }} SLOTS</span>
+            </div>
+
+            <div class="squad-members-grid">
+              <div
+                v-for="member in ft.members"
+                :key="member.id || member.name"
+                class="member-card"
+              >
+                <!-- Header with rank insignia -->
+                <div class="member-header">
+                  <div class="member-rank-insignia-wrapper" v-if="rankInsignia(member.rank)">
+                    <img
+                      :src="rankInsignia(member.rank)"
+                      :alt="member.rank + ' insignia'"
+                      class="member-rank-insignia"
+                    />
+                  </div>
+
+                  <div class="member-header-text">
+                    <h3>{{ (member.name || '').toUpperCase() }}</h3>
+                    <p class="rank-line">
+                      <span class="rank">{{ member.rank || 'N/A' }}</span>
+                      <span class="id">ID: {{ member.id || "N/A" }}</span>
+                    </p>
+                  </div>
                 </div>
 
-                <div class="member-header-text">
-                  <h3>{{ member.name.toUpperCase() }}</h3>
-                  <p class="rank-line">
-                    <span class="rank">{{ member.rank }}</span>
-                    <span class="id">ID: {{ member.id || "N/A" }}</span>
-                  </p>
-                </div>
-              </div>
+                <!-- Body -->
+                <div class="member-body">
+                  <div class="member-column left">
+                    <p><strong>Squad:</strong> {{ member.squad || activeSquad.squad }}</p>
+                    <p><strong>Fireteam:</strong> {{ member.fireteam || ft.name }}</p>
+                    <p><strong>Role:</strong> {{ member.slot || "Unassigned" }}</p>
+                    <p><strong>Join Date:</strong> {{ member.joinDate || "Unknown" }}</p>
+                  </div>
 
-              <!-- Body -->
-              <div class="member-body">
-                <div class="member-column left">
-                  <p><strong>Squad:</strong> {{ member.squad || activeSquad.squad }}</p>
-                  <p><strong>Join Date:</strong> {{ member.joinDate || "Unknown" }}</p>
-                </div>
-
-                <!-- Certifications (vertical list) -->
-                <div class="member-column right">
-                  <p><strong>Certifications:</strong></p>
-                  <div class="cert-list">
-                    <div
-                      v-for="(label, idx) in certLabels"
-                      :key="label"
-                      class="cert-row"
-                    >
-                      <span
-                        class="cert-checkbox"
-                        :class="{ checked: hasCert(member, idx) }"
-                      >
-                        <span v-if="hasCert(member, idx)" class="checkbox-dot"></span>
-                      </span>
-                      <span class="cert-label">{{ label }}</span>
+                  <!-- Certifications (vertical list) -->
+                  <div class="member-column right">
+                    <p><strong>Certifications:</strong></p>
+                    <div class="cert-list">
+                      <div v-for="(label, idx) in certLabels" :key="label" class="cert-row">
+                        <span class="cert-checkbox" :class="{ checked: hasCert(member, idx) }">
+                          <span v-if="hasCert(member, idx)" class="checkbox-dot"></span>
+                        </span>
+                        <span class="cert-label">{{ label }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- Footer -->
-              <div class="member-footer">
-                <span>BIOMETRIC RECORD VALID</span>
-                <span>UNSC SYSTEMS DATABASE</span>
+                <!-- Footer -->
+                <div class="member-footer">
+                  <span>BIOMETRIC RECORD VALID</span>
+                  <span>UNSC SYSTEMS DATABASE</span>
+                </div>
               </div>
             </div>
           </div>
+          <!-- END FIRETEAM GROUPS -->
         </div>
       </div>
     </div>
@@ -263,30 +251,76 @@ export default {
       };
 
       (this.orbat || []).forEach((sq) => {
-        const n = (sq.squad || "").trim().toLowerCase();
+        const n = String(sq.squad || "").trim().toLowerCase();
 
         if (n === "chalk actual") {
           groups.chalkActual = sq;
-        } else if (n === "chalk 1" || n === "chalk 2" || n === "chalk 3") {
+        } else if (n === "chalk 1" || n === "chalk 2" || n === "chalk 3" || n === "chalk 4") {
           groups.chalks.push(sq);
         } else if (
           n === "broadsword command" ||
+          n === "broadsword" ||
           n === "wyvern air wing" ||
-          n === "caladrius"
+          n === "wyvern" ||
+          n === "caladrius" ||
+          n === "ifrit"
         ) {
           groups.support.push(sq);
-        } else if (n === "fillers" || n === "recruit" || n === "reserves") {
-          groups.other.push(sq);
         } else {
           groups.other.push(sq);
         }
       });
 
-      groups.chalks.sort((a, b) => a.squad.localeCompare(b.squad));
+      groups.chalks.sort((a, b) => a.squad.localeCompare(b.squad, undefined, { numeric: true }));
       groups.support.sort((a, b) => a.squad.localeCompare(b.squad));
       groups.other.sort((a, b) => a.squad.localeCompare(b.squad));
 
       return groups;
+    },
+
+    activeFireteams() {
+      if (!this.activeSquad) return [];
+
+      // Group members by fireteam (fallback to "Element")
+      const map = {};
+      (this.activeSquad.members || []).forEach((m) => {
+        const ft = (m.fireteam || "Element").trim() || "Element";
+        map[ft] ??= [];
+        map[ft].push(m);
+      });
+
+      // Sort members inside each fireteam: try slot then name
+      const sortMembers = (a, b) => {
+        const sa = (a.slot || "").toLowerCase();
+        const sb = (b.slot || "").toLowerCase();
+        if (sa && sb && sa !== sb) return sa.localeCompare(sb);
+        return (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
+      };
+
+      const out = Object.entries(map).map(([name, members]) => ({
+        name,
+        members: members.slice().sort(sortMembers),
+      }));
+
+      // Fireteam 1/2 first, then Element, then everything else
+      const orderKey = (n) => {
+        const t = n.toLowerCase();
+        if (t === "fireteam 1") return 0;
+        if (t === "fireteam 2") return 1;
+        if (t === "fireteam 3") return 2;
+        if (t === "fireteam 4") return 3;
+        if (t === "element") return 90;
+        return 50;
+      };
+
+      out.sort((a, b) => {
+        const ka = orderKey(a.name);
+        const kb = orderKey(b.name);
+        if (ka !== kb) return ka - kb;
+        return a.name.localeCompare(b.name, undefined, { numeric: true });
+      });
+
+      return out;
     },
   },
   methods: {
@@ -295,12 +329,6 @@ export default {
     },
     closeSquad() {
       this.activeSquad = null;
-    },
-
-    sortedMembers(list) {
-      return (list || []).slice().sort((a, b) =>
-        (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
-      );
     },
 
     squadInitials(name) {
@@ -314,16 +342,17 @@ export default {
     },
 
     squadDescriptor(name) {
-      const n = String(name).toLowerCase();
+      const n = String(name || "").toLowerCase();
       if (n.includes("chalk")) return "INFANTRY ELEMENT";
       if (n.includes("air") || n.includes("wing")) return "AVIATION SUPPORT";
-      if (n.includes("command")) return "COMMAND ELEMENT";
+      if (n.includes("command") || n.includes("actual")) return "COMMAND ELEMENT";
       return "UNSC ELEMENT";
     },
 
     hasCert(member, idx) {
       const certs = member.certifications || [];
-      return String(certs[idx] || "").toUpperCase() === "Y";
+      const flag = certs[idx];
+      return flag === "Y" || flag === true || flag === "1";
     },
 
     rankCode(rank) {
@@ -376,6 +405,7 @@ export default {
 </script>
 
 <style scoped>
+/* ===== MAIN CONTAINER ================================================= */
 .section-container {
   padding: 2.5rem 3rem;
   color: #dce6f1;
@@ -433,7 +463,7 @@ export default {
   }
 }
 
-/* Command lines (subtle) */
+/* Command lines on desktop */
 @media (min-width: 900px) {
   .actual-row {
     position: relative;
@@ -545,8 +575,8 @@ export default {
   background-color: #050811;
   color: #dce6f1;
   font-family: "Consolas", "Courier New", monospace;
-  width: 90vw;
-  max-width: 1600px;
+  width: 92vw;
+  max-width: 1700px;
   max-height: 90vh;
   border-radius: 0.8rem;
   box-shadow: 0 0 24px rgba(0, 0, 0, 0.9);
@@ -617,11 +647,40 @@ export default {
   margin-top: 0.5rem;
   flex: 1;
   overflow-y: auto;
+  padding-right: 0.5rem;
 }
 
+/* ===== FIRETEAM BLOCKS =============================================== */
+.fireteam-block {
+  margin-bottom: 1.25rem;
+}
+
+.fireteam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-left: 4px solid rgba(30, 144, 255, 0.9);
+  background: rgba(0, 10, 30, 0.65);
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.fireteam-title {
+  letter-spacing: 0.12em;
+  color: #e0f0ff;
+  font-size: 0.95rem;
+}
+
+.fireteam-count {
+  font-size: 0.8rem;
+  color: #7aa7c7;
+}
+
+/* ===== MEMBER CARDS =================================================== */
 .squad-members-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 1rem;
 }
 
@@ -667,7 +726,6 @@ export default {
   opacity: 0.8;
 }
 
-/* Body */
 .member-body {
   display: flex;
   flex-direction: column;
@@ -681,7 +739,6 @@ export default {
   margin: 0.18rem 0;
 }
 
-/* Certs vertical */
 .cert-list {
   display: flex;
   flex-direction: column;
