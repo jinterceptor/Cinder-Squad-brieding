@@ -62,8 +62,8 @@ export default {
       missions: [],
       events: [],
 
-      members: [], // MembersMaster: rank, name, joinDate, id, certifications, squad/fireteam/slot filled from RefData
-      orbat: [],   // squads + members (built from slotting table)
+      members: [], // MembersMaster + slotting overlay
+      orbat: [],   // squads + members
       reserves: [],
     };
   },
@@ -71,7 +71,6 @@ export default {
   created() {
     this.setTitleFavicon(Config.defaultTitle + " MISSION BRIEFING", Config.icon);
 
-    // Local content
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
@@ -81,7 +80,6 @@ export default {
     const refDataUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRur4HOP2tdxileoG5jqAOslvnbLmjelTbY2JEQWVkvALwG3QrH16ktAVg7HiItyHeTib2jY-MMb24Z/pub?gid=107253735&single=true&output=csv";
 
-    // Load MembersMaster first, then overlay slotting from RefData
     this.loadMembersCSV(membersUrl).then(() => {
       this.loadRefDataCSV(refDataUrl);
     });
@@ -101,7 +99,7 @@ export default {
       headEl.appendChild(faviconEl);
     },
 
-    // ---- MembersMaster ----
+    // ---------------- MembersMaster ----------------
     async loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
@@ -110,8 +108,12 @@ export default {
           header: false,
           complete: (results) => {
             const rows = results.data;
-            const dataStart = headerRowIndex + 1; // data begins right after whichever header row we used
-            const assignments = rows.slice(dataStart)
+
+            // MembersMaster:
+            // row 0 = title row
+            // row 1 = header row
+            // row 2+ = data
+            const dataRows = rows.slice(2);
 
             const CERT_COLUMNS = 13;
 
@@ -138,7 +140,7 @@ export default {
                   id,
                   certifications: certs,
 
-                  // Filled from RefData slotting table:
+                  // Will be filled by RefData slotting:
                   squad: "",
                   fireteam: "",
                   slot: "",
@@ -159,15 +161,12 @@ export default {
       });
     },
 
-    // ---- RefData: Slotting table (Squad Slots + Squad Roles) ----
+    // ---------------- RefData: Slotting (Squad Slots + Squad Roles) ----------------
     async loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
-
-          // IMPORTANT: keep blanks so headings + spacing don't break context parsing
-          skipEmptyLines: false,
-
+          skipEmptyLines: false, // keep blanks so headings stay aligned
           header: false,
           complete: (results) => {
             const rows = results.data;
@@ -179,78 +178,68 @@ export default {
                 .trim()
                 .toLowerCase();
 
-            // --- Find headers robustly (they might be on CSV row 0 or row 1) ---
-const headerCandidates = [
-  { rowIndex: 0, row: rows[0] || [] },
-  { rowIndex: 1, row: rows[1] || [] },
-];
+            const headerCandidates = [
+              { rowIndex: 0, row: rows[0] || [] },
+              { rowIndex: 1, row: rows[1] || [] },
+            ];
 
-// Helper: find first column index matching any of the provided normalized names
-const findCol = (row, names) => {
-  const normNames = names.map((n) => normalize(n));
-  return row.findIndex((cell) => normNames.includes(normalize(cell)));
-};
+            const findCol = (row, names) => {
+              const normNames = names.map((n) => normalize(n));
+              return row.findIndex((cell) => normNames.includes(normalize(cell)));
+            };
 
-// We want these columns (support both naming schemes)
-let headerRowIndex = -1;
-let headerRow = [];
-let memberColIndex = -1;   // "Squad Member" (N)
-let squadColIndex = -1;    // "Squads" (O)
-let slotNameColIndex = -1; // "Squad Slots" OR "Slot" (P)
-let roleColIndex = -1;     // "Squad Roles" OR "Role" (Q)
+            // Find columns for slotting table
+            let headerRowIndex = -1;
+            let headerRow = [];
+            let slotNameColIndex = -1; // "Squad Slots" OR "Slot"
+            let roleColIndex = -1;     // "Squad Roles" OR "Role" OR (fallback) any "Chalk 1 Fireteam 1" style col
 
-for (const cand of headerCandidates) {
-  const row = cand.row;
+            for (const cand of headerCandidates) {
+              const row = cand.row;
 
-  const mIdx = findCol(row, ["Squad Member"]);
-  const sIdx = findCol(row, ["Squads"]);
+              const slotIdx = findCol(row, ["Squad Slots", "Slot"]);
+              const roleIdx = findCol(row, ["Squad Roles", "Role"]);
 
-  // Slots/Roles may be labeled either way:
-  const slotIdx = findCol(row, ["Squad Slots", "Slot"]);
-  const roleIdx = findCol(row, ["Squad Roles", "Role"]);
+              // We accept the header row if we at least found slots column.
+              // Role column might be "Squad Roles" or could be a specific fireteam header column.
+              if (slotIdx !== -1) {
+                headerRowIndex = cand.rowIndex;
+                headerRow = row;
+                slotNameColIndex = slotIdx;
 
-  // We accept this header row if it contains member+squads at minimum.
-  // (slots/roles optional — but if present we record them)
-  if (mIdx !== -1 && sIdx !== -1) {
-    headerRowIndex = cand.rowIndex;
-    headerRow = row;
-    memberColIndex = mIdx;
-    squadColIndex = sIdx;
-    slotNameColIndex = slotIdx;
-    roleColIndex = roleIdx;
-    break;
-  }
-}
+                // Prefer explicit Squad Roles / Role column…
+                if (roleIdx !== -1) {
+                  roleColIndex = roleIdx;
+                } else {
+                  // …otherwise try fallback: find first column containing "fireteam"
+                  roleColIndex = row.findIndex((cell) => normalize(cell).includes("fireteam"));
+                }
 
-if (headerRowIndex === -1) {
-  console.error(
-    "Could not find 'Squad Member' / 'Squads' in RefData headers:",
-    rows[0] || [],
-    rows[1] || []
-  );
-  resolve([]);
-  return;
-}
+                break;
+              }
+            }
 
-// Debug
-console.log("RefData header row used:", headerRowIndex, headerRow);
-console.log("RefData indices:", {
-  memberColIndex,
-  squadColIndex,
-  slotNameColIndex,
-  roleColIndex,
-});
+            if (headerRowIndex === -1 || slotNameColIndex === -1 || roleColIndex === -1) {
+              console.error(
+                "Could not find slotting columns in RefData headers:",
+                "row0=", rows[0] || [],
+                "row1=", rows[1] || []
+              );
+              resolve([]);
+              return;
+            }
 
+            console.log("RefData header row used:", headerRowIndex, headerRow);
+            console.log("RefData slotting indices:", { slotNameColIndex, roleColIndex });
 
             let currentSquad = "";
             let currentFireteam = "";
 
-            // Parse heading: "Chalk 1 Fireteam 1"
             const parseHeading = (text) => {
               const raw = String(text || "").trim();
               if (!raw) return null;
 
-              // matches "<SQUAD NAME> Fireteam <number>"
+              // "<SQUAD NAME> Fireteam <number>"
               const m = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
               if (!m) return null;
 
@@ -261,58 +250,52 @@ console.log("RefData indices:", {
               return { squad, fireteam: `Fireteam ${ftNum}` };
             };
 
-            // Match slot-name to MembersMaster member (robust-ish)
             const findMemberFromSlotName = (slotName) => {
               const s = normalize(slotName);
               if (!s) return null;
 
-              // Extract surname + optional initial
+              // Try direct inclusion of member name (best case)
+              let m = this.members.find((mem) => s.includes(normalize(mem.name)));
+              if (m) return m;
+
+              // surname + initial (good for "PFC M. Jinter")
               const parts = s.split(" ");
               const surname = parts[parts.length - 1] || "";
               const initialMatch = s.match(/\b([a-z])\./i);
               const initial = initialMatch ? initialMatch[1].toLowerCase() : "";
 
-              // Try direct inclusion of member name
-              let m = this.members.find((mem) => {
-                const n = normalize(mem.name);
-                return s.includes(n);
-              });
-              if (m) return m;
-
-              // Try surname + initial match
               m = this.members.find((mem) => {
                 const n = normalize(mem.name);
                 const nParts = n.split(" ");
                 const memSurname = nParts[nParts.length - 1] || "";
                 const memInitial = (nParts[0] || "").charAt(0);
-
                 if (!surname || memSurname !== surname) return false;
                 if (initial && memInitial !== initial) return false;
                 return true;
               });
               if (m) return m;
 
-              // Last resort: surname-only (can be ambiguous)
-              return this.members.find((mem) => {
-                const n = normalize(mem.name);
-                const nParts = n.split(" ");
-                const memSurname = nParts[nParts.length - 1] || "";
-                return surname && memSurname === surname;
-              }) || null;
+              // last resort: surname-only
+              return (
+                this.members.find((mem) => {
+                  const n = normalize(mem.name);
+                  const nParts = n.split(" ");
+                  const memSurname = nParts[nParts.length - 1] || "";
+                  return surname && memSurname === surname;
+                }) || null
+              );
             };
 
             const slotAssignments = [];
 
-            // Walk rows after header row
-            for (let i = 2; i < rows.length; i++) {
+            const dataStart = headerRowIndex + 1;
+
+            for (let i = dataStart; i < rows.length; i++) {
               const row = rows[i] || [];
-              const slotCell = row[slotColIndex];
-              const roleCell = row[roleColIndex];
+              const slotText = String(row[slotNameColIndex] || "").trim();
+              const roleText = String(row[roleColIndex] || "").trim();
 
-              const slotText = String(slotCell || "").trim();
-              const roleText = String(roleCell || "").trim();
-
-              // 1) Heading rows live in Role column
+              // Heading rows live in role column (e.g., "Chalk 1 Fireteam 1")
               const heading = parseHeading(roleText);
               if (heading) {
                 currentSquad = heading.squad;
@@ -320,7 +303,7 @@ console.log("RefData indices:", {
                 continue;
               }
 
-              // 2) Slot rows: slotText is the member, roleText is the role
+              // Slot rows
               if (currentSquad && currentFireteam && slotText && roleText) {
                 const member = findMemberFromSlotName(slotText);
                 if (!member) continue;
@@ -336,7 +319,6 @@ console.log("RefData indices:", {
 
             console.log("Slot assignments parsed:", slotAssignments.length);
 
-            // Apply assignments to members
             const byId = new Map(slotAssignments.map((a) => [a.id, a]));
 
             this.members = this.members.map((m) => {
@@ -375,7 +357,7 @@ console.log("RefData indices:", {
       });
     },
 
-    // ---- Missions / Events (unchanged) ----
+    // ---------------- Missions / Events (unchanged) ----------------
     async importMissions(files) {
       const filePromises = Object.keys(files).map((path) => files[path]());
       const fileContents = await Promise.all(filePromises);
