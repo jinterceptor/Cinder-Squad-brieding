@@ -20,7 +20,7 @@ const routes = [
     meta: { title: `${DEFAULT_TITLE} BRIEFING SYSTEM` },
   },
   {
-    path: "/pilots",
+    path: "/Roster",
     name: "Unit Roster",
     component: Pilots,
     props: true,
