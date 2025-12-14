@@ -1,35 +1,31 @@
 <template>
-    <!-- FAKE LOGIN OVERLAY -->
-  <div v-if="showLogin" class="login-overlay" @click.self="authorize">
+  <!-- FAKE LOGIN OVERLAY (CLICK ANYWHERE) -->
+  <div
+    v-if="showLogin"
+    class="login-overlay"
+    :class="{ fading: isFading }"
+    @click="authorize"
+  >
     <div class="login-bg">
-      <img class="login-logo" src="/faction-logos/FUD_UNSC_Logo.png" alt="UNSC Logo" />
+      <img
+        class="login-logo"
+        src="/faction-logos/FUD_UNSC_Logo.png"
+        alt="UNSC Logo"
+      />
     </div>
 
-    <div class="login-panel">
-      <div class="login-header">
-        <div class="login-title">UNSC SECURE ACCESS</div>
-        <div class="login-subtitle">BRIEFING SYSTEM TERMINAL</div>
+    <div class="login-text">
+      <div class="login-lore">
+        UNITED NATIONS SPACE COMMAND<br />
+        SECURE MILITARY NETWORK
       </div>
 
-      <div class="login-body">
-        <div class="login-line">
-          <span class="label">STATUS</span>
-          <span class="value">AWAITING AUTHORIZATION</span>
-        </div>
-        <div class="login-line">
-          <span class="label">CLEARANCE</span>
-          <span class="value">REQUIRED</span>
-        </div>
-        <div class="login-line">
-          <span class="label">NOTICE</span>
-          <span class="value">CLICK AUTHORIZE TO CONTINUE</span>
-        </div>
-
-        <div class="login-actions">
-          <button class="btn deny" @click="deny">DENY</button>
-          <button class="btn allow" @click="authorize">AUTHORIZE</button>
-        </div>
+      <div class="login-warning">
+        UNAUTHORIZED ACCESS IS PUNISHABLE UNDER THE<br />
+        UNIFIED MILITARY CODE
       </div>
+
+      <div class="login-prompt">CLICK TO LOGIN</div>
     </div>
   </div>
 
@@ -69,6 +65,7 @@ export default {
   data() {
     return {
       showLogin: true,
+      isFading: false,
 
       animate: Config.animate,
       initialSlug: Config.initialSlug,
@@ -103,33 +100,35 @@ export default {
   },
 
   mounted() {
-    // Don't push routes here anymore — wait until user interaction (Authorize).
-    // This helps avoid autoplay restrictions and ensures the "login" experience is consistent.
+    // Don't push routes here — wait until user interaction (Authorize).
   },
 
   methods: {
     authorize() {
-      this.showLogin = false;
+      // Prevent double-click / double fade
+      if (this.isFading) return;
 
-      // Route after auth
-      if (this.$router?.currentRoute?.value?.path !== "/status") {
-        this.$router.push("/status");
-      }
+      // Start fade
+      this.isFading = true;
 
-      // Play startup sound (allowed because this runs on a user gesture)
+      // Play startup sound immediately on the click (gesture-safe)
       const a = this.$refs.startupAudio;
       if (a && typeof a.play === "function") {
         a.currentTime = 0;
         a.play().catch(() => {
-          // If the browser still blocks (rare), we just fail silently.
+          // Fail silently if blocked
         });
       }
-    },
 
-    deny() {
-      // Optional behavior: just do a little "shake"/no-op. For now, keep them on the screen.
-      // You can change this to redirect elsewhere if you want.
-      this.showLogin = true;
+      // Wait for fade to finish, then unlock UI + route
+      setTimeout(() => {
+        this.showLogin = false;
+        this.isFading = false;
+
+        if (this.$router?.currentRoute?.value?.path !== "/status") {
+          this.$router.push("/status");
+        }
+      }, 800);
     },
 
     normalize(str) {
@@ -569,7 +568,7 @@ export default {
   overflow: hidden !important;
 }
 
-/* Fake login */
+/* Fake login overlay (click anywhere) */
 .login-overlay {
   position: fixed;
   inset: 0;
@@ -578,6 +577,14 @@ export default {
   align-items: center;
   justify-content: center;
   background: #000; /* solid black so nothing behind shows */
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.8s ease;
+}
+
+.login-overlay.fading {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* background layer with logo */
@@ -587,100 +594,55 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none; /* clicks go to overlay/panel */
+  pointer-events: none;
 }
 
 .login-logo {
   width: min(520px, 70vw);
   height: auto;
-  opacity: 0.22; /* subtle, readable behind UI */
+  opacity: 0.18;
   filter: drop-shadow(0 0 24px rgba(0, 0, 0, 0.9));
 }
 
-/* ensure panel sits above logo */
-.login-panel {
+/* centered lore text */
+.login-text {
   position: relative;
   z-index: 1;
-}
-
-.login-header {
-  padding: 18px 18px 14px;
-  border-bottom: 1px solid rgba(50, 180, 120, 0.35);
-  background: linear-gradient(to right, rgba(50, 180, 120, 0.22), transparent);
-}
-
-.login-title {
-  font-size: 18px;
+  text-align: center;
+  color: rgba(170, 255, 210, 0.92);
+  font-family: "Titillium Web", sans-serif;
   letter-spacing: 0.18em;
-  font-weight: 800;
   text-transform: uppercase;
-  color: rgba(170, 255, 210, 0.95);
 }
 
-.login-subtitle {
-  margin-top: 6px;
-  font-size: 12px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(170, 255, 210, 0.7);
+.login-lore {
+  font-size: 14px;
+  margin-bottom: 2.2em;
+  opacity: 0.9;
 }
 
-.login-body {
-  padding: 18px;
-}
-
-.login-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(50, 180, 120, 0.18);
-}
-
-.login-line:last-of-type {
-  border-bottom: none;
-}
-
-.login-line .label {
+.login-warning {
   font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(170, 255, 210, 0.65);
+  line-height: 1.8em;
+  opacity: 0.75;
+  margin-bottom: 3em;
 }
 
-.login-line .value {
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(170, 255, 210, 0.95);
-}
-
-.login-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 14px;
-}
-
-.btn {
-  border-radius: 999px;
-  padding: 8px 14px;
-  cursor: pointer;
+.login-prompt {
+  font-size: 18px;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-size: 12px;
+  letter-spacing: 0.22em;
+  animation: pulse 1.8s ease-in-out infinite;
 }
 
-.btn.deny {
-  background: transparent;
-  border: 1px solid rgba(170, 255, 210, 0.35);
-  color: rgba(170, 255, 210, 0.85);
-}
-
-.btn.allow {
-  background: rgba(50, 180, 120, 0.22);
-  border: 1px solid rgba(50, 180, 120, 0.85);
-  color: rgba(170, 255, 210, 0.95);
+/* subtle UNSC-style pulse */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 </style>
