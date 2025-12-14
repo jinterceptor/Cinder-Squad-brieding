@@ -29,27 +29,29 @@
     </div>
   </div>
 
-  <!-- NORMAL APP UI -->
-  <div class="page-wrapper">
-    <Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
-    <Sidebar :animate="animate" :class="{ animate: animate }" />
-  </div>
+  <!-- NORMAL APP UI (DELAY MOUNT UNTIL AFTER LOGIN) -->
+  <template v-if="!showLogin">
+    <div class="page-wrapper">
+      <Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
+      <Sidebar :animate="animate" :class="{ animate: animate }" />
+    </div>
 
-  <div id="router-view-container">
-    <!-- HUD transition on ALL route changes -->
-    <transition name="hud" mode="out-in">
-      <router-view
-        :key="$route.fullPath"
-        :animate="animate"
-        :initial-slug="initialSlug"
-        :missions="missions"
-        :events="events"
-        :members="members"
-        :orbat="orbat"
-        :reserves="reserves"
-      />
-    </transition>
-  </div>
+    <div id="router-view-container">
+      <!-- HUD transition on ALL route changes -->
+      <transition name="hud" mode="out-in">
+        <router-view
+          :key="$route.fullPath"
+          :animate="animate"
+          :initial-slug="initialSlug"
+          :missions="missions"
+          :events="events"
+          :members="members"
+          :orbat="orbat"
+          :reserves="reserves"
+        />
+      </transition>
+    </div>
+  </template>
 
   <!-- Startup tone: must be triggered by user interaction -->
   <audio ref="startupAudio" preload="auto">
@@ -124,7 +126,7 @@ export default {
         });
       }
 
-      // Wait for fade to finish, then unlock UI + route
+      // Wait for fade to finish, then mount UI + route (startup anim will now be visible)
       setTimeout(() => {
         this.showLogin = false;
         this.isFading = false;
@@ -580,7 +582,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000; /* solid black so nothing behind shows */
+  background: #000;
   cursor: pointer;
   opacity: 1;
   transition: opacity 0.8s ease;
@@ -639,20 +641,12 @@ export default {
   animation: pulse 1.8s ease-in-out infinite;
 }
 
-/* subtle UNSC-style pulse */
 @keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
-/* =========================================================
-   ROUTE TRANSITIONS: UNSC HUD SHUDDER / FADE (ALL PAGES)
-   ========================================================= */
+/* ROUTE TRANSITIONS: UNSC HUD SHUDDER / FADE (ALL PAGES) */
 .hud-enter-active {
   animation: hud-in 420ms ease-out both;
 }
@@ -662,39 +656,15 @@ export default {
 }
 
 @keyframes hud-in {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 0, 0);
-    filter: blur(2px);
-  }
-  35% {
-    opacity: 0.75;
-    transform: translate3d(1px, -1px, 0);
-    filter: blur(1px);
-  }
-  55% {
-    transform: translate3d(-1px, 1px, 0);
-  }
-  70% {
-    transform: translate3d(1px, 0px, 0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    filter: blur(0);
-  }
+  0%   { opacity: 0; transform: translate3d(0,0,0); filter: blur(2px); }
+  35%  { opacity: 0.75; transform: translate3d(1px,-1px,0); filter: blur(1px); }
+  55%  { transform: translate3d(-1px,1px,0); }
+  70%  { transform: translate3d(1px,0px,0); }
+  100% { opacity: 1; transform: translate3d(0,0,0); filter: blur(0); }
 }
 
 @keyframes hud-out {
-  0% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(0, 2px, 0);
-    filter: blur(2px);
-  }
+  0%   { opacity: 1; transform: translate3d(0,0,0); filter: blur(0); }
+  100% { opacity: 0; transform: translate3d(0,2px,0); filter: blur(2px); }
 }
 </style>
