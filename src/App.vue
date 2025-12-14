@@ -1,4 +1,35 @@
 <template>
+  <!-- FAKE LOGIN OVERLAY -->
+  <div v-if="showLogin" class="login-overlay" @click.self="authorize">
+    <div class="login-panel">
+      <div class="login-header">
+        <div class="login-title">UNSC SECURE ACCESS</div>
+        <div class="login-subtitle">BRIEFING SYSTEM TERMINAL</div>
+      </div>
+
+      <div class="login-body">
+        <div class="login-line">
+          <span class="label">STATUS</span>
+          <span class="value">AWAITING AUTHORIZATION</span>
+        </div>
+        <div class="login-line">
+          <span class="label">CLEARANCE</span>
+          <span class="value">REQUIRED</span>
+        </div>
+        <div class="login-line">
+          <span class="label">NOTICE</span>
+          <span class="value">CLICK AUTHORIZE TO CONTINUE</span>
+        </div>
+
+        <div class="login-actions">
+          <button class="btn deny" @click="deny">DENY</button>
+          <button class="btn allow" @click="authorize">AUTHORIZE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NORMAL APP UI -->
   <div class="page-wrapper">
     <Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
     <Sidebar :animate="animate" :class="{ animate: animate }" />
@@ -16,8 +47,8 @@
     />
   </div>
 
-  <!-- UNSC startup tone -->
-  <audio autoplay>
+  <!-- Startup tone: must be triggered by user interaction -->
+  <audio ref="startupAudio" preload="auto">
     <source src="/startup.ogg" type="audio/ogg" />
   </audio>
 </template>
@@ -33,6 +64,8 @@ export default {
 
   data() {
     return {
+      showLogin: true,
+
       animate: Config.animate,
       initialSlug: Config.initialSlug,
       planetPath: Config.planetPath,
@@ -66,10 +99,35 @@ export default {
   },
 
   mounted() {
-    this.$router.push("/status");
+    // Don't push routes here anymore — wait until user interaction (Authorize).
+    // This helps avoid autoplay restrictions and ensures the "login" experience is consistent.
   },
 
   methods: {
+    authorize() {
+      this.showLogin = false;
+
+      // Route after auth
+      if (this.$router?.currentRoute?.value?.path !== "/status") {
+        this.$router.push("/status");
+      }
+
+      // Play startup sound (allowed because this runs on a user gesture)
+      const a = this.$refs.startupAudio;
+      if (a && typeof a.play === "function") {
+        a.currentTime = 0;
+        a.play().catch(() => {
+          // If the browser still blocks (rare), we just fail silently.
+        });
+      }
+    },
+
+    deny() {
+      // Optional behavior: just do a little "shake"/no-op. For now, keep them on the screen.
+      // You can change this to redirect elsewhere if you want.
+      this.showLogin = true;
+    },
+
     normalize(str) {
       return String(str || "")
         .replace(/"/g, "")
@@ -198,13 +256,11 @@ export default {
           complete: (results) => {
             const rows = results.data || [];
 
-            // --- helper to find a column in a row by any of several names ---
             const findCol = (row, names) => {
               const wanted = names.map((n) => this.normalize(n));
               return row.findIndex((c) => wanted.includes(this.normalize(c)));
             };
 
-            // --- 1) Find membership headers (Squad Member / Squads) in first 2 rows ---
             let membershipHeaderRowIndex = -1;
             let memberCol = -1;
             let squadCol = -1;
@@ -227,7 +283,6 @@ export default {
               return;
             }
 
-            // --- 2) Find slotting headers (Slot + Role column) by scanning first 4 rows ---
             const KNOWN_ROLE_HEADER_HINTS = [
               "squad roles",
               "role",
@@ -275,7 +330,6 @@ export default {
             console.log("RefData membership header row:", membershipHeaderRowIndex, { memberCol, squadCol });
             console.log("RefData slotting:", slottingAvailable ? { slotHeaderRowIndex, slotCol, roleCol } : "NOT FOUND");
 
-            // --- member matching helper (label -> member) ---
             const findMemberByLabel = (label) => {
               const labelNorm = this.normalize(label);
               if (!labelNorm) return null;
@@ -302,9 +356,6 @@ export default {
               return m;
             };
 
-            /* ==========================================================
-             * A) MEMBERSHIP (Squad Member / Squads)
-             * ========================================================== */
             const membershipRows = rows
               .slice(membershipHeaderRowIndex + 1)
               .map((r) => {
@@ -321,9 +372,6 @@ export default {
               if (!mem.squad) mem.squad = squad;
             });
 
-            /* ==========================================================
-             * B) SLOTTING (Slot + Role column)
-             * ========================================================== */
             const slotEntries = [];
 
             const parseHeading = (txt) => {
@@ -402,9 +450,6 @@ export default {
 
             console.log("Parsed slot entries:", slotEntries.length);
 
-            /* ==========================================================
-             * C) BUILD ORBAT (always include all squads)
-             * ========================================================== */
             const ALWAYS_SQUADS = [
               "Chalk Actual",
               "Chalk 1",
@@ -484,9 +529,6 @@ export default {
       });
     },
 
-    /* ===============================================================
-     *  MISSIONS / EVENTS
-     * =============================================================== */
     async importMissions(files) {
       const contents = await Promise.all(Object.values(files).map((f) => f()));
       contents.forEach((c) => {
@@ -521,5 +563,108 @@ export default {
 #app {
   min-height: 100vh;
   overflow: hidden !important;
+}
+
+/* Fake login */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.login-panel {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  border: 2px solid rgba(50, 180, 120, 0.85);
+  background: rgba(5, 14, 10, 0.92);
+  box-shadow: 0 0 28px rgba(0, 0, 0, 0.9);
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+.login-header {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba(50, 180, 120, 0.35);
+  background: linear-gradient(to right, rgba(50, 180, 120, 0.22), transparent);
+}
+
+.login-title {
+  font-size: 18px;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: rgba(170, 255, 210, 0.95);
+}
+
+.login-subtitle {
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(170, 255, 210, 0.7);
+}
+
+.login-body {
+  padding: 18px;
+}
+
+.login-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(50, 180, 120, 0.18);
+}
+
+.login-line:last-of-type {
+  border-bottom: none;
+}
+
+.login-line .label {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(170, 255, 210, 0.65);
+}
+
+.login-line .value {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(170, 255, 210, 0.95);
+}
+
+.login-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.btn {
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.btn.deny {
+  background: transparent;
+  border: 1px solid rgba(170, 255, 210, 0.35);
+  color: rgba(170, 255, 210, 0.85);
+}
+
+.btn.allow {
+  background: rgba(50, 180, 120, 0.22);
+  border: 1px solid rgba(50, 180, 120, 0.85);
+  color: rgba(170, 255, 210, 0.95);
 }
 </style>
