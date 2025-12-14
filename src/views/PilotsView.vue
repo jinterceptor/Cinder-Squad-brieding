@@ -17,7 +17,11 @@
           <!-- TOP: CHALK ACTUAL -->
           <div v-if="hierarchy.chalkActual" class="orbat-row center-row actual-row">
             <div class="squad-row single">
-              <div class="squad-card" @click="openSquad(hierarchy.chalkActual)">
+              <div
+                class="squad-card"
+                :class="{ clicked: clickedSquadKey === hierarchy.chalkActual.squad }"
+                @click="openSquad(hierarchy.chalkActual)"
+              >
                 <div class="squad-header">
                   <div class="squad-insignia">
                     <span>{{ squadInitials(hierarchy.chalkActual.squad) }}</span>
@@ -39,6 +43,7 @@
                 v-for="sq in hierarchy.chalks"
                 :key="sq.squad"
                 class="squad-card"
+                :class="{ clicked: clickedSquadKey === sq.squad }"
                 @click="openSquad(sq)"
               >
                 <div class="squad-header">
@@ -62,6 +67,7 @@
                 v-for="sq in hierarchy.support"
                 :key="sq.squad"
                 class="squad-card"
+                :class="{ clicked: clickedSquadKey === sq.squad }"
                 @click="openSquad(sq)"
               >
                 <div class="squad-header">
@@ -85,6 +91,7 @@
                 v-for="sq in hierarchy.other"
                 :key="sq.squad"
                 class="squad-card"
+                :class="{ clicked: clickedSquadKey === sq.squad }"
                 @click="openSquad(sq)"
               >
                 <div class="squad-header">
@@ -100,182 +107,176 @@
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
 
-    <!-- FULLSCREEN OVERLAY -->
-    <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
-      <div class="squad-modal">
-        <div class="squad-modal-header">
-          <div class="squad-header-left">
-            <div class="section-header clipped-medium-backward-bio">
-              <img src="/icons/license.svg" />
-              <h1>SQUAD ROSTER</h1>
-            </div>
-            <div class="rhombus-back">&nbsp;</div>
-          </div>
-
-          <button class="squad-close" @click="closeSquad">✕</button>
-        </div>
-
-        <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
-          <div class="squad-title">
-            <h2>{{ activeSquad.squad }}</h2>
-            <p class="subtitle">
-              {{ squadDescriptor(activeSquad.squad) }} ·
-              {{ personnelCount(activeSquad) }} PERSONNEL
-            </p>
-
-            <div class="loadout-status">
-              <span class="points">
-                LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS
-              </span>
-              <span
-                v-if="!squadLoadoutStatus.valid"
-                class="warn"
-                :title="squadLoadoutStatus.errors.join(' • ')"
-              >
-                ⚠ LOADOUT INVALID
-              </span>
-              <span v-else class="ok">✓ VALID</span>
-            </div>
-          </div>
-
-          <div class="squad-tag">
-            <span>{{ squadInitials(activeSquad.squad) }}</span>
-          </div>
-        </div>
-
-        <div class="squad-modal-scroll">
-          <div v-for="ft in activeFireteams" :key="ft.name" class="fireteam-block">
-            <div class="fireteam-header">
-              <span class="fireteam-title">{{ ft.name.toUpperCase() }}</span>
-              <span class="fireteam-count">{{ ft.slots.length }} SLOTS</span>
+    <!-- FULLSCREEN OVERLAY (with modal transition) -->
+    <transition name="squad-modal">
+      <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
+        <div class="squad-modal">
+          <div class="squad-modal-header">
+            <div class="squad-header-left">
+              <div class="section-header clipped-medium-backward-bio">
+                <img src="/icons/license.svg" />
+                <h1>SQUAD ROSTER</h1>
+              </div>
+              <div class="rhombus-back">&nbsp;</div>
             </div>
 
-            <div class="squad-members-grid">
-              <div
-                v-for="(slot, idx) in ft.slots"
-                :key="slotKey(slot, idx)"
-                class="member-card"
-                :class="{ vacant: slot.status === 'VACANT', closed: slot.status === 'CLOSED' }"
-              >
-                <!-- VACANT/CLOSED tile -->
-                <template v-if="slot.status === 'VACANT' || slot.status === 'CLOSED'">
-                  <div class="member-header">
-                    <div class="member-header-text">
-                      <h3>{{ slot.status }}</h3>
-                      <p class="rank-line">
-                        <span class="rank">{{ slot.role }}</span>
-                        <span class="id">UNFILLED SLOT</span>
-                      </p>
+            <button class="squad-close" @click="closeSquad">✕</button>
+          </div>
+
+          <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
+            <div class="squad-title">
+              <h2>{{ activeSquad.squad }}</h2>
+              <p class="subtitle">
+                {{ squadDescriptor(activeSquad.squad) }} ·
+                {{ personnelCount(activeSquad) }} PERSONNEL
+              </p>
+
+              <div class="loadout-status">
+                <span class="points">LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS</span>
+                <span
+                  v-if="!squadLoadoutStatus.valid"
+                  class="warn"
+                  :title="squadLoadoutStatus.errors.join(' • ')"
+                >
+                  ⚠ LOADOUT INVALID
+                </span>
+                <span v-else class="ok">✓ VALID</span>
+              </div>
+            </div>
+
+            <div class="squad-tag">
+              <span>{{ squadInitials(activeSquad.squad) }}</span>
+            </div>
+          </div>
+
+          <div class="squad-modal-scroll">
+            <div v-for="ft in activeFireteams" :key="ft.name" class="fireteam-block">
+              <div class="fireteam-header">
+                <span class="fireteam-title">{{ ft.name.toUpperCase() }}</span>
+                <span class="fireteam-count">{{ ft.slots.length }} SLOTS</span>
+              </div>
+
+              <div class="squad-members-grid">
+                <div
+                  v-for="(slot, idx) in ft.slots"
+                  :key="slotKey(slot, idx)"
+                  class="member-card"
+                  :class="{ vacant: slot.status === 'VACANT', closed: slot.status === 'CLOSED' }"
+                >
+                  <!-- VACANT/CLOSED tile -->
+                  <template v-if="slot.status === 'VACANT' || slot.status === 'CLOSED'">
+                    <div class="member-header">
+                      <div class="member-header-text">
+                        <h3>{{ slot.status }}</h3>
+                        <p class="rank-line">
+                          <span class="rank">{{ slot.role }}</span>
+                          <span class="id">UNFILLED SLOT</span>
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div class="member-body">
-                    <div class="member-column left">
-                      <p><strong>Squad:</strong> {{ activeSquad.squad }}</p>
-                      <p><strong>Fireteam:</strong> {{ ft.name }}</p>
-                      <p><strong>Role:</strong> {{ slot.role }}</p>
-                    </div>
-                    <div class="member-column right">
-                      <p><strong>Certifications:</strong></p>
-                      <span class="cert-none">N/A</span>
-                    </div>
-                  </div>
-
-                  <div class="member-footer">
-                    <span>SLOT STATUS: {{ slot.status }}</span>
-                    <span>UNSC ORBAT</span>
-                  </div>
-                </template>
-
-                <!-- FILLED tile -->
-                <template v-else>
-                  <div class="member-header">
-                    <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
-                      <img
-                        :src="rankInsignia(slot.member.rank)"
-                        :alt="slot.member.rank + ' insignia'"
-                        class="member-rank-insignia"
-                      />
+                    <div class="member-body">
+                      <div class="member-column left">
+                        <p><strong>Squad:</strong> {{ activeSquad.squad }}</p>
+                        <p><strong>Fireteam:</strong> {{ ft.name }}</p>
+                        <p><strong>Role:</strong> {{ slot.role }}</p>
+                      </div>
+                      <div class="member-column right">
+                        <p><strong>Certifications:</strong></p>
+                        <span class="cert-none">N/A</span>
+                      </div>
                     </div>
 
-                    <div class="member-header-text">
-                      <h3>{{ (slot.member?.name || '').toUpperCase() }}</h3>
-                      <p class="rank-line">
-                        <span class="rank">{{ slot.member?.rank || 'N/A' }}</span>
-                        <span class="id">ID: {{ slot.member?.id || 'N/A' }}</span>
-                      </p>
+                    <div class="member-footer">
+                      <span>SLOT STATUS: {{ slot.status }}</span>
+                      <span>UNSC ORBAT</span>
                     </div>
-                  </div>
+                  </template>
 
-                  <div class="member-body">
-                    <div class="member-column left">
-                      <p><strong>Squad:</strong> {{ slot.member?.squad || activeSquad.squad }}</p>
-                      <p><strong>Fireteam:</strong> {{ slot.member?.fireteam || ft.name }}</p>
-                      <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
-                      <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
-
-                      <!-- DISPOSABLE CHECKBOX -->
-                      <div class="loadout-row">
-                        <label class="disposable">
-                          <input
-                            type="checkbox"
-                            :checked="getLoadout(slot.member).disposable"
-                            @change="toggleDisposable(slot.member)"
-                          />
-                          Disposable Rocket (1pt)
-                        </label>
+                  <!-- FILLED tile -->
+                  <template v-else>
+                    <div class="member-header">
+                      <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
+                        <img
+                          :src="rankInsignia(slot.member.rank)"
+                          :alt="slot.member.rank + ' insignia'"
+                          class="member-rank-insignia"
+                        />
                       </div>
 
-                      <!-- PRIMARY LOADOUT SELECT -->
-                      <div class="loadout-row">
-                        <label class="primary-label">Assigned Loadout</label>
-                        <select
-                          class="loadout-select"
-                          :value="getLoadout(slot.member).primary"
-                          @change="setPrimary(slot.member, $event.target.value)"
-                        >
-                          <option value="">None / Standard</option>
-                          <option
-                            v-for="opt in availableLoadouts(slot.member)"
-                            :key="opt"
-                            :value="opt"
+                      <div class="member-header-text">
+                        <h3>{{ (slot.member?.name || '').toUpperCase() }}</h3>
+                        <p class="rank-line">
+                          <span class="rank">{{ slot.member?.rank || 'N/A' }}</span>
+                          <span class="id">ID: {{ slot.member?.id || 'N/A' }}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="member-body">
+                      <div class="member-column left">
+                        <p><strong>Squad:</strong> {{ slot.member?.squad || activeSquad.squad }}</p>
+                        <p><strong>Fireteam:</strong> {{ slot.member?.fireteam || ft.name }}</p>
+                        <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
+                        <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
+
+                        <!-- DISPOSABLE CHECKBOX -->
+                        <div class="loadout-row">
+                          <label class="disposable">
+                            <input
+                              type="checkbox"
+                              :checked="getLoadout(slot.member).disposable"
+                              @change="toggleDisposable(slot.member)"
+                            />
+                            Disposable Rocket (1pt)
+                          </label>
+                        </div>
+
+                        <!-- PRIMARY LOADOUT SELECT -->
+                        <div class="loadout-row">
+                          <label class="primary-label">Assigned Loadout</label>
+                          <select
+                            class="loadout-select"
+                            :value="getLoadout(slot.member).primary"
+                            @change="setPrimary(slot.member, $event.target.value)"
                           >
-                            {{ loadoutLabel(opt) }}
-                          </option>
-                        </select>
+                            <option value="">None / Standard</option>
+                            <option v-for="opt in availableLoadouts(slot.member)" :key="opt" :value="opt">
+                              {{ loadoutLabel(opt) }}
+                            </option>
+                          </select>
+                        </div>
                       </div>
-                    </div>
 
-                    <div class="member-column right">
-                      <p><strong>Certifications:</strong></p>
-                      <div class="cert-list">
-                        <div v-for="(label, cidx) in certLabels" :key="label" class="cert-row">
-                          <span class="cert-checkbox" :class="{ checked: hasCert(slot.member, cidx) }">
-                            <span v-if="hasCert(slot.member, cidx)" class="checkbox-dot"></span>
-                          </span>
-                          <span class="cert-label">{{ label }}</span>
+                      <div class="member-column right">
+                        <p><strong>Certifications:</strong></p>
+                        <div class="cert-list">
+                          <div v-for="(label, cidx) in certLabels" :key="label" class="cert-row">
+                            <span class="cert-checkbox" :class="{ checked: hasCert(slot.member, cidx) }">
+                              <span v-if="hasCert(slot.member, cidx)" class="checkbox-dot"></span>
+                            </span>
+                            <span class="cert-label">{{ label }}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div class="member-footer">
-                    <span>BIOMETRIC RECORD VALID</span>
-                    <span>UNSC SYSTEMS DATABASE</span>
-                  </div>
-                </template>
+                    <div class="member-footer">
+                      <span>BIOMETRIC RECORD VALID</span>
+                      <span>UNSC SYSTEMS DATABASE</span>
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
         </div>
-
       </div>
-    </div>
+    </transition>
   </section>
 </template>
 
@@ -289,6 +290,10 @@ export default {
   data() {
     return {
       activeSquad: null,
+
+      // NEW: click “raise” animation state
+      clickedSquadKey: null,
+      clickedTimer: null,
 
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
@@ -306,6 +311,9 @@ export default {
         marksman: { label: "Marksman", points: 2 },
       },
     };
+  },
+  beforeUnmount() {
+    if (this.clickedTimer) clearTimeout(this.clickedTimer);
   },
   computed: {
     hierarchy() {
@@ -370,7 +378,7 @@ export default {
 
       let points = 0;
       const errors = [];
-      const explosiveTaken = new Set(); // disposable/grenadier/antitank (no duplicates)
+      const explosiveTaken = new Set();
 
       const slots = [];
       this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((s) => slots.push(s)));
@@ -391,7 +399,6 @@ export default {
           const def = this.loadoutOptions[l.primary];
           if (def) {
             points += def.points;
-
             if (def.explosive) {
               if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`);
               explosiveTaken.add(l.primary);
@@ -401,16 +408,37 @@ export default {
       });
 
       if (points > 10) errors.push("Exceeds 10 point maximum");
-
       return { valid: errors.length === 0, points, errors };
     },
   },
   methods: {
+    // Adds a quick “raise” to the clicked card, then opens the modal
     openSquad(sq) {
-      this.activeSquad = sq;
+      const key = sq?.squad || null;
+      if (!key) {
+        this.activeSquad = sq;
+        return;
+      }
+
+      this.clickedSquadKey = key;
+
+      if (this.clickedTimer) clearTimeout(this.clickedTimer);
+
+      // Let the raise animation show briefly before the overlay appears
+      this.clickedTimer = setTimeout(() => {
+        this.activeSquad = sq;
+
+        // Clear clicked state shortly after (so it resets for next click)
+        this.clickedTimer = setTimeout(() => {
+          this.clickedSquadKey = null;
+        }, 220);
+      }, 120);
     },
+
     closeSquad() {
       this.activeSquad = null;
+      this.clickedSquadKey = null;
+      if (this.clickedTimer) clearTimeout(this.clickedTimer);
     },
 
     personnelCount(sq) {
@@ -458,7 +486,6 @@ export default {
       if (!id) return { primary: "", disposable: false };
 
       if (!this.loadouts[id]) {
-        // Vue 3: direct assignment is reactive
         this.loadouts[id] = { primary: "", disposable: false };
       }
       return this.loadouts[id];
@@ -607,8 +634,15 @@ export default {
   min-height: 210px;
   padding-right: 1.5rem;
   transition: 0.15s ease-in-out;
+  will-change: transform;
 }
 .squad-card:hover { transform: translateY(-2px); border-color: #5ab3ff; }
+
+/* NEW: quick click “raise” */
+.squad-card.clicked {
+  transform: translateY(-8px) scale(1.01);
+}
+
 .squad-header {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -655,6 +689,18 @@ export default {
   display: flex;
   flex-direction: column;
 }
+
+/* NEW: modal entrance/exit */
+.squad-modal-enter-active,
+.squad-modal-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.squad-modal-enter-from,
+.squad-modal-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
 .squad-modal-header {
   display: flex;
   justify-content: space-between;
