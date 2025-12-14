@@ -577,18 +577,30 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.85);
+  background: #000; /* solid black so nothing behind shows */
 }
 
+/* background layer with logo */
+.login-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* clicks go to overlay/panel */
+}
+
+.login-logo {
+  width: min(520px, 70vw);
+  height: auto;
+  opacity: 0.22; /* subtle, readable behind UI */
+  filter: drop-shadow(0 0 24px rgba(0, 0, 0, 0.9));
+}
+
+/* ensure panel sits above logo */
 .login-panel {
-  width: 560px;
-  max-width: calc(100vw - 32px);
-  border: 2px solid rgba(50, 180, 120, 0.85);
-  background: rgba(5, 14, 10, 0.92);
-  box-shadow: 0 0 28px rgba(0, 0, 0, 0.9);
-  border-radius: 10px;
-  overflow: hidden;
-  font-family: inherit;
+  position: relative;
+  z-index: 1;
 }
 
 .login-header {
