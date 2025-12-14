@@ -1,6 +1,10 @@
 <template>
-  <!-- FAKE LOGIN OVERLAY -->
+    <!-- FAKE LOGIN OVERLAY -->
   <div v-if="showLogin" class="login-overlay" @click.self="authorize">
+    <div class="login-bg">
+      <img class="login-logo" src="/faction-logos/FUD_UNSC_Logo.png" alt="UNSC Logo" />
+    </div>
+
     <div class="login-panel">
       <div class="login-header">
         <div class="login-title">UNSC SECURE ACCESS</div>
