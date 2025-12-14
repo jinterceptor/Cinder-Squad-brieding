@@ -9,10 +9,10 @@
 /*-------------------------------------*/
 :root {
 	/* Primary Colors */
-	--primary-color: #7dbbbb;
+	--primary-color: #1f4f46;
 	--secondary-color: #161c1dcc;
-	--highlight-hover: rgba(255, 255, 255, 0.3);
-	--highlight-active: rgba(255, 255, 255, 0.1);
+	--highlight-hover: rgba(47, 111, 99, 0.35);
+	--highlight-active: rgba(47, 111, 99, 0.2);
 	/* Primary Text */
 	--text-headers: rgba(0, 0, 0, 1);
 	--text-location: rgba(255, 255, 255, 0.87);
@@ -26,7 +26,7 @@
 	--mission-success: #226662;
 	--mission-failure: rgba(176, 45, 45, 1);
 	--primary-logo: #0C3C40;
-	--secondary-logo: #146464;
+	--secondary-logo: #2f6f63;
 	/* Pilot Roster Text */
 	--text-pilot-header: rgba(255, 255, 255, 0.67);
 	--text-pilot-value: rgba(255, 255, 255, 0.87);
