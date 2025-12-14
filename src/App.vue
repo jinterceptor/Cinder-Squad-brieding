@@ -87,6 +87,59 @@ export default {
     },
 
     /* ===============================================================
+     *  UNSC ID SCRAMBLER (#####-#####-XX)
+     *  - Deterministic per member (same input => same output)
+     *  - Collision-checked for uniqueness
+     * =============================================================== */
+    makeInitials(name) {
+      const parts = String(name || "").trim().toUpperCase().split(/\s+/).filter(Boolean);
+      if (!parts.length) return "XX";
+
+      const first = parts[0]?.[0] || "X";
+      const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] || "X") : "X";
+
+      return `${first}${last}`;
+    },
+
+    // Stable 32-bit hash (FNV-1a)
+    hash32(str) {
+      let h = 2166136261;
+      const s = String(str || "");
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    },
+
+    pad5(n) {
+      return String(n).padStart(5, "0");
+    },
+
+    makeUNSCId(oldId, name, used) {
+      const initials = this.makeInitials(name);
+
+      // Seed from old id + name so it's "scrambled" but consistent
+      let seed = this.hash32(`${oldId}::${name}`);
+
+      let a = seed % 100000;
+      let b = ((seed / 100000) >>> 0) % 100000;
+
+      let candidate = `${this.pad5(a)}-${this.pad5(b)}-${initials}`;
+
+      // Collision-safe: walk until unused
+      while (used.has(candidate)) {
+        seed = (seed + 1) >>> 0;
+        a = seed % 100000;
+        b = ((seed / 100000) >>> 0) % 100000;
+        candidate = `${this.pad5(a)}-${this.pad5(b)}-${initials}`;
+      }
+
+      used.add(candidate);
+      return candidate;
+    },
+
+    /* ===============================================================
      *  PERSONNEL ROSTER (MembersMaster)
      * =============================================================== */
     async loadMembersCSV(csvUrl) {
@@ -99,16 +152,20 @@ export default {
             const rows = results.data.slice(2); // skip title + headers
             const CERT_COLUMNS = 13;
 
+            const usedUNSCIds = new Set();
+
             this.members = rows
               .map((row) => {
                 const name = row[1]?.trim();
                 if (!name) return null;
 
+                const oldId = row[4]?.trim() || "";
+
                 return {
                   rank: row[0]?.trim() || "",
                   name,
                   joinDate: row[3]?.trim() || "",
-                  id: row[4]?.trim() || "",
+                  id: this.makeUNSCId(oldId, name, usedUNSCIds), // ✅ UNSC formatted
                   certifications: row
                     .slice(5, 5 + CERT_COLUMNS)
                     .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
@@ -171,8 +228,6 @@ export default {
             }
 
             // --- 2) Find slotting headers (Slot + Role column) by scanning first 4 rows ---
-            // Slot header is usually "Squad Slots" or "Slot"
-            // Role header might be "Squad Roles" OR it might literally be "Chalk 1 Fireteam 1" (etc.)
             const KNOWN_ROLE_HEADER_HINTS = [
               "squad roles",
               "role",
@@ -196,10 +251,8 @@ export default {
               const sl = findCol(r, ["Squad Slots", "Slot"]);
               if (sl === -1) continue;
 
-              // Prefer explicit "Squad Roles"/"Role"
               let rc = findCol(r, ["Squad Roles", "Role"]);
 
-              // If not found, try “this cell looks like a heading seed”
               if (rc === -1) {
                 rc = r.findIndex((c) => {
                   const n = this.normalize(c);
@@ -217,7 +270,6 @@ export default {
               }
             }
 
-            // Slotting is optional; membership will still work if not present
             const slottingAvailable = slotHeaderRowIndex !== -1 && slotCol !== -1 && roleCol !== -1;
 
             console.log("RefData membership header row:", membershipHeaderRowIndex, { memberCol, squadCol });
@@ -228,11 +280,9 @@ export default {
               const labelNorm = this.normalize(label);
               if (!labelNorm) return null;
 
-              // 1) contains full member name
               let m = this.members.find((mem) => labelNorm.includes(this.normalize(mem.name)));
               if (m) return m;
 
-              // 2) initial + surname heuristic
               const parts = labelNorm.split(" ");
               const surname = parts[parts.length - 1] || "";
               const initialMatch = labelNorm.match(/\b([a-z])\./i);
@@ -254,7 +304,6 @@ export default {
 
             /* ==========================================================
              * A) MEMBERSHIP (Squad Member / Squads)
-             *    - This is the authoritative roster assignment source.
              * ========================================================== */
             const membershipRows = rows
               .slice(membershipHeaderRowIndex + 1)
@@ -269,26 +318,23 @@ export default {
             membershipRows.forEach(({ label, squad }) => {
               const mem = findMemberByLabel(label);
               if (!mem) return;
-              if (!mem.squad) mem.squad = squad; // slotting can overwrite later
+              if (!mem.squad) mem.squad = squad;
             });
 
             /* ==========================================================
              * B) SLOTTING (Slot + Role column)
-             *    - Generates fireteams and VACANT/CLOSED tiles.
              * ========================================================== */
-            const slotEntries = []; // { squad, fireteam, role, status, member|null }
+            const slotEntries = [];
 
             const parseHeading = (txt) => {
               const raw = String(txt || "").trim();
               if (!raw) return null;
 
-              // Fireteam heading
               const ft = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
               if (ft) {
                 return { squad: ft[1].trim(), fireteam: `Fireteam ${ft[2].trim()}` };
               }
 
-              // Single unit heading (no fireteam)
               const n = this.normalize(raw);
               const singles = [
                 "broadsword",
@@ -312,8 +358,8 @@ export default {
 
               for (let i = slotHeaderRowIndex + 1; i < rows.length; i++) {
                 const r = rows[i] || [];
-                const slotTxt = String(r[slotCol] || "").trim(); // member / VACANT / CLOSED
-                const roleTxt = String(r[roleCol] || "").trim(); // heading OR role
+                const slotTxt = String(r[slotCol] || "").trim();
+                const roleTxt = String(r[roleCol] || "").trim();
 
                 const heading = parseHeading(roleTxt);
                 if (heading) {
@@ -378,7 +424,6 @@ export default {
               orbatMap[s] = { squad: s, members: [], fireteams: {} };
             });
 
-            // Add members to squads
             this.members.forEach((m) => {
               if (!m.squad) return;
 
@@ -401,7 +446,6 @@ export default {
               }
             });
 
-            // Add VACANT/CLOSED + any extra slotEntries
             slotEntries.forEach((e) => {
               if (!orbatMap[e.squad]) {
                 orbatMap[e.squad] = { squad: e.squad, members: [], fireteams: {} };
@@ -422,9 +466,6 @@ export default {
                 member: e.member,
               });
             });
-
-            // Important: we DO NOT auto-dump unassigned into Reserves.
-            // Reserves/Recruit/Fillers are determined only by membership columns N/O.
 
             this.orbat = Object.values(orbatMap).map((s) => ({
               squad: s.squad,
