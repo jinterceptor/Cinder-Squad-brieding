@@ -36,15 +36,19 @@
   </div>
 
   <div id="router-view-container">
-    <router-view
-      :animate="animate"
-      :initial-slug="initialSlug"
-      :missions="missions"
-      :events="events"
-      :members="members"
-      :orbat="orbat"
-      :reserves="reserves"
-    />
+    <!-- HUD transition on ALL route changes -->
+    <transition name="hud" mode="out-in">
+      <router-view
+        :key="$route.fullPath"
+        :animate="animate"
+        :initial-slug="initialSlug"
+        :missions="missions"
+        :events="events"
+        :members="members"
+        :orbat="orbat"
+        :reserves="reserves"
+      />
+    </transition>
   </div>
 
   <!-- Startup tone: must be triggered by user interaction -->
@@ -643,6 +647,54 @@ export default {
   }
   50% {
     opacity: 1;
+  }
+}
+
+/* =========================================================
+   ROUTE TRANSITIONS: UNSC HUD SHUDDER / FADE (ALL PAGES)
+   ========================================================= */
+.hud-enter-active {
+  animation: hud-in 420ms ease-out both;
+}
+
+.hud-leave-active {
+  animation: hud-out 220ms ease-in both;
+}
+
+@keyframes hud-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0);
+    filter: blur(2px);
+  }
+  35% {
+    opacity: 0.75;
+    transform: translate3d(1px, -1px, 0);
+    filter: blur(1px);
+  }
+  55% {
+    transform: translate3d(-1px, 1px, 0);
+  }
+  70% {
+    transform: translate3d(1px, 0px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+
+@keyframes hud-out {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 2px, 0);
+    filter: blur(2px);
   }
 }
 </style>
