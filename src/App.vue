@@ -66,6 +66,7 @@ import Config from "@/assets/info/general-config.json";
 import Papa from "papaparse";
 
 export default {
+  name: "App",
   components: { Header, Sidebar },
 
   data() {
@@ -87,300 +88,198 @@ export default {
     };
   },
 
- created() {
-  // Theme: make the browser title read more UNSC-friendly
-  this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
+  created() {
+    // Theme: make the browser title read more UNSC-friendly
+    this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
 
-  this.importMissions(
-    import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" })
-  );
-  this.importEvents(
-    import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" })
-  );
+    // Preload content bundles
+    this.importMissions(
+      import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" })
+    );
+    this.importEvents(
+      import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" })
+    );
 
-  const membersUrl =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv";
+    // CSV sources
+    const membersUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv";
 
-  const refDataUrl =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
+    const refDataUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
 
-  const opsUrl =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
+    const opsUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
 
-  // Load members → build ORBAT → then attempt ops (non-blocking)
-  this.loadMembersCSV(membersUrl)
-    .then(() => this.loadRefDataCSV(refDataUrl))
-    .then(() => {
-      // Fire-and-forget ops loading (never blocks UI)
-      this.loadOpsCSV(opsUrl).catch((err) => {
-        console.warn(
-          "Ops CSV failed to load, continuing without ops data.",
-          err
-        );
+    // Load members → build ORBAT → then attempt ops (non-blocking)
+    this.loadMembersCSV(membersUrl)
+      .then(() => this.loadRefDataCSV(refDataUrl))
+      .then(() => {
+        // Fire-and-forget ops loading (never blocks UI)
+        this.loadOpsCSV(opsUrl).catch((err) => {
+          console.warn("Ops CSV failed to load, continuing without ops data.", err);
+        });
       });
-    });
-},
+  },
 
-
-mounted() {
+  mounted() {
     // Don't push routes here — wait until user interaction (Authorize).
   },
 
-methods: {
-  /* ===============================================================
-   *  LOGIN / STARTUP
-   * =============================================================== */
-  authorize() {
-    if (this.isFading) return;
-    this.isFading = true;
+  methods: {
+    /* ===============================================================
+     *  LOGIN / STARTUP
+     * =============================================================== */
+    authorize() {
+      if (this.isFading) return;
+      this.isFading = true;
 
-    const a = this.$refs.startupAudio;
-    if (a && typeof a.play === "function") {
-      a.currentTime = 0;
-      a.play().catch(() => {});
-    }
-
-    setTimeout(() => {
-      this.showLogin = false;
-      this.isFading = false;
-
-      if (this.$router?.currentRoute?.value?.path !== "/status") {
-        this.$router.push("/status");
-      }
-    }, 800);
-  },
-
-  /* ===============================================================
-   *  STRING NORMALIZATION (shared)
-   * =============================================================== */
-  normalize(str) {
-    return String(str || "")
-      .replace(/"/g, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
-  },
-
-  /* ===============================================================
-   *  TITLE / FAVICON
-   * =============================================================== */
-  setTitleFavicon(title, favicon) {
-    document.title = title;
-    const link = document.createElement("link");
-    link.rel = "icon";
-    link.href = favicon;
-    document.head.appendChild(link);
-  },
-
-  /* ===============================================================
-   *  OPS / ATTENDANCE CSV
-   *  - SAFE: never blocks rendering
-   *  - Matches your Ops sheet: Col A = name label, Col C = ops
-   * =============================================================== */
-  loadOpsCSV(opsUrl) {
-    return new Promise((resolve) => {
-      Papa.parse(opsUrl, {
-        download: true,
-        skipEmptyLines: true,
-        header: false,
-        complete: (results) => {
-          const rows = (results.data || []).slice(1); // skip header row
-          const opsMap = {};
-
-          rows.forEach((row) => {
-            const rawName = String(row[0] || "").trim(); // col A
-            const rawOps = String(row[2] || "").trim();  // col C
-            if (!rawName) return;
-
-            const ops = Number(rawOps);
-            if (Number.isNaN(ops)) return;
-
-            // Extract the quoted bit if present:  PFC "M. Jinter"  ->  M. Jinter
-            const quoted = rawName.match(/"([^"]+)"/);
-            const nameCore = quoted ? quoted[1] : rawName;
-
-            const key = String(nameCore)
-              .replace(/"/g, "")
-              .replace(/\s+/g, " ")
-              .trim()
-              .toLowerCase();
-
-            opsMap[key] = ops;
-          });
-
-          // Merge onto members (member.name is like: M. Jinter)
-          (this.members || []).forEach((m) => {
-            const key = String(m.name || "")
-              .replace(/"/g, "")
-              .replace(/\s+/g, " ")
-              .trim()
-              .toLowerCase();
-
-            m.opsAttended = opsMap[key] ?? null;
-          });
-
-          console.log("Ops attendance merged onto members.");
-          resolve();
-        },
-        error: (err) => {
-          console.warn("Ops CSV failed to load (non-fatal)", err);
-          resolve(); // never block app
-        },
-      });
-    });
-  },
-
-
-     /* ===============================================================
-   *  OPS / PROMOTION SYSTEM
-   * =============================================================== */
-  rankKey(rank) {
-    return String(rank || "")
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, "");
-  },
-
-  promotionLadderFor(rank) {
-    const r = this.rankKey(rank);
-
-    // thresholds represent the *next* milestone for the current rank
-    const ladders = {
-      // Enlisted / Infantry
-      PVT:  { nextAt: 2,  nextRank: "PFC" },
-      PFC:  { nextAt: 10, nextRank: "SPC" },
-      SPC:  { nextAt: 20, nextRank: "SPC2" },
-      SPC2: { nextAt: 30, nextRank: "SPC3" },
-      SPC3: { nextAt: 40, nextRank: "SPC4" },
-      SPC4: { nextAt: 50, nextRank: null },
-
-      // Corpsman ladder
-      HA:   { nextAt: 2,  nextRank: "HN" },
-      HN:   { nextAt: 10, nextRank: "HM3" },
-      HM3:  { nextAt: 20, nextRank: "HM2" },
-      HM2:  { nextAt: 30, nextRank: null },
-
-      // Warrant ladder
-      CWO2: { nextAt: 10, nextRank: "CWO3" },
-      CWO3: { nextAt: 20, nextRank: "CWO4" },
-      CWO4: { nextAt: 30, nextRank: null },
-    };
-
-    return ladders[r] || null;
-  },
-
-  opsToNextPromotion(member) {
-    const ops = Number(member?.opsAttended);
-    if (!Number.isFinite(ops)) return null;
-
-    const ladder = this.promotionLadderFor(member?.rank);
-    if (!ladder || !ladder.nextAt) return null;
-
-    return Math.max(0, ladder.nextAt - ops);
-  },
-
-  nextPromotionRank(member) {
-    const ladder = this.promotionLadderFor(member?.rank);
-    return ladder?.nextRank || null;
-  },
-},
-
-
-    computePromotion(rank, opsAttended) {
-      const ladder = this.promotionLadderFor(rank);
-      if (!ladder) {
-        return { opsAttended, nextRank: null, nextRankAtOps: null, opsToNext: null };
+      const a = this.$refs.startupAudio;
+      if (a && typeof a.play === "function") {
+        a.currentTime = 0;
+        a.play().catch(() => {});
       }
 
-      const r = this.rankKey(rank);
-      const idx = ladder.findIndex((x) => x.code === r);
-      if (idx === -1) {
-        return { opsAttended, nextRank: null, nextRankAtOps: null, opsToNext: null };
-      }
+      setTimeout(() => {
+        this.showLogin = false;
+        this.isFading = false;
 
-      const next = ladder[idx + 1] || null;
-      if (!next) {
-        return { opsAttended, nextRank: null, nextRankAtOps: null, opsToNext: 0 };
-      }
-
-      const ops = Number.isFinite(+opsAttended) ? +opsAttended : 0;
-      const toNext = Math.max(0, next.req - ops);
-
-      return {
-        opsAttended: ops,
-        nextRank: next.code,
-        nextRankAtOps: next.req,
-        opsToNext: toNext,
-      };
+        if (this.$router?.currentRoute?.value?.path !== "/status") {
+          this.$router.push("/status");
+        }
+      }, 800);
     },
 
-    // Try to match ops sheet label -> member by name containment (robust to extra text)
-    findOpsForMember(opsRows, memberName) {
-      const nameNorm = this.normalize(memberName);
-      if (!nameNorm) return null;
-
-      // exact containment match
-      let hit = opsRows.find((r) => this.normalize(r.label).includes(nameNorm));
-      if (hit) return hit;
-
-      // fallback: surname containment
-      const parts = nameNorm.split(" ");
-      const surname = parts[parts.length - 1] || "";
-      if (surname) {
-        hit = opsRows.find((r) => this.normalize(r.label).includes(surname));
-        if (hit) return hit;
-      }
-
-      return null;
+    /* ===============================================================
+     *  STRING NORMALIZATION (shared)
+     * =============================================================== */
+    normalize(str) {
+      return String(str || "")
+        .replace(/"/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
     },
 
-    async loadOpsCSV(csvUrl) {
-      return new Promise((resolve, reject) => {
-        Papa.parse(csvUrl, {
+    /* ===============================================================
+     *  TITLE / FAVICON
+     * =============================================================== */
+    setTitleFavicon(title, favicon) {
+      document.title = title;
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.href = favicon;
+      document.head.appendChild(link);
+    },
+
+    /* ===============================================================
+     *  OPS / ATTENDANCE CSV
+     *  - SAFE: never blocks rendering
+     *  - Matches your Ops sheet: Col A = name label, Col C = ops
+     * =============================================================== */
+    loadOpsCSV(opsUrl) {
+      return new Promise((resolve) => {
+        Papa.parse(opsUrl, {
           download: true,
           skipEmptyLines: true,
           header: false,
           complete: (results) => {
-            const rows = results.data || [];
+            const rows = (results.data || []).slice(1); // skip header row
+            const opsMap = {};
 
-            // You said: start from row 2, where row 2 is headers.
-            // So data begins AFTER row 2 => slice from index 2.
-            const dataRows = rows.slice(2);
+            rows.forEach((row) => {
+              const rawName = String(row[0] || "").trim(); // col A
+              const rawOps = String(row[2] || "").trim();  // col C
+              if (!rawName) return;
 
-            // Column A = 0, Column C = 2
-            const opsRows = dataRows
-              .map((r) => {
-                const label = String(r[0] || "").trim();
-                const opsRaw = String(r[2] || "").trim();
-                if (!label) return null;
+              const ops = Number(rawOps);
+              if (Number.isNaN(ops)) return;
 
-                const ops = parseInt(opsRaw, 10);
-                return { label, ops: Number.isFinite(ops) ? ops : 0 };
-              })
-              .filter(Boolean);
+              // Extract quoted callsign if present:  PFC "M. Jinter"  ->  M. Jinter
+              const quoted = rawName.match(/"([^"]+)"/);
+              const nameCore = quoted ? quoted[1] : rawName;
 
-            // Merge into members
-            this.members = (this.members || []).map((m) => {
-              const hit = this.findOpsForMember(opsRows, m.name);
-              const opsAttended = hit ? hit.ops : 0;
+              const key = String(nameCore)
+                .replace(/"/g, "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase();
 
-              const promo = this.computePromotion(m.rank, opsAttended);
-
-              return {
-                ...m,
-                opsAttended: promo.opsAttended,
-                nextRank: promo.nextRank,
-                nextRankAtOps: promo.nextRankAtOps,
-                opsToNext: promo.opsToNext,
-              };
+              opsMap[key] = ops;
             });
 
-            console.log("Ops loaded + merged:", opsRows.length);
-            resolve(opsRows);
+            // Merge onto members by normalized name (member.name like: M. Jinter)
+            (this.members || []).forEach((m) => {
+              const key = String(m.name || "")
+                .replace(/"/g, "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase();
+
+              m.opsAttended = opsMap[key] ?? null;
+            });
+
+            console.log("Ops attendance merged onto members.");
+            resolve();
           },
-          error: reject,
+          error: (err) => {
+            console.warn("Ops CSV failed to load (non-fatal)", err);
+            resolve(); // never block app
+          },
         });
       });
+    },
+
+    /* ===============================================================
+     *  OPS / PROMOTION SYSTEM
+     * =============================================================== */
+    rankKey(rank) {
+      return String(rank || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "");
+    },
+
+    promotionLadderFor(rank) {
+      const r = this.rankKey(rank);
+
+      // thresholds represent the *next* milestone for the current rank
+      const ladders = {
+        // Enlisted / Infantry
+        PVT:  { nextAt: 2,  nextRank: "PFC" },
+        PFC:  { nextAt: 10, nextRank: "SPC" },
+        SPC:  { nextAt: 20, nextRank: "SPC2" },
+        SPC2: { nextAt: 30, nextRank: "SPC3" },
+        SPC3: { nextAt: 40, nextRank: "SPC4" },
+        SPC4: { nextAt: 50, nextRank: null },
+
+        // Corpsman ladder
+        HA:   { nextAt: 2,  nextRank: "HN" },
+        HN:   { nextAt: 10, nextRank: "HM3" },
+        HM3:  { nextAt: 20, nextRank: "HM2" },
+        HM2:  { nextAt: 30, nextRank: null },
+
+        // Warrant ladder
+        CWO2: { nextAt: 10, nextRank: "CWO3" },
+        CWO3: { nextAt: 20, nextRank: "CWO4" },
+        CWO4: { nextAt: 30, nextRank: null },
+      };
+
+      return ladders[r] || null;
+    },
+
+    opsToNextPromotion(member) {
+      const ops = Number(member?.opsAttended);
+      if (!Number.isFinite(ops)) return null;
+
+      const ladder = this.promotionLadderFor(member?.rank);
+      if (!ladder || !ladder.nextAt) return null;
+
+      return Math.max(0, ladder.nextAt - ops);
+    },
+
+    nextPromotionRank(member) {
+      const ladder = this.promotionLadderFor(member?.rank);
+      return ladder?.nextRank || null;
     },
 
     /* ===============================================================
@@ -431,29 +330,29 @@ methods: {
     /* ===============================================================
      *  PERSONNEL ROSTER (MembersMaster)
      * =============================================================== */
-    async loadMembersCSV(csvUrl) {
+    loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
           skipEmptyLines: true,
           header: false,
           complete: (results) => {
-            const rows = results.data.slice(2); // skip title + headers
+            const rows = (results.data || []).slice(2); // skip title + headers
             const CERT_COLUMNS = 13;
 
             const usedUNSCIds = new Set();
 
             this.members = rows
               .map((row) => {
-                const name = row[1]?.trim();
+                const name = String(row[1] || "").trim();
                 if (!name) return null;
 
-                const oldId = row[4]?.trim() || "";
+                const oldId = String(row[4] || "").trim();
 
                 return {
-                  rank: row[0]?.trim() || "",
+                  rank: String(row[0] || "").trim(),
                   name,
-                  joinDate: row[3]?.trim() || "",
+                  joinDate: String(row[3] || "").trim(),
                   id: this.makeUNSCId(oldId, name, usedUNSCIds),
 
                   certifications: row
@@ -467,9 +366,6 @@ methods: {
 
                   // Filled later from Ops sheet:
                   opsAttended: 0,
-                  nextRank: null,
-                  nextRankAtOps: null,
-                  opsToNext: null,
                 };
               })
               .filter(Boolean);
@@ -485,7 +381,7 @@ methods: {
     /* ===============================================================
      *  REFDATA — membership (N/O) + slotting (P/Q)
      * =============================================================== */
-    async loadRefDataCSV(csvUrl) {
+    loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
           download: true,
