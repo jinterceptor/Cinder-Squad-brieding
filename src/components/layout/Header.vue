@@ -14,10 +14,12 @@
 			</div>
 		</div>
 		<div class="rhombus"></div>
+
 		<div class="planet-location-container">
 			<video autoplay muted loop width="90px" height="90px">
 				<source :src="`${planetPath}`" type="video/webm" />
 			</video>
+
 			<div class="location-info">
 				<div id="planet-year" class="location-row">
 					<div id="year">
@@ -29,17 +31,19 @@
 						<span class="subtitle">{{ header.planet }}</span>
 					</div>
 				</div>
+
+				<!-- UNSC-flavoured line (still uses the same header fields under the hood) -->
 				<div id="system-gate-ring" class="location-row">
 					<div id="ring">
-						<h4>Ring</h4>
+						<h4>AO</h4>
 						<span class="subtitle">{{ header.ring }}</span>
 					</div>
 					<div id="gate">
-						<h4>Gate</h4>
+						<h4>OPORD</h4>
 						<span class="subtitle">{{ header.gate }}</span>
 					</div>
 					<div id="system">
-						<h4>System</h4>
+						<h4>COMM CH</h4>
 						<span class="subtitle">{{ header.system }}</span>
 					</div>
 				</div>
@@ -50,22 +54,10 @@
 
 <script>
 export default {
-	components: {},
 	props: {
-		planetPath: {
-			type: String,
-			required: true,
-		},
-		header: {
-			type: Object,
-			required: true,
-		},
+		planetPath: { type: String, required: true },
+		header: { type: Object, required: true },
 	},
-	data() {
-		return {};
-	},
-	created() {},
-	mounted() {},
 };
 </script>
 
