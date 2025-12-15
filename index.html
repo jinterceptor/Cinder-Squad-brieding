@@ -1,34 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<link rel="icon" href="" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta property="og:type" content="website" />
-	</head>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta property="og:type" content="website" />
 
-	<body style="margin: 0px">
-		<div id="app"></div>
-		<script type="module" src="/src/main.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-		<script type="module" src="/src/assets/scripts/vanta.globe.min.js"></script>
-		<script type="module">
-			VANTA.GLOBE({
-				el: "body",
-				mouseControls: false,
-				touchControls: false,
-				gyroControls: false,
-				minHeight: 200.0,
-				minWidth: 200.0,
-				scale: 1.0,
-				scaleMobile: 1.0,
-				color: 0x694f5d,
-				color2: 0x68a691,
-				backgroundColor: 0x0c090d,
-				size: 2.0,
-				sphereRotation: -0.002,
-				meshRotation: 0.004,
-			});
-		</script>
-	</body>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+
+      /* Ensure the Vue app stays above the Vanta canvas */
+      #app {
+        position: relative;
+        z-index: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app"></div>
+
+    <script type="module" src="/src/main.js"></script>
+
+    <!-- Vanta dependencies (LOCAL FILES) -->
+    <script src="/three.r134.min.js"></script>
+    <script src="/vanta.waves.min.js"></script>
+
+    <script>
+      VANTA.WAVES({
+        el: "body",
+        mouseControls: true,
+        touchControls: true,
+        gyroControls: false,
+        minHeight: 200.0,
+        minWidth: 200.0,
+        scale: 1.0,
+        scaleMobile: 1.0,
+        color: 0x1c251c,
+        shininess: 0.0,
+        waveHeight: 8.5,
+        waveSpeed: 0.65,
+        zoom: 0.88,
+      });
+    </script>
+  </body>
 </html>
