@@ -113,7 +113,7 @@ export default {
     });
   });
 
-  mounted() {
+mounted() {
     // Don't push routes here — wait until user interaction (Authorize).
   },
 
