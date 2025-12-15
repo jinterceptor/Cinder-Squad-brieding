@@ -57,11 +57,6 @@
   <audio ref="startupAudio" preload="auto">
     <source src="/startup.ogg" type="audio/ogg" />
   </audio>
-
-  <!-- ORBAT UI SFX: browse between menus/routes -->
-  <audio ref="orbatBrowseAudio" preload="auto">
-    <source src="/Orbat Main Menu Browse.ogg" type="audio/ogg" />
-  </audio>
 </template>
 
 <script>
@@ -78,9 +73,6 @@ export default {
       showLogin: true,
       isFading: false,
 
-      // gate menu-browse SFX until AFTER login + initial route settle
-      browseSfxEnabled: false,
-
       animate: Config.animate,
       initialSlug: Config.initialSlug,
       planetPath: Config.planetPath,
@@ -96,7 +88,6 @@ export default {
   },
 
   created() {
-    // Theme: make the browser title read more UNSC-friendly
     this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
 
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
@@ -108,76 +99,38 @@ export default {
     const refDataUrl =
       "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
 
-    this.loadMembersCSV(membersUrl).then(() => {
-      this.loadRefDataCSV(refDataUrl);
-    });
+    // OPS sheet (your link’s gid)
+    const opsUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1413636180&single=true&output=csv";
+
+    // Load members -> merge ops -> then build ORBAT
+    this.loadMembersCSV(membersUrl)
+      .then(() => this.loadOpsCSV(opsUrl))
+      .then(() => this.loadRefDataCSV(refDataUrl));
   },
 
   mounted() {
     // Don't push routes here — wait until user interaction (Authorize).
   },
 
-  watch: {
-    // Menu browse SFX on any route change (status/events/roster/etc.)
-    $route(to, from) {
-      if (this.showLogin) return;
-      if (!this.browseSfxEnabled) return;
-      if (!from || to.fullPath === from.fullPath) return;
-
-      this.playBrowseSfx();
-    },
-  },
-
   methods: {
-    playBrowseSfx() {
-      const a = this.$refs.orbatBrowseAudio;
-      if (!a || typeof a.play !== "function") return;
-
-      try {
-        a.currentTime = 0;
-        a.play().catch(() => {
-          // fail silently if blocked (rare after initial click)
-        });
-      } catch {
-        // ignore
-      }
-    },
-
     authorize() {
-      // Prevent double-click / double fade
       if (this.isFading) return;
-
-      // Start fade
       this.isFading = true;
 
-      // Ensure browse SFX doesn't fire during initial post-login routing
-      this.browseSfxEnabled = false;
-
-      // Play startup sound immediately on the click (gesture-safe)
       const a = this.$refs.startupAudio;
       if (a && typeof a.play === "function") {
         a.currentTime = 0;
-        a.play().catch(() => {
-          // Fail silently if blocked
-        });
+        a.play().catch(() => {});
       }
 
-      // Wait for fade to finish, then mount UI + route
       setTimeout(() => {
         this.showLogin = false;
         this.isFading = false;
 
-        const goStatus =
-          this.$router?.currentRoute?.value?.path !== "/status"
-            ? this.$router.push("/status").catch(() => {})
-            : Promise.resolve();
-
-        // Enable browse SFX shortly AFTER initial route settles
-        Promise.resolve(goStatus).then(() => {
-          setTimeout(() => {
-            this.browseSfxEnabled = true;
-          }, 250);
-        });
+        if (this.$router?.currentRoute?.value?.path !== "/status") {
+          this.$router.push("/status");
+        }
       }, 800);
     },
 
@@ -198,21 +151,156 @@ export default {
     },
 
     /* ===============================================================
+     *  OPS / PROMOTION SYSTEM
+     *  - Reads Ops attended from Ops sheet (A=name label, C=ops)
+     *  - Computes ops-to-next promotion for known ladders
+     * =============================================================== */
+    rankKey(rank) {
+      return String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
+    },
+
+    promotionLadderFor(rank) {
+      const r = this.rankKey(rank);
+
+      const ENLISTED = [
+        { code: "RCT", req: 0 },   // optional baseline
+        { code: "PVT", req: 2 },
+        { code: "PFC", req: 10 },
+        { code: "SPC", req: 20 },
+        { code: "SPC2", req: 30 },
+        { code: "SPC3", req: 40 },
+        { code: "SPC4", req: 50 },
+      ];
+
+      const CORPSMAN = [
+        { code: "HA", req: 2 },
+        { code: "HN", req: 10 },
+        { code: "HM3", req: 20 },
+        { code: "HM2", req: 30 },
+      ];
+
+      const WARRANT = [
+        { code: "CWO2", req: 10 },
+        { code: "CWO3", req: 20 },
+        { code: "CWO4", req: 30 },
+      ];
+
+      if (ENLISTED.some((x) => x.code === r)) return ENLISTED;
+      if (CORPSMAN.some((x) => x.code === r)) return CORPSMAN;
+      if (WARRANT.some((x) => x.code === r)) return WARRANT;
+
+      // Unknown / officer / other tracks => no computed promotion
+      return null;
+    },
+
+    computePromotion(rank, opsAttended) {
+      const ladder = this.promotionLadderFor(rank);
+      if (!ladder) {
+        return { opsAttended, nextRank: null, nextRankAtOps: null, opsToNext: null };
+      }
+
+      const r = this.rankKey(rank);
+      const idx = ladder.findIndex((x) => x.code === r);
+      if (idx === -1) {
+        return { opsAttended, nextRank: null, nextRankAtOps: null, opsToNext: null };
+      }
+
+      const next = ladder[idx + 1] || null;
+      if (!next) {
+        return { opsAttended, nextRank: null, nextRankAtOps: null, opsToNext: 0 };
+      }
+
+      const ops = Number.isFinite(+opsAttended) ? +opsAttended : 0;
+      const toNext = Math.max(0, next.req - ops);
+
+      return {
+        opsAttended: ops,
+        nextRank: next.code,
+        nextRankAtOps: next.req,
+        opsToNext: toNext,
+      };
+    },
+
+    // Try to match ops sheet label -> member by name containment (robust to extra text)
+    findOpsForMember(opsRows, memberName) {
+      const nameNorm = this.normalize(memberName);
+      if (!nameNorm) return null;
+
+      // exact containment match
+      let hit = opsRows.find((r) => this.normalize(r.label).includes(nameNorm));
+      if (hit) return hit;
+
+      // fallback: surname containment
+      const parts = nameNorm.split(" ");
+      const surname = parts[parts.length - 1] || "";
+      if (surname) {
+        hit = opsRows.find((r) => this.normalize(r.label).includes(surname));
+        if (hit) return hit;
+      }
+
+      return null;
+    },
+
+    async loadOpsCSV(csvUrl) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(csvUrl, {
+          download: true,
+          skipEmptyLines: true,
+          header: false,
+          complete: (results) => {
+            const rows = results.data || [];
+
+            // You said: start from row 2, where row 2 is headers.
+            // So data begins AFTER row 2 => slice from index 2.
+            const dataRows = rows.slice(2);
+
+            // Column A = 0, Column C = 2
+            const opsRows = dataRows
+              .map((r) => {
+                const label = String(r[0] || "").trim();
+                const opsRaw = String(r[2] || "").trim();
+                if (!label) return null;
+
+                const ops = parseInt(opsRaw, 10);
+                return { label, ops: Number.isFinite(ops) ? ops : 0 };
+              })
+              .filter(Boolean);
+
+            // Merge into members
+            this.members = (this.members || []).map((m) => {
+              const hit = this.findOpsForMember(opsRows, m.name);
+              const opsAttended = hit ? hit.ops : 0;
+
+              const promo = this.computePromotion(m.rank, opsAttended);
+
+              return {
+                ...m,
+                opsAttended: promo.opsAttended,
+                nextRank: promo.nextRank,
+                nextRankAtOps: promo.nextRankAtOps,
+                opsToNext: promo.opsToNext,
+              };
+            });
+
+            console.log("Ops loaded + merged:", opsRows.length);
+            resolve(opsRows);
+          },
+          error: reject,
+        });
+      });
+    },
+
+    /* ===============================================================
      *  UNSC ID SCRAMBLER (#####-#####-XX)
-     *  - Deterministic per member (same input => same output)
-     *  - Collision-checked for uniqueness
      * =============================================================== */
     makeInitials(name) {
       const parts = String(name || "").trim().toUpperCase().split(/\s+/).filter(Boolean);
       if (!parts.length) return "XX";
-
       const first = parts[0]?.[0] || "X";
       const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] || "X") : "X";
-
       return `${first}${last}`;
     },
 
-    // Stable 32-bit hash (FNV-1a)
     hash32(str) {
       let h = 2166136261;
       const s = String(str || "");
@@ -229,8 +317,6 @@ export default {
 
     makeUNSCId(oldId, name, used) {
       const initials = this.makeInitials(name);
-
-      // Seed from old id + name so it's "scrambled" but consistent
       let seed = this.hash32(`${oldId}::${name}`);
 
       let a = seed % 100000;
@@ -238,7 +324,6 @@ export default {
 
       let candidate = `${this.pad5(a)}-${this.pad5(b)}-${initials}`;
 
-      // Collision-safe: walk until unused
       while (used.has(candidate)) {
         seed = (seed + 1) >>> 0;
         a = seed % 100000;
@@ -276,7 +361,8 @@ export default {
                   rank: row[0]?.trim() || "",
                   name,
                   joinDate: row[3]?.trim() || "",
-                  id: this.makeUNSCId(oldId, name, usedUNSCIds), // ✅ UNSC formatted
+                  id: this.makeUNSCId(oldId, name, usedUNSCIds),
+
                   certifications: row
                     .slice(5, 5 + CERT_COLUMNS)
                     .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
@@ -285,6 +371,12 @@ export default {
                   squad: "",
                   fireteam: "",
                   slot: "",
+
+                  // Filled later from Ops sheet:
+                  opsAttended: 0,
+                  nextRank: null,
+                  nextRankAtOps: null,
+                  opsToNext: null,
                 };
               })
               .filter(Boolean);
@@ -380,9 +472,6 @@ export default {
 
             const slottingAvailable = slotHeaderRowIndex !== -1 && slotCol !== -1 && roleCol !== -1;
 
-            console.log("RefData membership header row:", membershipHeaderRowIndex, { memberCol, squadCol });
-            console.log("RefData slotting:", slottingAvailable ? { slotHeaderRowIndex, slotCol, roleCol } : "NOT FOUND");
-
             const findMemberByLabel = (label) => {
               const labelNorm = this.normalize(label);
               if (!labelNorm) return null;
@@ -432,9 +521,7 @@ export default {
               if (!raw) return null;
 
               const ft = raw.match(/^(.*?)(?:\s+)?fireteam\s*(\d+)\s*$/i);
-              if (ft) {
-                return { squad: ft[1].trim(), fireteam: `Fireteam ${ft[2].trim()}` };
-              }
+              if (ft) return { squad: ft[1].trim(), fireteam: `Fireteam ${ft[2].trim()}` };
 
               const n = this.normalize(raw);
               const singles = [
@@ -446,9 +533,7 @@ export default {
                 "caladrius",
                 "chalk actual",
               ];
-              if (singles.includes(n)) {
-                return { squad: raw.trim(), fireteam: "Element" };
-              }
+              if (singles.includes(n)) return { squad: raw.trim(), fireteam: "Element" };
 
               return null;
             };
@@ -500,8 +585,6 @@ export default {
                 });
               }
             }
-
-            console.log("Parsed slot entries:", slotEntries.length);
 
             const ALWAYS_SQUADS = [
               "Chalk Actual",
@@ -574,7 +657,6 @@ export default {
               })),
             }));
 
-            console.log("ORBAT built:", this.orbat.length);
             resolve(this.orbat);
           },
           error: reject,
@@ -582,6 +664,9 @@ export default {
       });
     },
 
+    /* ===============================================================
+     *  MISSIONS / EVENTS
+     * =============================================================== */
     async importMissions(files) {
       const contents = await Promise.all(Object.values(files).map((f) => f()));
       contents.forEach((c) => {
