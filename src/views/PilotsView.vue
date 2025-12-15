@@ -14,24 +14,6 @@
         <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
 
         <div v-else class="hierarchy-container">
-          <!-- TOP: BROADSWORD COMMAND (moved above Chalk Actual) -->
-          <div v-if="hierarchy.broadswordCommand" class="orbat-row center-row actual-row">
-            <div class="squad-row single">
-              <div class="squad-card" @click="openSquad(hierarchy.broadswordCommand)">
-                <div class="squad-header">
-                  <div class="squad-insignia">
-                    <span>{{ squadInitials(hierarchy.broadswordCommand.squad) }}</span>
-                  </div>
-                  <div class="squad-meta">
-                    <h2>{{ hierarchy.broadswordCommand.squad }}</h2>
-                    <p class="squad-subtitle">{{ squadDescriptor(hierarchy.broadswordCommand.squad) }}</p>
-                    <p class="squad-count">{{ personnelCount(hierarchy.broadswordCommand) }} PERSONNEL</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- TOP: CHALK ACTUAL -->
           <div v-if="hierarchy.chalkActual" class="orbat-row center-row actual-row">
             <div class="squad-row single">
@@ -73,7 +55,7 @@
             </div>
           </div>
 
-          <!-- SUPPORT (excluding Broadsword Command because it's now top) -->
+          <!-- SUPPORT -->
           <div v-if="hierarchy.support.length" class="orbat-row">
             <div class="squad-row three">
               <div
@@ -237,6 +219,16 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
+                      <p><strong>OPs Attended:</strong> {{ opsAttended(slot.member) !== null ? opsAttended(slot.member) : 'N/A' }}</p>
+
+                      <p><strong>Next Promotion:</strong>
+                        <span v-if="opsToNextPromotion(slot.member).remaining === null">N/A</span>
+                        <span v-else-if="opsToNextPromotion(slot.member).nextRank">
+                          {{ opsToNextPromotion(slot.member).nextRank }} in {{ opsToNextPromotion(slot.member).remaining }} OPs
+                        </span>
+                        <span v-else>MAX / N/A</span>
+                      </p>
+
                       <!-- DISPOSABLE CHECKBOX -->
                       <div class="loadout-row">
                         <label class="disposable">
@@ -294,15 +286,12 @@
 
       </div>
     </div>
-
-    <!-- UI SFX (click): user-gesture safe because openSquad is triggered by a click -->
-    <audio ref="orbatClickAudio" preload="auto">
-      <source src="/Orbat Main Menu Click.ogg" type="audio/ogg" />
-    </audio>
   </section>
 </template>
 
 <script>
+import Papa from "papaparse";
+
 export default {
   name: "PilotsView",
   props: {
@@ -312,6 +301,11 @@ export default {
   data() {
     return {
       activeSquad: null,
+
+      // Ops tracking (loaded from Google Sheet)
+      opsEntries: [], // [{ labelNorm, ops }]
+      opsById: {},    // { [memberId]: number }
+      opsLoaded: false,
 
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
@@ -330,17 +324,28 @@ export default {
       },
     };
   },
+
+  mounted() {
+    this.loadOpsCSV();
+  },
+
+  watch: {
+    members: {
+      handler() { this.rebuildOpsMap(); },
+      deep: false,
+    },
+  },
+
   computed: {
     hierarchy() {
-      const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
+      const groups = { chalkActual: null, chalks: [], support: [], other: [] };
 
       (this.orbat || []).forEach((sq) => {
         const n = String(sq.squad || "").trim().toLowerCase();
 
-        if (n === "broadsword command") groups.broadswordCommand = sq;
-        else if (n === "chalk actual") groups.chalkActual = sq;
+        if (n === "chalk actual") groups.chalkActual = sq;
         else if (["chalk 1","chalk 2","chalk 3","chalk 4"].includes(n)) groups.chalks.push(sq);
-        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n))
+        else if (["broadsword command","broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n))
           groups.support.push(sq);
         else groups.other.push(sq);
       });
@@ -376,55 +381,6 @@ export default {
           return String(a.name).localeCompare(String(b.name), undefined, {numeric:true});
         });
 
-        // Sort slots within each fireteam by rank (highest -> lowest), with VACANT/CLOSED last
-        const rankOrder = [
-          // Officers / leadership (if you have them)
-          "MAJ","CAPT","1STLT","2NDLT",
-          // Warrant
-          "CWO5","CWO4","CWO3","CWO2","WO",
-          // Senior NCO
-          "GYSGT","SSGT","SGT","CPL","LCPL",
-          // Enlisted
-          "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
-          // Navy medical (if used)
-          "HMC","HM1","HM2","HM3","HN","HA","HR",
-        ];
-
-        const normalizeRank = (r) => String(r || "").trim().toUpperCase().replace(/\s+/g, "");
-        const rankScore = (r) => {
-          const rr = normalizeRank(r);
-          const idx = rankOrder.indexOf(rr);
-          return idx === -1 ? 999 : idx;
-        };
-
-        const statusScore = (s) => {
-          const st = String(s || "").toUpperCase();
-          if (st === "FILLED") return 0;
-          if (st === "VACANT") return 1;
-          if (st === "CLOSED") return 2;
-          return 3;
-        };
-
-        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-
-        sorted.forEach((ft) => {
-          ft.slots = (ft.slots || []).slice().sort((a, b) => {
-            const as = statusScore(a.status);
-            const bs = statusScore(b.status);
-            if (as !== bs) return as - bs;
-
-            if (a.status !== "FILLED" || b.status !== "FILLED") {
-              return collator.compare(String(a.role || ""), String(b.role || ""));
-            }
-
-            const ar = rankScore(a.member?.rank);
-            const br = rankScore(b.member?.rank);
-            if (ar !== br) return ar - br;
-
-            return collator.compare(String(a.member?.name || ""), String(b.member?.name || ""));
-          });
-        });
-
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
@@ -443,7 +399,7 @@ export default {
 
       let points = 0;
       const errors = [];
-      const explosiveTaken = new Set();
+      const explosiveTaken = new Set(); // disposable/grenadier/antitank (no duplicates)
 
       const slots = [];
       this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((s) => slots.push(s)));
@@ -478,22 +434,134 @@ export default {
       return { valid: errors.length === 0, points, errors };
     },
   },
+
   methods: {
-    playOrbatClick() {
-      const a = this.$refs.orbatClickAudio;
-      if (!a || typeof a.play !== "function") return;
-      try {
-        a.currentTime = 0;
-        a.play().catch(() => {});
-      } catch {
-        // ignore
+    /* ===============================================================
+     *  OPS TRACKING (Google Sheet -> Ops attended)
+     * =============================================================== */
+    async loadOpsCSV() {
+      // Published sheet tab (gid=1413636180) - output as CSV
+      const opsUrl =
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1413636180&single=true&output=csv";
+
+      return new Promise((resolve) => {
+        Papa.parse(opsUrl, {
+          download: true,
+          skipEmptyLines: true,
+          header: false,
+          complete: (results) => {
+            const rows = results.data || [];
+
+            // Row 1 is usually headers: "Rank/Number/Name" ... "OPs attended"
+            const body = rows.slice(1);
+
+            this.opsEntries = body
+              .map((r) => {
+                const label = String(r?.[0] ?? "").trim(); // Column A
+                const opsRaw = r?.[2]; // Column C
+                const ops = Number.parseInt(String(opsRaw ?? "").trim(), 10);
+
+                if (!label) return null;
+                if (this.normalize(label) === this.normalize("Rank/Number/Name")) return null;
+                if (!Number.isFinite(ops)) return null;
+
+                return { labelNorm: this.normalize(label), ops };
+              })
+              .filter(Boolean);
+
+            this.opsLoaded = true;
+            this.rebuildOpsMap();
+            resolve(this.opsEntries);
+          },
+          error: () => {
+            // If it fails, just keep the UI usable (ops will show N/A)
+            this.opsEntries = [];
+            this.opsLoaded = true;
+            this.opsById = {};
+            resolve([]);
+          },
+        });
+      });
+    },
+
+    rebuildOpsMap() {
+      if (!this.opsLoaded) return;
+      const map = {};
+
+      (this.members || []).forEach((m) => {
+        const nameNorm = this.normalize(m?.name);
+        if (!nameNorm) return;
+
+        const found = (this.opsEntries || []).find((e) => e.labelNorm.includes(nameNorm));
+        if (found && m?.id) map[m.id] = found.ops;
+      });
+
+      this.opsById = map;
+    },
+
+    opsAttended(member) {
+      if (!member?.id) return null;
+      const v = this.opsById?.[member.id];
+      return Number.isFinite(v) ? v : null;
+    },
+
+    promoInfo(rankCode) {
+      const r = String(rankCode || "").trim().toUpperCase();
+
+      const tracks = [
+        // Enlisted
+        [
+          { code: "PVT", req: 2 },
+          { code: "PFC", req: 10 },
+          { code: "SPC", req: 20 },
+          { code: "SPC2", req: 30 },
+          { code: "SPC3", req: 40 },
+          { code: "SPC4", req: 50 },
+        ],
+        // Corpsman
+        [
+          { code: "HA", req: 2 },
+          { code: "HN", req: 10 },
+          { code: "HM3", req: 20 },
+          { code: "HM2", req: 30 },
+        ],
+        // Warrant
+        [
+          { code: "CWO2", req: 10 },
+          { code: "CWO3", req: 20 },
+          { code: "CWO4", req: 30 },
+        ],
+      ];
+
+      for (const track of tracks) {
+        const idx = track.findIndex((x) => x.code === r);
+        if (idx !== -1) {
+          const next = track[idx + 1] || null;
+          return {
+            currentReq: track[idx].req,
+            nextRank: next?.code || null,
+            nextReq: next?.req || null,
+          };
+        }
       }
+
+      return { currentReq: null, nextRank: null, nextReq: null };
+    },
+
+    opsToNextPromotion(member) {
+      const ops = this.opsAttended(member);
+      if (!Number.isFinite(ops)) return { nextRank: null, remaining: null };
+
+      const info = this.promoInfo(member?.rank);
+      if (!info?.nextRank || !Number.isFinite(info.nextReq)) {
+        return { nextRank: null, remaining: 0 }; // max/unknown
+      }
+
+      const remaining = Math.max(0, info.nextReq - ops);
+      return { nextRank: info.nextRank, remaining };
     },
 
     openSquad(sq) {
-      // Play click SFX on entering any squad view
-      this.playOrbatClick();
-
       this.activeSquad = sq;
     },
     closeSquad() {
@@ -539,11 +607,13 @@ export default {
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
     },
 
+    // ===== Vue 3-safe loadout helpers =====
     getLoadout(member) {
       const id = member?.id;
       if (!id) return { primary: "", disposable: false };
 
       if (!this.loadouts[id]) {
+        // Vue 3: direct assignment is reactive
         this.loadouts[id] = { primary: "", disposable: false };
       }
       return this.loadouts[id];
@@ -590,7 +660,7 @@ export default {
       const key = rank.trim().toUpperCase();
       const rankMap = {
         RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
-        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
+        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt",
         WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
         "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
         HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
@@ -601,6 +671,14 @@ export default {
     rankInsignia(rank) {
       const fileBase = this.rankCode(rank);
       return fileBase ? `/ranks/${fileBase}.png` : null;
+    },
+
+    normalize(str) {
+      return String(str || "")
+        .replace(/"/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
     },
   },
 };
