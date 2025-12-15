@@ -126,7 +126,7 @@ mounted() {
     // Don't push routes here — wait until user interaction (Authorize).
   },
 
-   methods: {
+methods: {
   /* ===============================================================
    *  LOGIN / STARTUP
    * =============================================================== */
@@ -175,44 +175,51 @@ mounted() {
   /* ===============================================================
    *  OPS / ATTENDANCE CSV
    *  - SAFE: never blocks rendering
-   *  - MATCHES: Rank + quoted names
+   *  - Matches your Ops sheet: Col A = name label, Col C = ops
    * =============================================================== */
-  async loadOpsCSV(opsUrl) {
-    return new Promise((resolve, reject) => {
+  loadOpsCSV(opsUrl) {
+    return new Promise((resolve) => {
       Papa.parse(opsUrl, {
         download: true,
         skipEmptyLines: true,
         header: false,
         complete: (results) => {
           const rows = (results.data || []).slice(1); // skip header row
-
           const opsMap = {};
 
           rows.forEach((row) => {
-            // Column A = Name, Column C = Ops
-            const rawName = String(row[0] || "").trim();
-            const ops = Number(row[2] || 0);
-
+            const rawName = String(row[0] || "").trim(); // col A
+            const rawOps = String(row[2] || "").trim();  // col C
             if (!rawName) return;
 
-            // Strip rank, quotes, normalize spacing
-            const normalizedName = rawName
-              .replace(/^.*?"|"/g, "")        // remove quotes
-              .replace(/^[A-Z0-9]+\s+/i, "")  // remove rank prefix
+            const ops = Number(rawOps);
+            if (Number.isNaN(ops)) return;
+
+            // Extract the quoted bit if present:  PFC "M. Jinter"  ->  M. Jinter
+            const quoted = rawName.match(/"([^"]+)"/);
+            const nameCore = quoted ? quoted[1] : rawName;
+
+            const key = String(nameCore)
+              .replace(/"/g, "")
               .replace(/\s+/g, " ")
               .trim()
               .toLowerCase();
 
-            opsMap[normalizedName] = ops;
+            opsMap[key] = ops;
           });
 
-          // Merge ops into existing members
-          this.members.forEach((member) => {
-            const key = member.name.toLowerCase();
-            member.opsAttended = opsMap[key] ?? null;
+          // Merge onto members (member.name is like: M. Jinter)
+          (this.members || []).forEach((m) => {
+            const key = String(m.name || "")
+              .replace(/"/g, "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .toLowerCase();
+
+            m.opsAttended = opsMap[key] ?? null;
           });
 
-          console.log("Ops attendance loaded:", opsMap);
+          console.log("Ops attendance merged onto members.");
           resolve();
         },
         error: (err) => {
@@ -222,51 +229,62 @@ mounted() {
       });
     });
   },
+
+
+     /* ===============================================================
+   *  OPS / PROMOTION SYSTEM
+   * =============================================================== */
+  rankKey(rank) {
+    return String(rank || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+  },
+
+  promotionLadderFor(rank) {
+    const r = this.rankKey(rank);
+
+    // thresholds represent the *next* milestone for the current rank
+    const ladders = {
+      // Enlisted / Infantry
+      PVT:  { nextAt: 2,  nextRank: "PFC" },
+      PFC:  { nextAt: 10, nextRank: "SPC" },
+      SPC:  { nextAt: 20, nextRank: "SPC2" },
+      SPC2: { nextAt: 30, nextRank: "SPC3" },
+      SPC3: { nextAt: 40, nextRank: "SPC4" },
+      SPC4: { nextAt: 50, nextRank: null },
+
+      // Corpsman ladder
+      HA:   { nextAt: 2,  nextRank: "HN" },
+      HN:   { nextAt: 10, nextRank: "HM3" },
+      HM3:  { nextAt: 20, nextRank: "HM2" },
+      HM2:  { nextAt: 30, nextRank: null },
+
+      // Warrant ladder
+      CWO2: { nextAt: 10, nextRank: "CWO3" },
+      CWO3: { nextAt: 20, nextRank: "CWO4" },
+      CWO4: { nextAt: 30, nextRank: null },
+    };
+
+    return ladders[r] || null;
+  },
+
+  opsToNextPromotion(member) {
+    const ops = Number(member?.opsAttended);
+    if (!Number.isFinite(ops)) return null;
+
+    const ladder = this.promotionLadderFor(member?.rank);
+    if (!ladder || !ladder.nextAt) return null;
+
+    return Math.max(0, ladder.nextAt - ops);
+  },
+
+  nextPromotionRank(member) {
+    const ladder = this.promotionLadderFor(member?.rank);
+    return ladder?.nextRank || null;
+  },
 },
 
-
-    /* ===============================================================
-     *  OPS / PROMOTION SYSTEM
-     *  - Reads Ops attended from Ops sheet (A=name label, C=ops)
-     *  - Computes ops-to-next promotion for known ladders
-     * =============================================================== */
-    rankKey(rank) {
-      return String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
-    },
-
-    promotionLadderFor(rank) {
-      const r = this.rankKey(rank);
-
-      const ENLISTED = [
-        { code: "RCT", req: 0 },   // optional baseline
-        { code: "PVT", req: 2 },
-        { code: "PFC", req: 10 },
-        { code: "SPC", req: 20 },
-        { code: "SPC2", req: 30 },
-        { code: "SPC3", req: 40 },
-        { code: "SPC4", req: 50 },
-      ];
-
-      const CORPSMAN = [
-        { code: "HA", req: 2 },
-        { code: "HN", req: 10 },
-        { code: "HM3", req: 20 },
-        { code: "HM2", req: 30 },
-      ];
-
-      const WARRANT = [
-        { code: "CWO2", req: 10 },
-        { code: "CWO3", req: 20 },
-        { code: "CWO4", req: 30 },
-      ];
-
-      if (ENLISTED.some((x) => x.code === r)) return ENLISTED;
-      if (CORPSMAN.some((x) => x.code === r)) return CORPSMAN;
-      if (WARRANT.some((x) => x.code === r)) return WARRANT;
-
-      // Unknown / officer / other tracks => no computed promotion
-      return null;
-    },
 
     computePromotion(rank, opsAttended) {
       const ladder = this.promotionLadderFor(rank);
