@@ -2,11 +2,14 @@
 	<header>
 		<div class="title clipped-x-large-forward">
 			<img class="logo" src="/faction-logos/Broadsword111.png" />
+
 			<div class="title-container">
+				<!-- PRIMARY TITLE (FIXED) -->
 				<div id="title-first-line" class="title-row">
-					<span id="title-header">{{ header.headerTitle }}</span>
-					<span id="title-subheader">{{ header.headerSubtitle }}</span>
+					<span id="title-header">UNSC TACNET</span>
 				</div>
+
+				<!-- SECONDARY LINE (STILL CONFIG-DRIVEN) -->
 				<div class="title-row">
 					<span id="subtitle-header">{{ header.subheaderTitle }}</span>
 					<span id="subtitle-subheader">// {{ header.subheaderSubtitle }}</span>
@@ -80,7 +83,7 @@ export default {
 	grid-column: span 2;
 }
 
-/* Keep visual consistency */
+/* Typography consistency */
 .location-row h4 {
 	text-transform: uppercase;
 	letter-spacing: 0.12em;
