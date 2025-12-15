@@ -26,9 +26,9 @@
 						<h4>Year</h4>
 						<span class="subtitle">{{ header.year }}</span>
 					</div>
-					<div id="planet">
-						<h4>Deployment Info</h4>
-						<span class="subtitle">{{ header.planet }}</span>
+					<div id="status">
+						<h4>status</h4>
+						<span class="subtitle">{{ header.status }}</span>
 					</div>
 				</div>
 
@@ -38,9 +38,9 @@
 						<h4>AO</h4>
 						<span class="subtitle">{{ header.AO }}</span>
 					</div>
-					<div id="Planet">
+					<div id="planet">
 						<h4>Planet</h4>
-						<span class="subtitle">{{ header.Planet }}</span>
+						<span class="subtitle">{{ header.planet }}</span>
 					</div>
 					<div id="system">
 						<h4>System</h4>
