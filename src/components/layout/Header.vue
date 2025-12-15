@@ -66,12 +66,13 @@ export default {
 };
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 /* Align both rows to the same 3-column grid */
 .location-row.grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	column-gap: 1.2rem;
+	align-items: end;
 }
 
 /* Status spans Planet + System columns */
@@ -79,7 +80,7 @@ export default {
 	grid-column: span 2;
 }
 
-/* Optional: keep visual consistency */
+/* Keep visual consistency */
 .location-row h4 {
 	text-transform: uppercase;
 	letter-spacing: 0.12em;
