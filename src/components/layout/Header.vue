@@ -35,7 +35,7 @@
 				<!-- UNSC-flavoured line (still uses the same header fields under the hood) -->
 				<div id="system-gate-ring" class="location-row">
 					<div id="ring">
-						<h4>System</h4>
+						<h4>AO</h4>
 						<span class="subtitle">{{ header.ring }}</span>
 					</div>
 					<div id="gate">
@@ -43,7 +43,7 @@
 						<span class="subtitle">{{ header.gate }}</span>
 					</div>
 					<div id="system">
-						<h4>AO</h4>
+						<h4>System</h4>
 						<span class="subtitle">{{ header.system }}</span>
 					</div>
 				</div>
