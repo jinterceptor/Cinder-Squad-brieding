@@ -34,13 +34,13 @@
 
 				<!-- UNSC-flavoured line (still uses the same header fields under the hood) -->
 				<div id="system-gate-ring" class="location-row">
-					<div id="ring">
+					<div id="AO">
 						<h4>AO</h4>
-						<span class="subtitle">{{ header.ring }}</span>
+						<span class="subtitle">{{ header.AO }}</span>
 					</div>
-					<div id="gate">
+					<div id="Planet">
 						<h4>Planet</h4>
-						<span class="subtitle">{{ header.gate }}</span>
+						<span class="subtitle">{{ header.Planet }}</span>
 					</div>
 					<div id="system">
 						<h4>System</h4>
