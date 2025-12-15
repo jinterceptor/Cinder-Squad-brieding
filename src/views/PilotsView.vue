@@ -330,38 +330,41 @@ export default {
     activeFireteams() {
       if (!this.activeSquad) return [];
 
-      // Sorting helpers
-      const statusPriority = (s) => (s === "FILLED" ? 0 : s === "VACANT" ? 1 : 2);
-
-      const sortSlots = (slots) => {
-        return (slots || []).slice().sort((a, b) => {
-          const pa = statusPriority(a.status);
-          const pb = statusPriority(b.status);
-          if (pa !== pb) return pa - pb;
-
-          // FILLED: rank high -> low, then name
-          if (a.status === "FILLED" && b.status === "FILLED") {
-            const wa = this.rankWeight(a.member?.rank);
-            const wb = this.rankWeight(b.member?.rank);
-            if (wa !== wb) return wa - wb;
-
-            const na = String(a.member?.name || "");
-            const nb = String(b.member?.name || "");
-            return na.localeCompare(nb);
-          }
-
-          // VACANT/CLOSED: tidy by role
-          const ra = String(a.role || "");
-          const rb = String(b.role || "");
-          return ra.localeCompare(rb);
-        });
-      };
-
+      // If slotting exists, use those slots — but sort FILLED by rank (high -> low)
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
-        const sorted = this.activeSquad.fireteams.slice().map((ft) => ({
-          name: ft.name || "Element",
-          slots: sortSlots(ft.slots || []),
-        }));
+        const sorted = this.activeSquad.fireteams.slice().map((ft) => {
+          const slots = (ft.slots || []).slice();
+
+          // Keep VACANT/CLOSED at bottom; sort FILLED by rankWeight then name
+          slots.sort((a, b) => {
+            const aFilled = a.status === "FILLED" && a.member;
+            const bFilled = b.status === "FILLED" && b.member;
+
+            if (aFilled && bFilled) {
+              const ra = this.rankWeight(a.member.rank);
+              const rb = this.rankWeight(b.member.rank);
+              if (ra !== rb) return ra - rb;
+
+              const na = String(a.member.name || "");
+              const nb = String(b.member.name || "");
+              return na.localeCompare(nb);
+            }
+
+            if (aFilled && !bFilled) return -1;
+            if (!aFilled && bFilled) return 1;
+
+            // Both unfilled: stable-ish ordering by status then role
+            const sa = String(a.status || "");
+            const sb = String(b.status || "");
+            if (sa !== sb) return sa.localeCompare(sb);
+            return String(a.role || "").localeCompare(String(b.role || ""));
+          });
+
+          return {
+            name: ft.name || "Element",
+            slots,
+          };
+        });
 
         const orderKey = (n) => {
           const t = String(n || "").toLowerCase();
@@ -382,6 +385,7 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
+      // Fallback (no slotting): build from members and sort by rank
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -389,18 +393,15 @@ export default {
         map[ft].push({ status: "FILLED", role: m.slot || "Unassigned", member: m });
       });
 
-      return Object.entries(map).map(([name, slots]) => ({
-        name,
-        slots: (slots || []).slice().sort((a, b) => {
-          const wa = this.rankWeight(a.member?.rank);
-          const wb = this.rankWeight(b.member?.rank);
-          if (wa !== wb) return wa - wb;
-
-          const na = String(a.member?.name || "");
-          const nb = String(b.member?.name || "");
-          return na.localeCompare(nb);
-        }),
-      }));
+      return Object.entries(map).map(([name, slots]) => {
+        slots.sort((a, b) => {
+          const ra = this.rankWeight(a.member?.rank);
+          const rb = this.rankWeight(b.member?.rank);
+          if (ra !== rb) return ra - rb;
+          return String(a.member?.name || "").localeCompare(String(b.member?.name || ""));
+        });
+        return { name, slots };
+      });
     },
 
     squadLoadoutStatus() {
@@ -408,7 +409,7 @@ export default {
 
       let points = 0;
       const errors = [];
-      const explosiveTaken = new Set(); // disposable/grenadier/antitank (no duplicates)
+      const explosiveTaken = new Set();
 
       const slots = [];
       this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((s) => slots.push(s)));
@@ -485,6 +486,55 @@ export default {
       return "UNSC ELEMENT";
     },
 
+    // Higher rank => smaller number
+    rankWeight(rank) {
+      const key = String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
+
+      const ORDER = {
+        // Officers
+        MAJ: 0,
+        CAPT: 1,
+        "1STLT": 2,
+        "2NDLT": 3,
+
+        // Warrant Officers
+        CWO5: 4,
+        CWO4: 5,
+        CWO3: 6,
+        CWO2: 7,
+        WO: 8,
+
+        // Senior enlisted / NCO
+        SSGT: 9,
+        GYSGT: 10, // ✅ Gunnery Sergeant (new)
+        SGT: 11,
+        CPL: 12,
+        LCPL: 13,
+
+        // Specialists
+        SPC4: 14,
+        SPC3: 15,
+        SPC2: 16,
+        SPC: 17,
+
+        // Junior enlisted / recruit
+        PFC: 18,
+        PVT: 19,
+        RCT: 20,
+
+        // Corpsman/medical-style ranks
+        HMC: 9,
+        HM1: 13,
+        HM2: 15,
+        HM3: 17,
+        HN: 18,
+        HA: 19,
+        HR: 20,
+      };
+
+      return ORDER[key] ?? 999;
+    },
+
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -496,7 +546,6 @@ export default {
       if (!id) return { primary: "", disposable: false };
 
       if (!this.loadouts[id]) {
-        // Vue 3: direct assignment is reactive
         this.loadouts[id] = { primary: "", disposable: false };
       }
       return this.loadouts[id];
@@ -538,60 +587,13 @@ export default {
       return opts;
     },
 
-    // Higher rank => smaller number
-    rankWeight(rank) {
-      const key = String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
-
-      const ORDER = {
-        // Officers
-        MAJ: 0,
-        CAPT: 1,
-        "1STLT": 2,
-        "2NDLT": 3,
-
-        // Warrant Officers
-        CWO5: 4,
-        CWO4: 5,
-        CWO3: 6,
-        CWO2: 7,
-        WO: 8,
-
-        // Senior enlisted / NCO
-        SSGT: 9,
-        SGT: 10,
-        CPL: 11,
-        LCPL: 12,
-
-        // Specialists
-        SPC4: 13,
-        SPC3: 14,
-        SPC2: 15,
-        SPC: 16,
-
-        // Junior enlisted / recruit
-        PFC: 17,
-        PVT: 18,
-        RCT: 19,
-
-        // Corpsman/medical-style ranks
-        HMC: 9,
-        HM1: 12,
-        HM2: 14,
-        HM3: 16,
-        HN: 17,
-        HA: 18,
-        HR: 19,
-      };
-
-      return ORDER[key] ?? 999;
-    },
-
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
       const rankMap = {
         RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
         LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt",
+        GYSGT: "GySgt", // ✅ expects /ranks/GySgt.png
         WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
         "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
         HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
