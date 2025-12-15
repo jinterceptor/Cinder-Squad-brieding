@@ -14,7 +14,7 @@
         <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
 
         <div v-else class="hierarchy-container">
-          <!-- TOP: BROADSWORD COMMAND -->
+          <!-- TOP: BROADSWORD COMMAND (moved above Chalk Actual) -->
           <div v-if="hierarchy.broadswordCommand" class="orbat-row center-row actual-row">
             <div class="squad-row single">
               <div class="squad-card" @click="openSquad(hierarchy.broadswordCommand)">
@@ -73,7 +73,7 @@
             </div>
           </div>
 
-          <!-- SUPPORT (EXCLUDES BROADSWORD COMMAND NOW) -->
+          <!-- SUPPORT (excluding Broadsword Command because it's now top) -->
           <div v-if="hierarchy.support.length" class="orbat-row">
             <div class="squad-row three">
               <div
@@ -237,6 +237,7 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
+                      <!-- DISPOSABLE CHECKBOX -->
                       <div class="loadout-row">
                         <label class="disposable">
                           <input
@@ -248,6 +249,7 @@
                         </label>
                       </div>
 
+                      <!-- PRIMARY LOADOUT SELECT -->
                       <div class="loadout-row">
                         <label class="primary-label">Assigned Loadout</label>
                         <select
@@ -292,6 +294,11 @@
 
       </div>
     </div>
+
+    <!-- UI SFX (click): user-gesture safe because openSquad is triggered by a click -->
+    <audio ref="orbatClickAudio" preload="auto">
+      <source src="/Orbat Main Menu Click.ogg" type="audio/ogg" />
+    </audio>
   </section>
 </template>
 
@@ -348,34 +355,10 @@ export default {
       if (!this.activeSquad) return [];
 
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
-        const sorted = this.activeSquad.fireteams.slice().map((ft) => {
-          const slots = (ft.slots || []).slice();
-
-          slots.sort((a, b) => {
-            const aFilled = a.status === "FILLED" && a.member;
-            const bFilled = b.status === "FILLED" && b.member;
-
-            if (aFilled && bFilled) {
-              const ra = this.rankWeight(a.member.rank);
-              const rb = this.rankWeight(b.member.rank);
-              if (ra !== rb) return ra - rb;
-
-              const na = String(a.member.name || "");
-              const nb = String(b.member.name || "");
-              return na.localeCompare(nb);
-            }
-
-            if (aFilled && !bFilled) return -1;
-            if (!aFilled && bFilled) return 1;
-
-            const sa = String(a.status || "");
-            const sb = String(b.status || "");
-            if (sa !== sb) return sa.localeCompare(sb);
-            return String(a.role || "").localeCompare(String(b.role || ""));
-          });
-
-          return { name: ft.name || "Element", slots };
-        });
+        const sorted = this.activeSquad.fireteams.slice().map((ft) => ({
+          name: ft.name || "Element",
+          slots: (ft.slots || []).slice(),
+        }));
 
         const orderKey = (n) => {
           const t = String(n || "").toLowerCase();
@@ -393,6 +376,55 @@ export default {
           return String(a.name).localeCompare(String(b.name), undefined, {numeric:true});
         });
 
+        // Sort slots within each fireteam by rank (highest -> lowest), with VACANT/CLOSED last
+        const rankOrder = [
+          // Officers / leadership (if you have them)
+          "MAJ","CAPT","1STLT","2NDLT",
+          // Warrant
+          "CWO5","CWO4","CWO3","CWO2","WO",
+          // Senior NCO
+          "GYSGT","SSGT","SGT","CPL","LCPL",
+          // Enlisted
+          "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
+          // Navy medical (if used)
+          "HMC","HM1","HM2","HM3","HN","HA","HR",
+        ];
+
+        const normalizeRank = (r) => String(r || "").trim().toUpperCase().replace(/\s+/g, "");
+        const rankScore = (r) => {
+          const rr = normalizeRank(r);
+          const idx = rankOrder.indexOf(rr);
+          return idx === -1 ? 999 : idx;
+        };
+
+        const statusScore = (s) => {
+          const st = String(s || "").toUpperCase();
+          if (st === "FILLED") return 0;
+          if (st === "VACANT") return 1;
+          if (st === "CLOSED") return 2;
+          return 3;
+        };
+
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+        sorted.forEach((ft) => {
+          ft.slots = (ft.slots || []).slice().sort((a, b) => {
+            const as = statusScore(a.status);
+            const bs = statusScore(b.status);
+            if (as !== bs) return as - bs;
+
+            if (a.status !== "FILLED" || b.status !== "FILLED") {
+              return collator.compare(String(a.role || ""), String(b.role || ""));
+            }
+
+            const ar = rankScore(a.member?.rank);
+            const br = rankScore(b.member?.rank);
+            if (ar !== br) return ar - br;
+
+            return collator.compare(String(a.member?.name || ""), String(b.member?.name || ""));
+          });
+        });
+
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
@@ -403,15 +435,7 @@ export default {
         map[ft].push({ status: "FILLED", role: m.slot || "Unassigned", member: m });
       });
 
-      return Object.entries(map).map(([name, slots]) => {
-        slots.sort((a, b) => {
-          const ra = this.rankWeight(a.member?.rank);
-          const rb = this.rankWeight(b.member?.rank);
-          if (ra !== rb) return ra - rb;
-          return String(a.member?.name || "").localeCompare(String(b.member?.name || ""));
-        });
-        return { name, slots };
-      });
+      return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
 
     squadLoadoutStatus() {
@@ -455,8 +479,26 @@ export default {
     },
   },
   methods: {
-    openSquad(sq) { this.activeSquad = sq; },
-    closeSquad() { this.activeSquad = null; },
+    playOrbatClick() {
+      const a = this.$refs.orbatClickAudio;
+      if (!a || typeof a.play !== "function") return;
+      try {
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      } catch {
+        // ignore
+      }
+    },
+
+    openSquad(sq) {
+      // Play click SFX on entering any squad view
+      this.playOrbatClick();
+
+      this.activeSquad = sq;
+    },
+    closeSquad() {
+      this.activeSquad = null;
+    },
 
     personnelCount(sq) {
       if (sq.fireteams && sq.fireteams.length) {
@@ -490,48 +532,6 @@ export default {
       if (n.includes("air") || n.includes("wing") || n.includes("wyvern")) return "AVIATION SUPPORT";
       if (n.includes("command") || n.includes("actual")) return "COMMAND ELEMENT";
       return "UNSC ELEMENT";
-    },
-
-    rankWeight(rank) {
-      const key = String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
-
-      const ORDER = {
-        MAJ: 0,
-        CAPT: 1,
-        "1STLT": 2,
-        "2NDLT": 3,
-
-        CWO5: 4,
-        CWO4: 5,
-        CWO3: 6,
-        CWO2: 7,
-        WO: 8,
-
-        SSGT: 9,
-        GYSGT: 10,
-        SGT: 11,
-        CPL: 12,
-        LCPL: 13,
-
-        SPC4: 14,
-        SPC3: 15,
-        SPC2: 16,
-        SPC: 17,
-
-        PFC: 18,
-        PVT: 19,
-        RCT: 20,
-
-        HMC: 9,
-        HM1: 13,
-        HM2: 15,
-        HM3: 17,
-        HN: 18,
-        HA: 19,
-        HR: 20,
-      };
-
-      return ORDER[key] ?? 999;
     },
 
     hasCert(member, idx) {
@@ -590,8 +590,7 @@ export default {
       const key = rank.trim().toUpperCase();
       const rankMap = {
         RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
-        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt",
-        GYSGT: "GySgt",
+        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
         WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
         "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
         HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
