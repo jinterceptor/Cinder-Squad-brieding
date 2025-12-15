@@ -127,41 +127,103 @@ mounted() {
   },
 
   methods: {
-    authorize() {
-      if (this.isFading) return;
-      this.isFading = true;
+  /* ===============================================================
+   *  LOGIN / STARTUP
+   * =============================================================== */
+  authorize() {
+    if (this.isFading) return;
+    this.isFading = true;
 
-      const a = this.$refs.startupAudio;
-      if (a && typeof a.play === "function") {
-        a.currentTime = 0;
-        a.play().catch(() => {});
+    const a = this.$refs.startupAudio;
+    if (a && typeof a.play === "function") {
+      a.currentTime = 0;
+      a.play().catch(() => {});
+    }
+
+    setTimeout(() => {
+      this.showLogin = false;
+      this.isFading = false;
+
+      if (this.$router?.currentRoute?.value?.path !== "/status") {
+        this.$router.push("/status");
       }
+    }, 800);
+  },
 
-      setTimeout(() => {
-        this.showLogin = false;
-        this.isFading = false;
+  /* ===============================================================
+   *  STRING NORMALIZATION (shared)
+   * =============================================================== */
+  normalize(str) {
+    return String(str || "")
+      .replace(/"/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  },
 
-        if (this.$router?.currentRoute?.value?.path !== "/status") {
-          this.$router.push("/status");
-        }
-      }, 800);
-    },
+  /* ===============================================================
+   *  TITLE / FAVICON
+   * =============================================================== */
+  setTitleFavicon(title, favicon) {
+    document.title = title;
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.href = favicon;
+    document.head.appendChild(link);
+  },
 
-    normalize(str) {
-      return String(str || "")
-        .replace(/"/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-    },
+  /* ===============================================================
+   *  OPS / ATTENDANCE CSV
+   *  - SAFE: never blocks rendering
+   *  - MATCHES: Rank + quoted names
+   * =============================================================== */
+  async loadOpsCSV(opsUrl) {
+    return new Promise((resolve, reject) => {
+      Papa.parse(opsUrl, {
+        download: true,
+        skipEmptyLines: true,
+        header: false,
+        complete: (results) => {
+          const rows = (results.data || []).slice(1); // skip header row
 
-    setTitleFavicon(title, favicon) {
-      document.title = title;
-      const link = document.createElement("link");
-      link.rel = "icon";
-      link.href = favicon;
-      document.head.appendChild(link);
-    },
+          const opsMap = {};
+
+          rows.forEach((row) => {
+            // Column A = Name, Column C = Ops
+            const rawName = String(row[0] || "").trim();
+            const ops = Number(row[2] || 0);
+
+            if (!rawName) return;
+
+            // Strip rank, quotes, normalize spacing
+            const normalizedName = rawName
+              .replace(/^.*?"|"/g, "")        // remove quotes
+              .replace(/^[A-Z0-9]+\s+/i, "")  // remove rank prefix
+              .replace(/\s+/g, " ")
+              .trim()
+              .toLowerCase();
+
+            opsMap[normalizedName] = ops;
+          });
+
+          // Merge ops into existing members
+          this.members.forEach((member) => {
+            const key = member.name.toLowerCase();
+            member.opsAttended = opsMap[key] ?? null;
+          });
+
+          console.log("Ops attendance loaded:", opsMap);
+          resolve();
+        },
+        error: (err) => {
+          console.warn("Ops CSV failed to load (non-fatal)", err);
+          resolve(); // never block app
+        },
+      });
+    });
+  },
+},
+
 
     /* ===============================================================
      *  OPS / PROMOTION SYSTEM
