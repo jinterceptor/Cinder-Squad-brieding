@@ -57,6 +57,11 @@
   <audio ref="startupAudio" preload="auto">
     <source src="/startup.ogg" type="audio/ogg" />
   </audio>
+
+  <!-- ORBAT UI SFX: browse between menus/routes -->
+  <audio ref="orbatBrowseAudio" preload="auto">
+    <source src="/Orbat Main Menu Browse.ogg" type="audio/ogg" />
+  </audio>
 </template>
 
 <script>
@@ -72,6 +77,9 @@ export default {
     return {
       showLogin: true,
       isFading: false,
+
+      // gate menu-browse SFX until AFTER login + initial route settle
+      browseSfxEnabled: false,
 
       animate: Config.animate,
       initialSlug: Config.initialSlug,
@@ -109,13 +117,41 @@ export default {
     // Don't push routes here — wait until user interaction (Authorize).
   },
 
+  watch: {
+    // Menu browse SFX on any route change (status/events/roster/etc.)
+    $route(to, from) {
+      if (this.showLogin) return;
+      if (!this.browseSfxEnabled) return;
+      if (!from || to.fullPath === from.fullPath) return;
+
+      this.playBrowseSfx();
+    },
+  },
+
   methods: {
+    playBrowseSfx() {
+      const a = this.$refs.orbatBrowseAudio;
+      if (!a || typeof a.play !== "function") return;
+
+      try {
+        a.currentTime = 0;
+        a.play().catch(() => {
+          // fail silently if blocked (rare after initial click)
+        });
+      } catch {
+        // ignore
+      }
+    },
+
     authorize() {
       // Prevent double-click / double fade
       if (this.isFading) return;
 
       // Start fade
       this.isFading = true;
+
+      // Ensure browse SFX doesn't fire during initial post-login routing
+      this.browseSfxEnabled = false;
 
       // Play startup sound immediately on the click (gesture-safe)
       const a = this.$refs.startupAudio;
@@ -126,14 +162,22 @@ export default {
         });
       }
 
-      // Wait for fade to finish, then mount UI + route (startup anim will now be visible)
+      // Wait for fade to finish, then mount UI + route
       setTimeout(() => {
         this.showLogin = false;
         this.isFading = false;
 
-        if (this.$router?.currentRoute?.value?.path !== "/status") {
-          this.$router.push("/status");
-        }
+        const goStatus =
+          this.$router?.currentRoute?.value?.path !== "/status"
+            ? this.$router.push("/status").catch(() => {})
+            : Promise.resolve();
+
+        // Enable browse SFX shortly AFTER initial route settles
+        Promise.resolve(goStatus).then(() => {
+          setTimeout(() => {
+            this.browseSfxEnabled = true;
+          }, 250);
+        });
       }, 800);
     },
 
