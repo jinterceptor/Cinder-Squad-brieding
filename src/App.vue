@@ -87,31 +87,40 @@ export default {
     };
   },
 
-  created() {
-    this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
+ created() {
+  // Theme: make the browser title read more UNSC-friendly
+  this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
 
-    this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
-    this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
+  this.importMissions(
+    import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" })
+  );
+  this.importEvents(
+    import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" })
+  );
 
-    const membersUrl =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv";
+  const membersUrl =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv";
 
-    const refDataUrl =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
+  const refDataUrl =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
 
-    // OPS sheet (your link’s gid)
-    const opsUrl =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
+  const opsUrl =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
 
-    // Load members -> merge ops -> then build ORBAT
-    this.loadMembersCSV(membersUrl)
-  .then(() => this.loadRefDataCSV(refDataUrl))
-  .then(() => {
-    // Fire-and-forget ops loading (never blocks)
-    this.loadOpsCSV(opsUrl).catch((err) => {
-      console.warn("Ops CSV failed to load, continuing without ops data.", err);
+  // Load members → build ORBAT → then attempt ops (non-blocking)
+  this.loadMembersCSV(membersUrl)
+    .then(() => this.loadRefDataCSV(refDataUrl))
+    .then(() => {
+      // Fire-and-forget ops loading (never blocks UI)
+      this.loadOpsCSV(opsUrl).catch((err) => {
+        console.warn(
+          "Ops CSV failed to load, continuing without ops data.",
+          err
+        );
+      });
     });
-  });
+},
+
 
 mounted() {
     // Don't push routes here — wait until user interaction (Authorize).
