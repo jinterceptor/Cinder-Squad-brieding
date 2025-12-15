@@ -13,6 +13,7 @@
 				</div>
 			</div>
 		</div>
+
 		<div class="rhombus"></div>
 
 		<div class="planet-location-container">
@@ -21,27 +22,31 @@
 			</video>
 
 			<div class="location-info">
-				<div id="planet-year" class="location-row">
+				<!-- ROW 1 -->
+				<div class="location-row grid">
 					<div id="year">
 						<h4>Year</h4>
 						<span class="subtitle">{{ header.year }}</span>
 					</div>
-					<div id="status">
-						<h4>status</h4>
+
+					<div id="status" class="span-2">
+						<h4>Status</h4>
 						<span class="subtitle">{{ header.status }}</span>
 					</div>
 				</div>
 
-				<!-- UNSC-flavoured line (still uses the same header fields under the hood) -->
-				<div id="system-gate-ring" class="location-row">
+				<!-- ROW 2 -->
+				<div class="location-row grid">
 					<div id="AO">
 						<h4>AO</h4>
 						<span class="subtitle">{{ header.AO }}</span>
 					</div>
+
 					<div id="planet">
 						<h4>Planet</h4>
 						<span class="subtitle">{{ header.planet }}</span>
 					</div>
+
 					<div id="system">
 						<h4>System</h4>
 						<span class="subtitle">{{ header.system }}</span>
@@ -61,4 +66,28 @@ export default {
 };
 </script>
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+/* Align both rows to the same 3-column grid */
+.location-row.grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	column-gap: 1.2rem;
+}
+
+/* Status spans Planet + System columns */
+.span-2 {
+	grid-column: span 2;
+}
+
+/* Optional: keep visual consistency */
+.location-row h4 {
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	font-size: 0.7rem;
+}
+
+.subtitle {
+	font-size: 0.85rem;
+	letter-spacing: 0.08em;
+}
+</style>
