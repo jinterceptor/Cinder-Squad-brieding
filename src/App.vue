@@ -101,7 +101,7 @@ export default {
 
     // OPS sheet (your link’s gid)
     const opsUrl =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1413636180&single=true&output=csv";
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
 
     // Load members -> merge ops -> then build ORBAT
     this.loadMembersCSV(membersUrl)
