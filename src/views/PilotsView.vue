@@ -14,6 +14,24 @@
         <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
 
         <div v-else class="hierarchy-container">
+          <!-- TOP: BROADSWORD COMMAND -->
+          <div v-if="hierarchy.broadswordCommand" class="orbat-row center-row actual-row">
+            <div class="squad-row single">
+              <div class="squad-card" @click="openSquad(hierarchy.broadswordCommand)">
+                <div class="squad-header">
+                  <div class="squad-insignia">
+                    <span>{{ squadInitials(hierarchy.broadswordCommand.squad) }}</span>
+                  </div>
+                  <div class="squad-meta">
+                    <h2>{{ hierarchy.broadswordCommand.squad }}</h2>
+                    <p class="squad-subtitle">{{ squadDescriptor(hierarchy.broadswordCommand.squad) }}</p>
+                    <p class="squad-count">{{ personnelCount(hierarchy.broadswordCommand) }} PERSONNEL</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- TOP: CHALK ACTUAL -->
           <div v-if="hierarchy.chalkActual" class="orbat-row center-row actual-row">
             <div class="squad-row single">
@@ -55,7 +73,7 @@
             </div>
           </div>
 
-          <!-- SUPPORT -->
+          <!-- SUPPORT (EXCLUDES BROADSWORD COMMAND NOW) -->
           <div v-if="hierarchy.support.length" class="orbat-row">
             <div class="squad-row three">
               <div
@@ -219,7 +237,6 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
-                      <!-- DISPOSABLE CHECKBOX -->
                       <div class="loadout-row">
                         <label class="disposable">
                           <input
@@ -231,7 +248,6 @@
                         </label>
                       </div>
 
-                      <!-- PRIMARY LOADOUT SELECT -->
                       <div class="loadout-row">
                         <label class="primary-label">Assigned Loadout</label>
                         <select
@@ -309,14 +325,15 @@ export default {
   },
   computed: {
     hierarchy() {
-      const groups = { chalkActual: null, chalks: [], support: [], other: [] };
+      const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
 
       (this.orbat || []).forEach((sq) => {
         const n = String(sq.squad || "").trim().toLowerCase();
 
-        if (n === "chalk actual") groups.chalkActual = sq;
+        if (n === "broadsword command") groups.broadswordCommand = sq;
+        else if (n === "chalk actual") groups.chalkActual = sq;
         else if (["chalk 1","chalk 2","chalk 3","chalk 4"].includes(n)) groups.chalks.push(sq);
-        else if (["broadsword command","broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n))
+        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n))
           groups.support.push(sq);
         else groups.other.push(sq);
       });
@@ -330,12 +347,10 @@ export default {
     activeFireteams() {
       if (!this.activeSquad) return [];
 
-      // If slotting exists, use those slots — but sort FILLED by rank (high -> low)
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
         const sorted = this.activeSquad.fireteams.slice().map((ft) => {
           const slots = (ft.slots || []).slice();
 
-          // Keep VACANT/CLOSED at bottom; sort FILLED by rankWeight then name
           slots.sort((a, b) => {
             const aFilled = a.status === "FILLED" && a.member;
             const bFilled = b.status === "FILLED" && b.member;
@@ -353,17 +368,13 @@ export default {
             if (aFilled && !bFilled) return -1;
             if (!aFilled && bFilled) return 1;
 
-            // Both unfilled: stable-ish ordering by status then role
             const sa = String(a.status || "");
             const sb = String(b.status || "");
             if (sa !== sb) return sa.localeCompare(sb);
             return String(a.role || "").localeCompare(String(b.role || ""));
           });
 
-          return {
-            name: ft.name || "Element",
-            slots,
-          };
+          return { name: ft.name || "Element", slots };
         });
 
         const orderKey = (n) => {
@@ -385,7 +396,6 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
-      // Fallback (no slotting): build from members and sort by rank
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -445,12 +455,8 @@ export default {
     },
   },
   methods: {
-    openSquad(sq) {
-      this.activeSquad = sq;
-    },
-    closeSquad() {
-      this.activeSquad = null;
-    },
+    openSquad(sq) { this.activeSquad = sq; },
+    closeSquad() { this.activeSquad = null; },
 
     personnelCount(sq) {
       if (sq.fireteams && sq.fireteams.length) {
@@ -486,43 +492,36 @@ export default {
       return "UNSC ELEMENT";
     },
 
-    // Higher rank => smaller number
     rankWeight(rank) {
       const key = String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
 
       const ORDER = {
-        // Officers
         MAJ: 0,
         CAPT: 1,
         "1STLT": 2,
         "2NDLT": 3,
 
-        // Warrant Officers
         CWO5: 4,
         CWO4: 5,
         CWO3: 6,
         CWO2: 7,
         WO: 8,
 
-        // Senior enlisted / NCO
         SSGT: 9,
-        GYSGT: 10, // ✅ Gunnery Sergeant (new)
+        GYSGT: 10,
         SGT: 11,
         CPL: 12,
         LCPL: 13,
 
-        // Specialists
         SPC4: 14,
         SPC3: 15,
         SPC2: 16,
         SPC: 17,
 
-        // Junior enlisted / recruit
         PFC: 18,
         PVT: 19,
         RCT: 20,
 
-        // Corpsman/medical-style ranks
         HMC: 9,
         HM1: 13,
         HM2: 15,
@@ -540,7 +539,6 @@ export default {
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
     },
 
-    // ===== Vue 3-safe loadout helpers =====
     getLoadout(member) {
       const id = member?.id;
       if (!id) return { primary: "", disposable: false };
@@ -593,7 +591,7 @@ export default {
       const rankMap = {
         RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
         LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt",
-        GYSGT: "GySgt", // ✅ expects /ranks/GySgt.png
+        GYSGT: "GySgt",
         WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
         "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
         HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
