@@ -105,9 +105,13 @@ export default {
 
     // Load members -> merge ops -> then build ORBAT
     this.loadMembersCSV(membersUrl)
-      .then(() => this.loadOpsCSV(opsUrl))
-      .then(() => this.loadRefDataCSV(refDataUrl));
-  },
+  .then(() => this.loadRefDataCSV(refDataUrl))
+  .then(() => {
+    // Fire-and-forget ops loading (never blocks)
+    this.loadOpsCSV(opsUrl).catch((err) => {
+      console.warn("Ops CSV failed to load, continuing without ops data.", err);
+    });
+  });
 
   mounted() {
     // Don't push routes here — wait until user interaction (Authorize).
