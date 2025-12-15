@@ -126,7 +126,7 @@ mounted() {
     // Don't push routes here — wait until user interaction (Authorize).
   },
 
-  methods: {
+   methods: {
   /* ===============================================================
    *  LOGIN / STARTUP
    * =============================================================== */
