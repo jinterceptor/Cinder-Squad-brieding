@@ -497,11 +497,11 @@ export default {
       const rk = alias[key] || key;
 
       const rules = {
-        PVT:  { nextRank: "PFC",  nextAt: 2,  misc: null },
-        PFC:  { nextRank: "SPC",  nextAt: 10, misc: null },
-        SPC:  { nextRank: "SPC2", nextAt: 20, misc: null },
-        SPC2: { nextRank: "SPC3", nextAt: 30, misc: null },
-        SPC3: { nextRank: "SPC4", nextAt: 40, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
+        PVT:  { nextRank: "PFC",  nextAt: 10,  misc: null },
+        PFC:  { nextRank: "SPC",  nextAt: 20, misc: null },
+        SPC:  { nextRank: "SPC2", nextAt: 30, misc: null },
+        SPC2: { nextRank: "SPC3", nextAt: 40, misc: null },
+        SPC3: { nextRank: "SPC4", nextAt: 50, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
         SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
         LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
         CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
@@ -513,10 +513,10 @@ export default {
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
 
-        HA:  { nextRank: "HN",  nextAt: 2,  misc: null },
-        HN:  { nextRank: "HM3", nextAt: 10, misc: null },
-        HM3: { nextRank: "HM2", nextAt: 20, misc: null },
-        HM2: { nextRank: "HM1", nextAt: 30, misc: null },
+        HA:  { nextRank: "HN",  nextAt: 10,  misc: null },
+        HN:  { nextRank: "HM3", nextAt: 20, misc: null },
+        HM3: { nextRank: "HM2", nextAt: 30, misc: null },
+        HM2: { nextRank: "HM1", nextAt: null, misc: null },
         HM1: { nextRank: "HMC", nextAt: null, misc: "Assigned to Corpsman slot & Medic Trainer" },
         HMC: { nextRank: null,  nextAt: null, misc: null },
 
