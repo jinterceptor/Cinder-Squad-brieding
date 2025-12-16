@@ -111,7 +111,7 @@
                   </div>
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
+                    <p class="squad-subtitle>{{ squadDescriptor(sq.squad) }}</p>
                     <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
                   </div>
                 </div>
@@ -186,9 +186,11 @@
 
                   <div class="member-body">
                     <div class="member-column left">
-                      <p><strong>Squad:</strong> {{ activeSquad.squad }}</p>
-                      <p><strong>Fireteam:</strong> {{ ft.name }}</p>
-                      <p><strong>Role:</strong> {{ slot.role }}</p>
+                      <!-- removed Squad/Fireteam lines per request -->
+                      <p class="detail-line">
+                        <strong>Role:</strong>
+                        <span class="accent">{{ slot.role }}</span>
+                      </p>
                     </div>
                     <div class="member-column right">
                       <p><strong>Certifications:</strong></p>
@@ -198,7 +200,7 @@
 
                   <div class="member-footer">
                     <span>SLOT STATUS: {{ slot.status }}</span>
-                    <span>UNSC ORBAT</span>
+                    <span>UNSC SYSTEMS DATABASE</span>
                   </div>
                 </template>
 
@@ -224,26 +226,37 @@
 
                   <div class="member-body">
                     <div class="member-column left">
-                      <p><strong>Squad:</strong> {{ slot.member?.squad || activeSquad.squad }}</p>
-                      <p><strong>Fireteam:</strong> {{ slot.member?.fireteam || ft.name }}</p>
-                      <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
-                      <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
+                      <!-- removed Squad/Fireteam lines per request -->
+                      <p class="detail-line">
+                        <strong>Role:</strong>
+                        <span class="accent">{{ slot.role || slot.member?.slot || 'Unassigned' }}</span>
+                      </p>
+                      <p class="detail-line">
+                        <strong>Join Date:</strong>
+                        <span class="accent">{{ slot.member?.joinDate || 'Unknown' }}</span>
+                      </p>
 
                       <!-- Ops + promo -->
                       <div
                         class="ops-promo"
                         :class="{ imminent: opsToNextPromotion(slot.member) === 1 || opsToNextPromotion(slot.member) === 0 }"
                       >
-                        <p><strong>Ops Attended:</strong> {{ formatOps(getOps(slot.member)) }}</p>
-                        <p>
+                        <p class="detail-line">
+                          <strong>Ops Attended:</strong>
+                          <span class="accent-strong">{{ formatOps(getOps(slot.member)) }}</span>
+                        </p>
+                        <p class="detail-line">
                           <strong>Next Rank:</strong>
-                          {{ nextPromotion(slot.member)?.nextRank || '—' }}
-                          <span v-if="opsToNextPromotion(slot.member) !== null">
+                          <span class="accent-strong">
+                            {{ nextPromotion(slot.member)?.nextRank || '—' }}
+                          </span>
+                          <span v-if="opsToNextPromotion(slot.member) !== null" class="accent">
                             ({{ opsToNextPromotion(slot.member) }} ops)
                           </span>
                         </p>
                         <p v-if="nextPromotion(slot.member)?.misc">
-                          <strong>Requirements:</strong> {{ nextPromotion(slot.member).misc }}
+                          <strong>Requirements:</strong>
+                          <span class="accent">{{ nextPromotion(slot.member).misc }}</span>
                         </p>
                       </div>
 
@@ -469,7 +482,6 @@ export default {
 
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
-      // canonicalize a few full names → abbreviations
       const alias = {
         PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
         SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
@@ -487,31 +499,23 @@ export default {
       };
       const rk = alias[key] || key;
 
-      // Your table (next rank, ops needed, misc requirements)
       const rules = {
-        // Enlisted line
         PVT:  { nextRank: "PFC",  nextAt: 2,  misc: null },
         PFC:  { nextRank: "SPC",  nextAt: 10, misc: null },
         SPC:  { nextRank: "SPC2", nextAt: 20, misc: null },
         SPC2: { nextRank: "SPC3", nextAt: 30, misc: null },
-        // SPC3 → SPC4 has extra misc per your row
         SPC3: { nextRank: "SPC4", nextAt: 40, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
-        // From SPC4 to NCO track (ops N/A, has misc)
         SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
-
-        // NCOs — all N/A ops, role/experience gates
-        LCPL: { nextRank: "Cpl", nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
-        CPL:  { nextRank: "Sgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
-        SGT:  { nextRank: "SSgt",nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
+        LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
+        CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
+        SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
         SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
         GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Support staff / Platoon lead" },
 
-        // Officers — N/A ops, role gates
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: null },
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
 
-        // Medical line
         HA:  { nextRank: "HN",  nextAt: 2,  misc: null },
         HN:  { nextRank: "HM3", nextAt: 10, misc: null },
         HM3: { nextRank: "HM2", nextAt: 20, misc: null },
@@ -519,7 +523,6 @@ export default {
         HM1: { nextRank: "HMC", nextAt: null, misc: "Assigned to Corpsman slot & Medic Trainer" },
         HMC: { nextRank: null,  nextAt: null, misc: null },
 
-        // Warrant
         WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
         CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
         CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
@@ -697,6 +700,11 @@ export default {
 /* Body */
 .member-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.6rem; font-size: 0.9rem; }
 .member-column p { margin: 0.18rem 0; }
+
+/* Info accents */
+.detail-line strong { color: #9ec5e6; }
+.accent { color: #a3e7ff; }          /* soft cyan for values */
+.accent-strong { color: #7fffd4; font-weight: 700; } /* aquamarine for key numbers/ranks */
 
 /* Ops / promo */
 .ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
