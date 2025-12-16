@@ -60,7 +60,7 @@
 <script>
 import Header from "./components/layout/Header.vue";
 import Sidebar from "./components/layout/Sidebar.vue";
-import AdminLoginModal from "@/components/AdminLoginModal.vue";
+import AdminLoginModal from "@/components/modals/AdminLoginModal.vue";
 import Config from "@/assets/info/general-config.json";
 import Papa from "papaparse";
 
