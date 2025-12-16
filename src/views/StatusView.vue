@@ -1,3 +1,4 @@
+<!-- src/views/StatusView.vue -->
 <template>
   <div
     id="status"
@@ -24,7 +25,7 @@
       </div>
     </section>
 
-    <!-- Current Assignment (markdown preserved + heading-level handling) -->
+    <!-- Current Assignment (markdown renderer preserved + heading handling) -->
     <section id="assignment" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/deployable.svg" />
@@ -35,50 +36,56 @@
       </div>
     </section>
 
-    <!-- Status Overview (NEW; styled like your other sections) -->
+    <!-- Current Status (overview; no custom boxes, just your theme) -->
     <section id="overview" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/orbital.svg" />
         <h1>Current Status</h1>
       </div>
       <div class="section-content-container">
-        <div class="status-grid">
-          <div class="status-block">
-            <p><strong>Active Members:</strong> {{ stats.activeMembers }}</p>
-            <p><strong>Reserves:</strong> {{ stats.reservesMembers }}</p>
-            <p><strong>Elements:</strong> {{ stats.totalElements }}</p>
-          </div>
+        <!-- Summary lines -->
+        <p><strong>Personnel:</strong> {{ stats.totalMembers }} ·
+           <strong>Active:</strong> {{ stats.activeMembers }} ·
+           <strong>Reserves:</strong> {{ stats.reservesMembers }}</p>
+        <p><strong>Elements:</strong> {{ stats.totalElements }} ·
+           <strong>Fireteams:</strong> {{ stats.totalFireteams }} ·
+           <strong>Filled:</strong> {{ stats.filledSlots }} ·
+           <strong>Vacant:</strong> {{ stats.vacantSlots }} ·
+           <strong>Fill Rate:</strong> {{ stats.fillRate }}%</p>
 
-          <div class="status-block">
-            <p><strong>Fireteams (with slots):</strong> {{ stats.totalFireteams }}</p>
-            <p><strong>Filled Slots:</strong> {{ stats.filledSlots }}</p>
-            <p><strong>Free Slots:</strong> {{ stats.vacantSlots }}</p>
-          </div>
+        <p><strong>Active Mission:</strong> {{ currentAssignment ? currentAssignment.name : 'None' }}</p>
+        <p><strong>Upcoming Operation:</strong> {{ upcomingOpTitle }} — {{ upcomingOpTime }}</p>
 
-          <div class="status-block">
-            <p><strong>Total Personnel:</strong> {{ stats.totalMembers }}</p>
-            <p><strong>Fill Rate:</strong> {{ stats.fillRate }}%</p>
-            <p><strong>Active Mission:</strong> {{ currentAssignment ? currentAssignment.name : 'None' }}</p>
-          </div>
+        <hr />
+
+        <!-- Per-element quick headcounts -->
+        <div v-if="elementSummaries.length">
+          <p><strong>Elements Overview:</strong></p>
+          <ul>
+            <li v-for="row in elementSummaries" :key="row.name">
+              {{ row.name }} — {{ row.filled }} filled<span v-if="row.vacant > 0"> · {{ row.vacant }} vacant</span>
+            </li>
+          </ul>
         </div>
 
-        <div class="promotions">
-          <h3 class="promotions-title">Upcoming Promotions</h3>
-          <div v-if="upcomingPromotions.length" class="promotions-list">
-            <div
-              v-for="(p, i) in upcomingPromotions"
-              :key="p.id || p.name + i"
-              class="promotion-row"
-              :class="{ eligible: p.opsToNext === 0, imminent: p.opsToNext === 1 }"
-              title="Ops attended pulled from Attendance sheet"
-            >
-              <span class="p-name">{{ p.name }}</span>
-              <span class="p-ranks">{{ p.rank }} → {{ p.nextRank || '—' }}</span>
-              <span class="p-ops" v-if="p.opsToNext > 0">{{ p.opsToNext }} ops</span>
-              <span class="p-ops" v-else>ELIGIBLE</span>
-            </div>
-          </div>
-          <div v-else class="promotions-empty">No upcoming promotions detected.</div>
+        <hr />
+
+        <!-- Upcoming promotions -->
+        <div>
+          <h3>Upcoming Promotions</h3>
+          <template v-if="upcomingPromotions.length">
+            <ul>
+              <li
+                v-for="(p, i) in upcomingPromotions"
+                :key="p.id || p.name + i"
+              >
+                <strong>{{ p.name }}</strong> — {{ p.rank }} → {{ p.nextRank || '—' }}
+                <span v-if="p.opsToNext > 0"> ({{ p.opsToNext }} ops)</span>
+                <span v-else> — ELIGIBLE</span>
+              </li>
+            </ul>
+          </template>
+          <p v-else>No upcoming promotions detected.</p>
         </div>
       </div>
     </section>
@@ -97,11 +104,9 @@ export default {
     initialSlug: { type: String, required: true },
     missions: { type: Array, required: true },
     events: { type: Array, required: true },
-    // for the overview:
     members: { type: Array, default: () => [] },
     orbat: { type: Array, default: () => [] },
-    // optional; we fall back to counting members in the "Reserves" element
-    reserves: { type: Array, default: () => [] },
+    reserves: { type: Array, default: () => [] }, // optional; used for count if provided
   },
   data() {
     return {
@@ -117,32 +122,33 @@ export default {
       const active = ms.find((m) => String(m.status || "").toUpperCase().includes("ACTIVE"));
       return active || (ms.length ? ms[ms.length - 1] : null);
     },
-    // --- Status Overview rollups ---
+    upcomingOp() {
+      const es = (this.events || []).slice();
+      return es.length ? es[0] : null;
+    },
+    upcomingOpTitle() { return this.upcomingOp ? (this.upcomingOp.title || "TBD") : "None"; },
+    upcomingOpTime() { return this.upcomingOp ? (this.upcomingOp.time || "TBD") : "—"; },
+
+    // Overview stats (no styling assumptions)
     stats() {
       const members = this.members || [];
       const orbat = this.orbat || [];
 
-      // Count reserves: prefer explicit prop; else infer from "Reserves" squad
-      let reservesMembers = Array.isArray(this.reserves) && this.reserves.length
+      const reservesMembers = Array.isArray(this.reserves) && this.reserves.length
         ? this.reserves.length
         : members.filter((m) => String(m.squad || "").toLowerCase() === "reserves").length;
 
-      // Active = members not in "Reserves"
-      const activeMembers = members.filter((m) => String(m.squad || "").toLowerCase() !== "reserves").length;
+      const activeMembers = members.length - reservesMembers;
 
-      let totalFireteams = 0;
-      let filledSlots = 0;
-      let vacantSlots = 0;
-
+      let totalFireteams = 0, filledSlots = 0, vacantSlots = 0;
       orbat.forEach((sq) => {
-        const fts = sq.fireteams || [];
-        fts.forEach((ft) => {
+        (sq.fireteams || []).forEach((ft) => {
           const slots = ft.slots || [];
           if (slots.length) totalFireteams += 1;
           slots.forEach((s) => {
             const st = String(s.status || "").toUpperCase();
-            if (st === "FILLED" && s.member) filledSlots += 1;
-            else if (st === "VACANT") vacantSlots += 1;
+            if (st === "FILLED" && s.member) filledSlots++;
+            else if (st === "VACANT") vacantSlots++;
           });
         });
       });
@@ -162,26 +168,37 @@ export default {
       };
     },
 
-    // Compute upcoming promotions by reusing the rank ladder logic here
+    elementSummaries() {
+      const rows = [];
+      (this.orbat || []).forEach((sq) => {
+        let filled = 0, vacant = 0;
+        if (sq.fireteams && sq.fireteams.length) {
+          sq.fireteams.forEach((ft) => {
+            (ft.slots || []).forEach((s) => {
+              const st = String(s.status || "").toUpperCase();
+              if (st === "FILLED" && s.member) filled++;
+              else if (st === "VACANT") vacant++;
+            });
+          });
+        } else {
+          filled = (sq.members || []).length;
+        }
+        rows.push({ name: sq.squad, filled, vacant });
+      });
+      return rows.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
+    },
+
     upcomingPromotions() {
       const list = [];
-
       (this.members || []).forEach((m) => {
         const opsToNext = this.opsToNextPromotion(m);
         const nextRank = this.nextPromotionRank(m);
         if (opsToNext === null || nextRank === null) return;
-
         list.push({
-          id: m.id,
-          name: m.name || "Unknown",
-          rank: m.rank || "N/A",
-          nextRank,
-          opsToNext,
-          opsAttended: Number(m.opsAttended ?? NaN),
+          id: m.id, name: m.name || "Unknown", rank: m.rank || "N/A",
+          nextRank, opsToNext, opsAttended: Number(m.opsAttended ?? NaN),
         });
       });
-
-      // Sort: eligible (0) first, then 1, 2 ... ; tie-break by more ops attended, then name
       list.sort((a, b) => {
         if (a.opsToNext !== b.opsToNext) return a.opsToNext - b.opsToNext;
         if (Number.isFinite(b.opsAttended) && Number.isFinite(a.opsAttended)) {
@@ -189,8 +206,6 @@ export default {
         }
         return String(a.name).localeCompare(String(b.name));
       });
-
-      // Limit to a compact list
       return list.slice(0, 10);
     },
   },
@@ -198,7 +213,6 @@ export default {
     this.setAnimate();
   },
   beforeUpdate() {
-    // keep Current Assignment markdown in sync with selection
     this.selectMission(this.missionSlug);
   },
   mounted() {
@@ -207,7 +221,6 @@ export default {
     }
   },
   methods: {
-    /* --- existing Current Assignment helpers --- */
     selectMission(slug) {
       this.missionSlug = slug;
       const m = this.missions.find((x) => x.slug === this.missionSlug);
@@ -232,21 +245,15 @@ export default {
       if (statusAnimated === null) window.sessionStorage.setItem("statusAnimated", true);
     },
 
-    /* --- promotion helpers (same ladder as Pilots/App) --- */
-    rankKey(rank) {
-      return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, "");
-    },
+    // Promotion helpers (same ladder you’ve standardized)
+    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     promotionLadderFor(rank) {
       const r = this.rankKey(rank);
       const alias = {
-        PRIVATE: "PVT", PVT: "PVT",
-        "PRIVATEFIRSTCLASS": "PFC", PFC: "PFC",
-        SPECIALIST: "SPC", SPC: "SPC",
-        "SPECIALIST2": "SPC2", SPC2: "SPC2",
-        "SPECIALIST3": "SPC3", SPC3: "SPC3",
-        "SPECIALIST4": "SPC4", SPC4: "SPC4",
-        HOSPITALMANAPPRENTICE: "HA", HA: "HA",
-        HOSPITALMAN: "HN", HN: "HN",
+        PRIVATE: "PVT", PVT: "PVT", "PRIVATEFIRSTCLASS": "PFC", PFC: "PFC",
+        SPECIALIST: "SPC", SPC: "SPC", "SPECIALIST2": "SPC2", SPC2: "SPC2",
+        "SPECIALIST3": "SPC3", SPC3: "SPC3", "SPECIALIST4": "SPC4", SPC4: "SPC4",
+        HOSPITALMANAPPRENTICE: "HA", HA: "HA", HOSPITALMAN: "HN", HN: "HN",
         "HOSPITALCORPSMANTHIRDCLASS": "HM3", HM3: "HM3",
         "HOSPITALCORPSMANSECONDCLASS": "HM2", HM2: "HM2",
         WARRANTOFFICER: "WO", WO: "WO",
@@ -255,26 +262,15 @@ export default {
         "CHIEFWARRANTOFFICER4": "CWO4", CWO4: "CWO4",
       };
       const key = alias[r] || r;
-
       const ladders = {
-        PVT:  { nextAt: 2,  nextRank: "PFC" },
-        PFC:  { nextAt: 10, nextRank: "SPC" },
-        SPC:  { nextAt: 20, nextRank: "SPC2" },
-        SPC2: { nextAt: 30, nextRank: "SPC3" },
-        SPC3: { nextAt: 40, nextRank: "SPC4" },
-        SPC4: { nextAt: null, nextRank: null },
-
-        HA:   { nextAt: 2,  nextRank: "HN" },
-        HN:   { nextAt: 10, nextRank: "HM3" },
-        HM3:  { nextAt: 20, nextRank: "HM2" },
-        HM2:  { nextAt: 30, nextRank: null },
-
-        WO:   { nextAt: null, nextRank: null },
-        CWO2: { nextAt: 10, nextRank: "CWO3" },
-        CWO3: { nextAt: 20, nextRank: "CWO4" },
-        CWO4: { nextAt: 30, nextRank: null },
+        PVT: { nextAt: 2, nextRank: "PFC" }, PFC: { nextAt: 10, nextRank: "SPC" },
+        SPC: { nextAt: 20, nextRank: "SPC2" }, SPC2: { nextAt: 30, nextRank: "SPC3" },
+        SPC3: { nextAt: 40, nextRank: "SPC4" }, SPC4: { nextAt: null, nextRank: null },
+        HA: { nextAt: 2, nextRank: "HN" }, HN: { nextAt: 10, nextRank: "HM3" },
+        HM3: { nextAt: 20, nextRank: "HM2" }, HM2: { nextAt: 30, nextRank: null },
+        WO: { nextAt: null, nextRank: null }, CWO2: { nextAt: 10, nextRank: "CWO3" },
+        CWO3: { nextAt: 20, nextRank: "CWO4" }, CWO4: { nextAt: 30, nextRank: null },
       };
-
       return ladders[key] || null;
     },
     opsToNextPromotion(member) {
@@ -293,49 +289,7 @@ export default {
 </script>
 
 <style scoped>
-/* Keep global chrome; light structure for the overview without changing theme */
-
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: .8rem;
-  margin-top: .2rem;
-}
-.status-block {
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,0,0,0.15);
-  border-radius: .35rem;
-  padding: .5rem .6rem;
-}
-
-/* Promotions list */
-.promotions { margin-top: 1rem; }
-.promotions-title { margin: 0 0 .4rem; letter-spacing: .06em; }
-.promotions-list { display: grid; gap: .35rem; }
-.promotion-row {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr auto;
-  gap: .6rem;
-  align-items: center;
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,0,0,0.15);
-  border-radius: .35rem;
-  padding: .35rem .5rem;
-}
-.promotion-row.eligible {
-  border-color: rgba(120,255,170,0.85);
-  box-shadow: 0 0 8px rgba(120,255,170,0.15) inset;
-}
-.promotion-row.imminent {
-  border-color: rgba(255,190,80,0.85);
-  box-shadow: 0 0 8px rgba(255,190,80,0.12) inset;
-}
-
-.p-name { color: #e0f0ff; }
-.p-ranks { color: #9ec5e6; }
-.p-ops { color: #cfdcea; }
-
-/* Markdown h3 override (leave h1/h2 as-is) */
+/* Keep your global theme; only retain the markdown h3 override you wanted */
 .markdown :deep(h3) { color: #9ec5e6; }
 /* If legacy deep selector is needed:
 ::v-deep(.markdown h3) { color: #9ec5e6; }
