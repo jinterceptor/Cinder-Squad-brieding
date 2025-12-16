@@ -29,7 +29,7 @@
       </div>
     </section>
 
-    <!-- CURRENT ASSIGNMENT (unchanged visuals) -->
+    <!-- CURRENT ASSIGNMENT (uses Mission.vue for identical styling) -->
     <section
       id="assignment"
       class="section-container"
@@ -40,24 +40,16 @@
         <h1>Current Assignment</h1>
       </div>
       <div class="section-content-container">
-        <div v-if="currentAssignment" class="assignment-container">
-          <div class="assignment-meta">
-            <p class="assignment-title">
-              <strong>{{ currentAssignment.name }}</strong>
-              <span class="assignment-status">
-                {{ (currentAssignment.status || 'N/A').toUpperCase() }}
-              </span>
-            </p>
-          </div>
-
-          <!-- Keep content area simple so your global styles apply -->
-          <div class="assignment-content">
-            <pre style="white-space: pre-wrap; margin: .25rem 0 0">
-{{ missionExcerpt(currentAssignment.content) }}
-            </pre>
+        <div v-if="currentAssignment">
+          <!-- Reuse Mission component so card/box styles match your log -->
+          <div class="mission-list-container">
+            <Mission
+              :mission="currentAssignment"
+              :selected="currentAssignment.slug"
+              @click="noop"
+            />
           </div>
         </div>
-
         <div v-else class="assignment-empty">
           No mission data available.
         </div>
@@ -71,19 +63,15 @@ import Mission from "@/components/Mission.vue";
 
 export default {
   name: "StatusView",
-  components: {
-    Mission,
-  },
+  components: { Mission },
   props: {
     animate: { type: Boolean, default: false },
     initialSlug: { type: String, default: "" },
-
     missions: { type: Array, default: () => [] },
     events: { type: Array, default: () => [] },
     members: { type: Array, default: () => [] },
     orbat: { type: Array, default: () => [] },
-
-    // still accepted, just unused now
+    // still accepted; no UI for it now
     reserves: { type: Array, default: () => [] },
   },
   data() {
@@ -94,7 +82,7 @@ export default {
     };
   },
   computed: {
-    // Prefer ACTIVE mission; else last in the list
+    // Prefer ACTIVE mission; else most recent entry
     currentAssignment() {
       const ms = (this.missions || []).slice();
       const active = ms.find((m) =>
@@ -112,46 +100,23 @@ export default {
     },
   },
   mounted() {
-    // preserve your existing “animate once” behavior
     if (this.animate) this.animateView = true;
-
     const statusAnimated = window.sessionStorage.getItem("statusAnimated");
-    if (statusAnimated) {
-      this.animationDelay = "0s";
-    } else {
-      window.sessionStorage.setItem("statusAnimated", "true");
-    }
+    if (statusAnimated) this.animationDelay = "0s";
+    else window.sessionStorage.setItem("statusAnimated", "true");
   },
   methods: {
     selectMission(slug) {
       this.missionSlug = slug;
     },
-    missionExcerpt(txt) {
-      const s = String(txt || "").trim();
-      return s.length > 800 ? s.slice(0, 800) + "…" : s || "—";
+    noop() {
+      /* keep click inert for the featured card */
     },
   },
 };
 </script>
 
 <style scoped>
-/* No new styles: rely on your existing global `.section-*`, `.clipped-medium-backward`, etc.  */
-.assignment-title {
-  margin: 0 0 .5rem;
-  letter-spacing: .04em;
-  color: #e0f0ff;
-}
-.assignment-status {
-  margin-left: .5rem;
-  font-size: .85rem;
-  color: #9ec5e6;
-  border: 1px solid rgba(122,167,199,.55);
-  border-radius: .35rem;
-  padding: .05rem .4rem;
-  text-transform: uppercase;
-}
-.assignment-empty {
-  color: #9ec5e6;
-  opacity: .85;
-}
+/* No new styles; rely on your existing global theme */
+.assignment-empty { color: #9ec5e6; opacity: .85; }
 </style>
