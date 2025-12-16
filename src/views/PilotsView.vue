@@ -111,7 +111,6 @@
                   </div>
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
-                    <!-- FIXED: missing closing quote -->
                     <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
                     <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
                   </div>
@@ -189,7 +188,12 @@
                     <div class="member-column left">
                       <p class="detail-line">
                         <strong>Role:</strong>
-                        <span class="accent">{{ slot.role }}</span>
+                        <span
+                          class="role-accent"
+                          :class="{ 'accent-med': isCorpsmanRole(slot.role) }"
+                        >
+                          {{ slot.role }}
+                        </span>
                       </p>
                     </div>
                     <div class="member-column right">
@@ -228,11 +232,17 @@
                     <div class="member-column left">
                       <p class="detail-line">
                         <strong>Role:</strong>
-                        <span class="accent">{{ slot.role || slot.member?.slot || 'Unassigned' }}</span>
+                        <span
+                          class="role-accent"
+                          :class="{ 'accent-med': isMedicalRank(slot.member?.rank) || isCorpsmanRole(slot.role || slot.member?.slot) }"
+                        >
+                          {{ slot.role || slot.member?.slot || 'Unassigned' }}
+                        </span>
                       </p>
+
                       <p class="detail-line">
                         <strong>Join Date:</strong>
-                        <span class="accent">{{ slot.member?.joinDate || 'Unknown' }}</span>
+                        <span class="date-accent join-date">{{ slot.member?.joinDate || 'Unknown' }}</span>
                       </p>
 
                       <div
@@ -321,9 +331,9 @@
 export default {
   name: "PilotsView",
   props: {
-    members: { type: Array, default: () => [] },    // roster (may include opsAttended)
+    members: { type: Array, default: () => [] },
     orbat:   { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] }, // optional raw attendance rows
+    attendance: { type: Array, default: () => [] },
   },
   data() {
     return {
@@ -344,7 +354,6 @@ export default {
     };
   },
   computed: {
-    /* ---------- Attendance merge (ID + normalized name) ---------- */
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach(m => {
@@ -362,8 +371,6 @@ export default {
       });
       return map;
     },
-
-    /* ---------- ORBAT groupings ---------- */
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
       (this.orbat || []).forEach((sq) => {
@@ -379,8 +386,6 @@ export default {
       groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
       return groups;
     },
-
-    /* ---------- Active squad fireteams ---------- */
     activeFireteams() {
       if (!this.activeSquad) return [];
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
@@ -428,7 +433,6 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
-      // Fallback if no slot grid
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -437,8 +441,6 @@ export default {
       });
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
-
-    /* ---------- Squad points validity ---------- */
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
       let points = 0; const errors = []; const explosiveTaken = new Set();
@@ -453,7 +455,6 @@ export default {
     },
   },
   methods: {
-    /* ========== Attendance merge ========== */
     nameKey(name) {
       return String(name || "")
         .replace(/["'.]/g, "")
@@ -475,9 +476,7 @@ export default {
       return Number.isFinite(direct) ? direct : null;
     },
 
-    /* ========== Promotion rules ========== */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
-
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
       const alias = {
@@ -509,7 +508,6 @@ export default {
         SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
         SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
         GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Support staff / Platoon lead" },
-
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: null },
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
@@ -527,19 +525,27 @@ export default {
         CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
         CWO5: { nextRank: null,   nextAt: null, misc: "Flight Lead" },
       };
-
       return rules[rk] || { nextRank: null, nextAt: null, misc: null };
     },
-
     opsToNextPromotion(member) {
       const ops = this.getOps(member);
       const rule = this.nextPromotion(member);
       if (!Number.isFinite(ops)) return null;
-      if (!Number.isFinite(rule.nextAt)) return null; // N/A
+      if (!Number.isFinite(rule.nextAt)) return null;
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* ========== UI + util helpers ========== */
+    /* Medical role detection */
+    isMedicalRank(rank) {
+      const r = String(rank || "").toUpperCase();
+      return ["HR","HA","HN","HM3","HM2","HM1","HMC"].includes(r);
+    },
+    isCorpsmanRole(role) {
+      const s = String(role || "").toUpperCase();
+      return /CORPSMAN|MEDIC|PJ/.test(s);
+    },
+
+    /* UI */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -573,7 +579,7 @@ export default {
       return "UNSC ELEMENT";
     },
 
-    /* ========== Certs & loadouts ========== */
+    /* Certs & loadouts */
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -606,7 +612,7 @@ export default {
       return opts;
     },
 
-    /* ========== Rank insignia ========== */
+    /* Rank insignia */
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
@@ -647,7 +653,7 @@ export default {
   .actual-row { position: relative; }
   .actual-row::after { content: ""; position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); width: 3px; height: 24px; background: rgba(30, 144, 255, 0.6); border-radius: 2px; pointer-events: none; }
   .chalk-row { position: relative; margin-top: 2.5rem; padding-top: 1.5rem; }
-  .chalk-row::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 3px; background: rgba(30,144,255,0.6); border-radius: 2px; pointer-events: none; }
+  .chalk-row::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 3px; background: rgba(30,144,255,0.6); border-radius: 2px; }
 }
 
 /* Squad tiles */
@@ -659,7 +665,7 @@ export default {
 .squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
 .squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
 
-/* Modal */
+/* Modal shell */
 .squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .squad-modal { background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
@@ -681,8 +687,8 @@ export default {
 .fireteam-count { color: #9ec5e6; font-size: .9rem; }
 .fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
 
-/* Cards grid */
-.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .85rem; }
+/* Cards grid – widened slightly to avoid Join Date wrapping */
+.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: .85rem; }
 
 /* Cards */
 .member-card { background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
@@ -701,8 +707,14 @@ export default {
 
 /* Info accents */
 .detail-line strong { color: #9ec5e6; }
-.accent { color: #a3e7ff; }
+.role-accent { color: #a3e7ff; }             /* role value color */
+.accent-med { color: #8af5cf; font-weight: 600; }  /* medical role highlight */
+.date-accent { color: #c3d7ff; }             /* join date value color */
+.accent { color: #a3e7ff; }                  /* generic value color */
 .accent-strong { color: #7fffd4; font-weight: 700; }
+
+/* Keep Join Date on one line */
+.join-date { white-space: nowrap; }
 
 /* Ops / promo */
 .ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
