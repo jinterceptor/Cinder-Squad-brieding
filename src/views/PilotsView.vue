@@ -205,9 +205,9 @@
                 <!-- FILLED -->
                 <template v-else>
                   <div class="member-header">
-                    <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
+                    <div class="member-rank-insignia-wrapper" v-if="getRankInsigniaUrl(slot.member?.rank)">
                       <img
-                        :src="rankInsignia(slot.member.rank)"
+                        :src="getRankInsigniaUrl(slot.member.rank)"
                         :alt="slot.member.rank + ' insignia'"
                         class="member-rank-insignia"
                       />
@@ -449,7 +449,6 @@ export default {
       return s.trim();
     },
     collapseInitialNicknameSurname(ranklessUpper) {
-      // "T THY TYRSSON" -> "T TYRSSON"
       const toks = ranklessUpper.split(" ").filter(Boolean);
       if (toks.length >= 3 && toks[0].length === 1) {
         return `${toks[0]} ${toks[toks.length - 1]}`;
@@ -472,15 +471,13 @@ export default {
     getOps(member) {
       if (!member?.name) return null;
 
-      // Clean variants for the member
       const cleaned = this.baseClean(member.name);
       const rankless = this.stripRank(cleaned);
       const collapsed = this.collapseInitialNicknameSurname(rankless);
       const isKey    = this.initialSurnameKey(rankless);
       const last     = this.lastName(rankless);
-      const nickSet  = new Set(rankless.split(" ").filter(Boolean).slice(1, -1)); // middle tokens (nicknames)
+      const nickSet  = new Set(rankless.split(" ").filter(Boolean).slice(1, -1));
 
-      // One pass over attendance rows, compute best match
       let bestScore = -1;
       let bestOps = null;
 
@@ -488,54 +485,36 @@ export default {
         const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
         if (ops === null) continue;
 
-        const rowName   = this.baseClean(row?.name ?? row?.A ?? "");
+        const rowName     = this.baseClean(row?.name ?? row?.A ?? "");
         const rowRankless = this.stripRank(rowName);
-        const rowTokens = rowRankless.split(" ").filter(Boolean);
-        const rowSet    = new Set(rowTokens);
+        const rowTokens   = rowRankless.split(" ").filter(Boolean);
+        const rowSet      = new Set(rowTokens);
 
-        // Exact name (cleaned) match
-        if (rowName === cleaned) {
-          bestScore = 100; bestOps = ops; break;
-        }
-        // Exact rankless match
-        if (rowRankless === rankless) {
-          if (100 - 1 > bestScore) { bestScore = 99; bestOps = ops; }
-        }
-        // Collapsed "T TYRSSON" match
-        if (this.collapseInitialNicknameSurname(rowRankless) === collapsed) {
-          if (98 > bestScore) { bestScore = 98; bestOps = ops; }
-        }
-        // Initial + last name present
+        if (rowName === cleaned) { bestScore = 100; bestOps = ops; break; }
+        if (rowRankless === rankless) { if (99 > bestScore) { bestScore = 99; bestOps = ops; } }
+        if (this.collapseInitialNicknameSurname(rowRankless) === collapsed) { if (98 > bestScore) { bestScore = 98; bestOps = ops; } }
+
         const rowIS = this.initialSurnameKey(rowRankless);
-        if (rowIS && rowIS === isKey) {
-          if (95 > bestScore) { bestScore = 95; bestOps = ops; }
-        }
-        // Last name + nickname token(s)
+        if (rowIS && rowIS === isKey) { if (95 > bestScore) { bestScore = 95; bestOps = ops; } }
+
         let score = 0;
         if (last && rowSet.has(last)) score += 3;
         if (isKey && rowIS === isKey) score += 2;
         if (nickSet.size) {
           let nickHits = 0;
           nickSet.forEach(n => { if (rowSet.has(n)) nickHits++; });
-          score += Math.min(2 * nickHits, 6); // weight nicknames strongly
+          score += Math.min(2 * nickHits, 6);
         }
-        // small overlap bonus
         let overlap = 0;
         for (const t of rowSet) {
           if (rankless.includes(t)) overlap++;
         }
         score += Math.min(overlap, 2);
 
-        if (score > bestScore) {
-          bestScore = score;
-          bestOps = ops;
-        } else if (score === bestScore && bestOps !== null && ops > bestOps) {
-          // tie-breaker: larger ops if same score
-          bestOps = ops;
-        }
+        if (score > bestScore) { bestScore = score; bestOps = ops; }
+        else if (score === bestScore && bestOps !== null && ops > bestOps) { bestOps = ops; }
       }
 
-      // If we never got a decent score, treat as null
       if (bestScore < 3 && bestScore < 95) return null;
       return bestOps;
     },
@@ -655,6 +634,20 @@ export default {
       this.loadouts[id] = { ...curr, primary: value || "" };
     },
     loadoutLabel(key) { const def = this.loadoutOptions[key]; return def ? `${def.label} (${def.points}pt)` : key; },
+
+    /* renamed to avoid collisions with any data/computed name */
+    getRankInsigniaUrl(rank) {
+      const key = String(rank || "").trim().toUpperCase();
+      const map = {
+        RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
+        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
+        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
+        "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
+        HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
+      };
+      const base = map[key];
+      return base ? `/ranks/${base}.png` : null;
+    },
 
     formatOps(v) {
       if (v === null || v === undefined) return "—";
