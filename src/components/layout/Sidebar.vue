@@ -15,7 +15,6 @@
         <router-link
           class="clipped-bottom-right"
           to="/status"
-          @mouseenter="playBrowse"
           @click="playClick"
         >
           <img src="/icons/orbital.svg" />
@@ -26,7 +25,6 @@
         <router-link
           class="clipped-bottom-right"
           to="/pilots"
-          @mouseenter="playBrowse"
           @click="playClick"
         >
           <img src="/icons/license.svg" />
@@ -37,7 +35,6 @@
         <router-link
           class="clipped-bottom-right"
           to="/events"
-          @mouseenter="playBrowse"
           @click="playClick"
         >
           <img src="/icons/events.svg" />
