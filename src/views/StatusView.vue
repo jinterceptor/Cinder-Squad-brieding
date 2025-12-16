@@ -1,171 +1,159 @@
 <!-- src/views/StatusView.vue -->
 <template>
-  <section id="status" class="section-container">
-    <!-- Header (unchanged visuals) -->
-    <div style="height: 52px; overflow: hidden">
-      <div class="section-header clipped-medium-backward-status">
-        <img src="/icons/orbital.svg" alt="Status Icon" />
-        <h1>Mission Status</h1>
+  <div
+    id="statusView"
+    :class="{ animate: animateView }"
+    :style="{ 'animation-delay': animationDelay }"
+    class="content-container"
+  >
+    <!-- MISSION LOG (keeps your visuals) -->
+    <section
+      id="missions"
+      class="section-container"
+      :style="{ 'animation-delay': animationDelay }"
+    >
+      <div class="section-header clipped-medium-backward">
+        <img src="/icons/campaign.svg" />
+        <h1>Mission Log</h1>
       </div>
-      <div class="rhombus-back">&nbsp;</div>
-    </div>
-
-    <div class="section-content-container">
-      <!-- Current Assignment -->
-      <div>
-        <h2>Current Assignment</h2>
-        <template v-if="currentAssignment">
-          <p><strong>Name:</strong> {{ currentAssignment.name }}</p>
-          <p><strong>Status:</strong> {{ (currentAssignment.status || 'N/A').toUpperCase() }}</p>
-          <pre style="white-space: pre-wrap; margin: .5rem 0 0">{{ missionExcerpt(currentAssignment.content) }}</pre>
-        </template>
-        <p v-else>No mission data.</p>
-      </div>
-
-      <hr />
-
-      <!-- Upcoming Operation -->
-      <div>
-        <h2>Upcoming Operation</h2>
-        <template v-if="upcomingOp">
-          <p class="meta"><strong>Title:</strong> {{ upcomingOp.title }}</p>
-          <p class="meta"><strong>Location:</strong> {{ upcomingOp.location || 'TBD' }}</p>
-          <p class="meta"><strong>Time:</strong> {{ upcomingOp.time || 'TBD' }}</p>
-          <pre style="white-space: pre-wrap; margin: .5rem 0 0">{{ eventExcerpt(upcomingOp.content) }}</pre>
-        </template>
-        <p v-else>No scheduled operations.</p>
-      </div>
-
-      <hr />
-
-      <!-- Unit Strength -->
-      <div>
-        <h2>Unit Strength</h2>
-        <p><strong>Personnel:</strong> {{ totalMembers }}</p>
-        <p><strong>Elements:</strong> {{ totalSquads }}</p>
-        <p><strong>Vacant Slots:</strong> {{ totalVacant }}</p>
-
-        <div v-if="squadSummaries.length" style="margin-top:.6rem">
-          <p><strong>By Element:</strong></p>
-          <ul style="margin: .3rem 0 0">
-            <li v-for="s in squadSummaries" :key="s.name">
-              {{ s.name }} — {{ s.count }}
-            </li>
-          </ul>
+      <div class="section-content-container">
+        <div class="mission-list-container">
+          <Mission
+            v-for="item in missions"
+            :key="item.slug"
+            :mission="item"
+            :selected="missionSlug"
+            @click="selectMission(item.slug)"
+          />
         </div>
       </div>
+    </section>
 
-      <hr />
-
-      <!-- Open Vacancies -->
-      <div>
-        <h2>Open Vacancies</h2>
-        <template v-if="vacancyList.length">
-          <ul style="margin: .3rem 0 0">
-            <li v-for="(v, i) in vacancyList" :key="i">
-              <strong>{{ v.squad }}</strong> · {{ v.fireteam }} — {{ v.role }}
-            </li>
-          </ul>
-        </template>
-        <p v-else>No vacancies detected.</p>
+    <!-- CURRENT ASSIGNMENT (keeps your visuals) -->
+    <section
+      id="assignment"
+      class="section-container"
+      :style="{ 'animation-delay': animationDelay }"
+    >
+      <div class="section-header clipped-medium-backward">
+        <img src="/icons/orbital.svg" />
+        <h1>Current Assignment</h1>
       </div>
-    </div>
-  </section>
+      <div class="section-content-container">
+        <div v-if="currentAssignment" class="assignment-container">
+          <div class="assignment-meta">
+            <p class="assignment-title">
+              <strong>{{ currentAssignment.name }}</strong>
+              <span class="assignment-status">
+                {{ (currentAssignment.status || 'N/A').toUpperCase() }}
+              </span>
+            </p>
+          </div>
+
+          <!-- Keep content area simple so your global styles apply -->
+          <div class="assignment-content">
+            <pre style="white-space: pre-wrap; margin: .25rem 0 0">
+{{ missionExcerpt(currentAssignment.content) }}
+            </pre>
+          </div>
+        </div>
+
+        <div v-else class="assignment-empty">
+          No mission data available.
+        </div>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script>
+import { VueMarkdownIt } from "@f3ve/vue-markdown-it"; // kept if you render markdown elsewhere on this view
+import Mission from "@/components/mission/Mission.vue";
+
 export default {
   name: "StatusView",
+  components: {
+    VueMarkdownIt,
+    Mission,
+  },
   props: {
     animate: { type: Boolean, default: false },
     initialSlug: { type: String, default: "" },
+
+    // data sources passed from App.vue
     missions: { type: Array, default: () => [] },
     events: { type: Array, default: () => [] },
     members: { type: Array, default: () => [] },
     orbat: { type: Array, default: () => [] },
-    // still accepted from App.vue, but intentionally unused in the UI now
+    // still accepted, just unused now (safe to keep)
     reserves: { type: Array, default: () => [] },
   },
+  data() {
+    return {
+      missionSlug: this.initialSlug || "",
+      animateView: false,
+      animationDelay: "0.2s",
+    };
+  },
   computed: {
-    // Prefer ACTIVE mission; otherwise last mission entry
     currentAssignment() {
+      // Prefer ACTIVE mission; else last in the list
       const ms = (this.missions || []).slice();
-      const active = ms.find(m => String(m.status || "").toUpperCase().includes("ACTIVE"));
+      const active = ms.find((m) =>
+        String(m.status || "").toUpperCase().includes("ACTIVE")
+      );
       return active || (ms.length ? ms[ms.length - 1] : null);
     },
-    // First events entry
-    upcomingOp() {
-      const es = (this.events || []).slice();
-      return es.length ? es[0] : null;
-    },
-
-    totalMembers() {
-      return (this.members || []).length;
-    },
-    totalSquads() {
-      return (this.orbat || []).length;
-    },
-    totalVacant() {
-      let n = 0;
-      (this.orbat || []).forEach((sq) => {
-        (sq.fireteams || []).forEach((ft) => {
-          (ft.slots || []).forEach((s) => {
-            if (String(s.status || "").toUpperCase() === "VACANT") n++;
-          });
-        });
-      });
-      return n;
-    },
-    squadSummaries() {
-      const out = [];
-      (this.orbat || []).forEach((sq) => {
-        let count = 0;
-        if (sq.fireteams && sq.fireteams.length) {
-          sq.fireteams.forEach((ft) =>
-            (ft.slots || []).forEach((s) => {
-              if (s.status === "FILLED" && s.member) count++;
-            })
-          );
-        } else {
-          count = (sq.members || []).length;
-        }
-        out.push({ name: sq.squad, count });
-      });
-      return out.sort((a, b) =>
-        String(a.name).localeCompare(String(b.name), undefined, { numeric: true })
-      );
-    },
-    vacancyList() {
-      const rows = [];
-      (this.orbat || []).forEach((sq) => {
-        (sq.fireteams || []).forEach((ft) => {
-          (ft.slots || []).forEach((s) => {
-            if (String(s.status || "").toUpperCase() === "VACANT") {
-              rows.push({
-                squad: sq.squad,
-                fireteam: ft.name || "Element",
-                role: s.role || "Unassigned",
-              });
-            }
-          });
-        });
-      });
-      return rows.slice(0, 24);
+  },
+  watch: {
+    initialSlug(slug) {
+      if (!slug) return;
+      this.missionSlug = slug;
+      const el = document.querySelector(`#m-${slug.replace(/[^\w-]/g, "")}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     },
   },
+  mounted() {
+    // preserve your existing “animate once” behavior
+    if (this.animate) this.animateView = true;
+
+    const statusAnimated = window.sessionStorage.getItem("statusAnimated");
+    if (statusAnimated) {
+      this.animationDelay = "0s";
+    } else {
+      window.sessionStorage.setItem("statusAnimated", "true");
+    }
+  },
   methods: {
+    selectMission(slug) {
+      this.missionSlug = slug;
+    },
     missionExcerpt(txt) {
       const s = String(txt || "").trim();
-      return s.length > 420 ? s.slice(0, 420) + "…" : s || "—";
-    },
-    eventExcerpt(txt) {
-      const s = String(txt || "").trim();
-      return s.length > 280 ? s.slice(0, 280) + "…" : s || "—";
+      return s.length > 800 ? s.slice(0, 800) + "…" : s || "—";
     },
   },
 };
 </script>
 
 <style scoped>
-/* No new visual styles introduced on purpose — your existing global styles apply. */
+/* No new styles: rely on your existing global `.section-*`, `.clipped-medium-backward`, etc.  */
+.assignment-title {
+  margin: 0 0 .5rem;
+  letter-spacing: .04em;
+  color: #e0f0ff;
+}
+.assignment-status {
+  margin-left: .5rem;
+  font-size: .85rem;
+  color: #9ec5e6;
+  border: 1px solid rgba(122,167,199,.55);
+  border-radius: .35rem;
+  padding: .05rem .4rem;
+  text-transform: uppercase;
+}
+.assignment-empty {
+  color: #9ec5e6;
+  opacity: .85;
+}
 </style>
