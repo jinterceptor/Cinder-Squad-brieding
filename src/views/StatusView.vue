@@ -1,4 +1,3 @@
-<!-- src/views/StatusView.vue -->
 <template>
   <div
     id="status"
@@ -45,21 +44,21 @@
       <div class="section-content-container">
         <div class="status-grid">
           <div class="status-block">
-            <p><strong>Active Members:</strong> {{ stats.activeMembers }}</p>
-            <p><strong>Reserves:</strong> {{ stats.reservesMembers }}</p>
-            <p><strong>Elements:</strong> {{ stats.totalElements }}</p>
+            <p><strong>Active Members:</strong> <span class="stat-num">{{ stats.activeMembers }}</span></p>
+            <p><strong>Reserves:</strong> <span class="stat-num">{{ stats.reservesMembers }}</span></p>
+            <p><strong>Elements:</strong> <span class="stat-num">{{ stats.totalElements }}</span></p>
           </div>
 
           <div class="status-block">
-            <p><strong>Fireteams (with slots):</strong> {{ stats.totalFireteams }}</p>
-            <p><strong>Filled Slots:</strong> {{ stats.filledSlots }}</p>
-            <p><strong>Free Slots:</strong> {{ stats.vacantSlots }}</p>
+            <p><strong>Fireteams (with slots):</strong> <span class="stat-num">{{ stats.totalFireteams }}</span></p>
+            <p><strong>Filled Slots:</strong> <span class="stat-num">{{ stats.filledSlots }}</span></p>
+            <p><strong>Free Slots:</strong> <span class="stat-num">{{ stats.vacantSlots }}</span></p>
           </div>
 
           <div class="status-block">
-            <p><strong>Total Personnel:</strong> {{ stats.totalMembers }}</p>
-            <p><strong>Fill Rate:</strong> {{ stats.fillRate }}%</p>
-            <p><strong>Active Mission:</strong> {{ currentAssignment ? currentAssignment.name : 'None' }}</p>
+            <p><strong>Total Personnel:</strong> <span class="stat-num">{{ stats.totalMembers }}</span></p>
+            <p><strong>Fill Rate:</strong> <span class="stat-num">{{ stats.fillRate }}%</span></p>
+            <p><strong>Active Mission:</strong> <span class="stat-num">{{ currentAssignment ? currentAssignment.name : 'None' }}</span></p>
           </div>
         </div>
 
@@ -285,10 +284,16 @@ export default {
   background: rgba(0,0,0,0.15);
   border-radius: .35rem;
   padding: .5rem .6rem;
-  color: #dce6f1; /* ensure themed text (was black) */
+  color: #dce6f1;
 }
-.status-block p { margin: .25rem 0; color: #dce6f1; } /* force white-ish */
-.status-block strong { color: #e0f0ff; } /* accent like assignment */
+.status-block p { margin: .25rem 0; color: #dce6f1; }
+.status-block strong { color: #e0f0ff; }
+
+/* Pop the numbers with a themed accent */
+.stat-num {
+  color: #7ec9ff; /* subtle cyan that fits your palette */
+  font-weight: 700; /* emphasize the figure */
+}
 
 /* Promotions list */
 .promotions { margin-top: 1rem; }
@@ -303,7 +308,7 @@ export default {
   background: rgba(0,0,0,0.15);
   border-radius: .35rem;
   padding: .35rem .5rem;
-  color: #dce6f1; /* ensure default text follows theme */
+  color: #dce6f1;
 }
 .promotion-row.eligible {
   border-color: rgba(120,255,170,0.85);
