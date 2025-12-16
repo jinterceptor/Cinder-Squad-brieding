@@ -6,7 +6,7 @@
     :style="{ 'animation-delay': animationDelay }"
     class="content-container"
   >
-    <!-- MISSION LOG (keeps your visuals) -->
+    <!-- MISSION LOG (unchanged visuals) -->
     <section
       id="missions"
       class="section-container"
@@ -29,7 +29,7 @@
       </div>
     </section>
 
-    <!-- CURRENT ASSIGNMENT (keeps your visuals) -->
+    <!-- CURRENT ASSIGNMENT (unchanged visuals) -->
     <section
       id="assignment"
       class="section-container"
@@ -67,25 +67,23 @@
 </template>
 
 <script>
-import { VueMarkdownIt } from "@f3ve/vue-markdown-it"; // kept if you render markdown elsewhere on this view
-import Mission from "@/components/mission/Mission.vue";
+import Mission from "@/components/Mission.vue";
 
 export default {
   name: "StatusView",
   components: {
-    VueMarkdownIt,
     Mission,
   },
   props: {
     animate: { type: Boolean, default: false },
     initialSlug: { type: String, default: "" },
 
-    // data sources passed from App.vue
     missions: { type: Array, default: () => [] },
     events: { type: Array, default: () => [] },
     members: { type: Array, default: () => [] },
     orbat: { type: Array, default: () => [] },
-    // still accepted, just unused now (safe to keep)
+
+    // still accepted, just unused now
     reserves: { type: Array, default: () => [] },
   },
   data() {
@@ -96,8 +94,8 @@ export default {
     };
   },
   computed: {
+    // Prefer ACTIVE mission; else last in the list
     currentAssignment() {
-      // Prefer ACTIVE mission; else last in the list
       const ms = (this.missions || []).slice();
       const active = ms.find((m) =>
         String(m.status || "").toUpperCase().includes("ACTIVE")
