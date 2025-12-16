@@ -111,7 +111,8 @@
                   </div>
                   <div class="squad-meta">
                     <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle>{{ squadDescriptor(sq.squad) }}</p>
+                    <!-- FIXED: missing closing quote -->
+                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
                     <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
                   </div>
                 </div>
@@ -186,7 +187,6 @@
 
                   <div class="member-body">
                     <div class="member-column left">
-                      <!-- removed Squad/Fireteam lines per request -->
                       <p class="detail-line">
                         <strong>Role:</strong>
                         <span class="accent">{{ slot.role }}</span>
@@ -226,7 +226,6 @@
 
                   <div class="member-body">
                     <div class="member-column left">
-                      <!-- removed Squad/Fireteam lines per request -->
                       <p class="detail-line">
                         <strong>Role:</strong>
                         <span class="accent">{{ slot.role || slot.member?.slot || 'Unassigned' }}</span>
@@ -236,7 +235,6 @@
                         <span class="accent">{{ slot.member?.joinDate || 'Unknown' }}</span>
                       </p>
 
-                      <!-- Ops + promo -->
                       <div
                         class="ops-promo"
                         :class="{ imminent: opsToNextPromotion(slot.member) === 1 || opsToNextPromotion(slot.member) === 0 }"
@@ -703,8 +701,8 @@ export default {
 
 /* Info accents */
 .detail-line strong { color: #9ec5e6; }
-.accent { color: #a3e7ff; }          /* soft cyan for values */
-.accent-strong { color: #7fffd4; font-weight: 700; } /* aquamarine for key numbers/ranks */
+.accent { color: #a3e7ff; }
+.accent-strong { color: #7fffd4; font-weight: 700; }
 
 /* Ops / promo */
 .ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
