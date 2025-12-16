@@ -5,12 +5,12 @@
   "defaultTitle": "150TH ORBAT |",
   "icon": "/faction-logos/FUD_UNSC_Logo.png",
   "header": {
-    "planet": "Ard tir",
+    "planet": "ARD TIR",
     "year": "2553",
-    "system": "Jakhari Expanse",
-    "AO": "Vidda",
-    "status": "Active Deployment",
-    "subheaderTitle": "150th Broadsword RRG",
+    "system": "JAKHARI EXPANSE",
+    "AO": "VIDDA",
+    "status": "ACTIVE",
+    "subheaderTitle": "150TH BROADSWORD RRG",
     "subheaderSubtitle": "UNSC EYES ONLY"
   },
   "pilotSpecialInfo": {}
