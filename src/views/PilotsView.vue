@@ -332,21 +332,36 @@ export default {
     };
   },
   computed: {
-    /* ---------- Attendance merge (ID + robust name variants + alias) ---------- */
+    /* ---------- Pre-cleaned attendance rows for fuzzy fallback ---------- */
+    attendanceRowsClean() {
+      const rows = [];
+      (this.attendance || []).forEach(row => {
+        const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
+        if (ops === null) return;
+        const name = row?.name ?? row?.A ?? "";
+        const clean = this.nameKey(name);
+        const tokens = clean.split(" ").filter(Boolean);
+        const tokenSet = new Set(tokens);
+        rows.push({ clean, tokens, tokenSet, ops });
+      });
+      return rows;
+    },
+
+    /* ---------- Primary fast map ---------- */
     attendanceMap() {
       const map = Object.create(null);
 
       const addVariants = (cleanUpper, ops) => {
         if (!cleanUpper) return;
-        const isKey = this.initialSurnameKey(cleanUpper);
-        const lnKey = this.lastNameKey(cleanUpper);
-        map[`NM:${cleanUpper}`] = ops;
         const rankless = this.stripRank(cleanUpper);
+        const isKey = this.initialSurnameKey(rankless);
+        const lnKey = this.lastNameKey(rankless);
+        map[`NM:${cleanUpper}`] = ops;
         map[`NR:${rankless}`] = ops;
         if (isKey) map[`IS:${isKey}`] = ops;
         if (lnKey) map[`LN:${lnKey}`] = ops;
 
-        // collapse Initial + Nickname + Surname → Initial + Surname
+        // alias and collapsed forms
         const collapsed = this.collapseInitialNicknameSurname(rankless);
         if (collapsed && collapsed !== rankless) {
           const cis = this.initialSurnameKey(collapsed);
@@ -355,8 +370,6 @@ export default {
           if (cis) map[`IS:${cis}`] = ops;
           if (cln) map[`LN:${cln}`] = ops;
         }
-
-        // explicit aliases
         const alias = this.aliasCanonical(rankless);
         if (alias) {
           const ais = this.initialSurnameKey(alias);
@@ -371,17 +384,14 @@ export default {
         const ops = this.parseOps(m.opsAttended);
         if (ops === null) return;
         if (m.id) map[`ID:${m.id}`] = ops;
-        const clean = this.nameKey(m.name);
-        addVariants(clean, ops);
+        addVariants(this.nameKey(m.name), ops);
       });
 
       (this.attendance || []).forEach(row => {
         const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
         if (ops === null) return;
         if (row?.id) map[`ID:${row.id}`] = ops;
-        const name = row?.name ?? row?.A;
-        const clean = this.nameKey(name);
-        addVariants(clean, ops);
+        addVariants(this.nameKey(row?.name ?? row?.A), ops);
       });
 
       return map;
@@ -488,7 +498,7 @@ export default {
       if (typeof v === "number" && Number.isFinite(v)) return v;
       const s = String(v).trim();
       if (s === "") return null;
-      const m = s.match(/-?\d+/); // first integer
+      const m = s.match(/-?\d+/);
       if (!m) return null;
       const n = parseInt(m[0], 10);
       return Number.isFinite(n) ? n : null;
@@ -502,7 +512,7 @@ export default {
     baseClean(name) {
       return String(name || "")
         .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")    // drop quote chars but KEEP words
+        .replace(/["']/g, "")    // drop quote chars but keep words
         .replace(/\./g, "")      // T. -> T
         .replace(/\s+/g, " ")
         .trim()
@@ -510,18 +520,14 @@ export default {
     },
     nameKey(name) { return this.baseClean(name); },
 
-    /* Collapse “T THY TYRSSON” → “T TYRSSON” when first token is 1 char and we have >=3 tokens. */
     collapseInitialNicknameSurname(cleanUpper) {
       if (!cleanUpper) return "";
       const toks = cleanUpper.split(" ").filter(Boolean);
       if (toks.length >= 3 && toks[0].length === 1) {
-        // keep first and last only
         return `${toks[0]} ${toks[toks.length - 1]}`;
       }
       return cleanUpper;
     },
-
-    /* Explicit alias map (uppercased, rankless). Add more if needed. */
     aliasCanonical(ranklessUpper) {
       if (!ranklessUpper) return null;
       const map = {
@@ -530,7 +536,6 @@ export default {
       };
       return map[ranklessUpper] || null;
     },
-
     initialSurnameKey(cleanedUpperName) {
       if (!cleanedUpperName) return "";
       const SUFFIX = new Set(["JR","SR","III","IV","V"]);
@@ -552,39 +557,67 @@ export default {
       return last || "";
     },
 
+    /* ===== Fuzzy fallback: first-initial + last-name tokens ===== */
+    fuzzyOpsByInitialAndLast(member) {
+      const raw = this.nameKey(member?.name || "");
+      const rankless = this.stripRank(raw);
+      const toks = rankless.split(" ").filter(Boolean);
+      if (!toks.length) return null;
+
+      const first = toks[0];
+      const last = this.lastNameKey(rankless);
+      if (!first || !last) return null;
+
+      const initial = first[0];
+      // find rows that contain BOTH the single-letter initial token and the last-name token
+      const matches = this.attendanceRowsClean.filter(r => {
+        // token match is safer than substring
+        const hasInitial = r.tokens.some(t => t.length === 1 && t === initial);
+        const hasLast = r.tokenSet.has(last);
+        return hasInitial && hasLast;
+      });
+
+      if (matches.length === 1) return matches[0].ops;
+
+      // If multiple rows share same last name, pick the one with the highest ops (safest bias)
+      if (matches.length > 1) {
+        return matches.reduce((max, r) => (r.ops > max ? r.ops : max), -1);
+      }
+      return null;
+    },
+
     /* ===== Attendance lookup ===== */
     getOps(member) {
       // 1) ID
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
-      // 2) Names: try alias/collapse first
+      // 2) Names with alias/collapse and variants
       if (member?.name) {
-        const raw = this.nameKey(member.name);        // includes rank
+        const raw = this.nameKey(member.name);
         const rankless = this.stripRank(raw);
-
         const collapsed = this.collapseInitialNicknameSurname(rankless);
         const alias = this.aliasCanonical(rankless);
 
         const tries = [
           alias && `AL:${alias}`,
-          // direct rankless/raw
           `NR:${rankless}`, `NM:${raw}`,
-          // initial+surname, last-name
           `IS:${this.initialSurnameKey(rankless)}`, `LN:${this.lastNameKey(rankless)}`,
           `IS:${this.initialSurnameKey(raw)}`,      `LN:${this.lastNameKey(raw)}`,
-          // collapsed
           collapsed && `NR:${collapsed}`,
           collapsed && `IS:${this.initialSurnameKey(collapsed)}`,
           collapsed && `LN:${this.lastNameKey(collapsed)}`,
         ].filter(Boolean);
 
         for (const k of tries) {
-          if (k.endsWith(":")) continue;
           if (this.attendanceMap[k] !== undefined) return this.attendanceMap[k];
         }
       }
-      // 3) Fallback
+      // 3) Fuzzy fallback
+      const fuzzy = this.fuzzyOpsByInitialAndLast(member);
+      if (Number.isFinite(fuzzy)) return fuzzy;
+
+      // 4) Last resort
       const direct = this.parseOps(member?.opsAttended);
       return direct !== null ? direct : null;
     },
