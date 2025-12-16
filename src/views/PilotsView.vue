@@ -347,7 +347,7 @@ export default {
       return rows;
     },
 
-    /* ---------- Primary fast map ---------- */
+    /* ---------- Fast map ---------- */
     attendanceMap() {
       const map = Object.create(null);
 
@@ -361,7 +361,6 @@ export default {
         if (isKey) map[`IS:${isKey}`] = ops;
         if (lnKey) map[`LN:${lnKey}`] = ops;
 
-        // alias and collapsed forms
         const collapsed = this.collapseInitialNicknameSurname(rankless);
         if (collapsed && collapsed !== rankless) {
           const cis = this.initialSurnameKey(collapsed);
@@ -512,8 +511,8 @@ export default {
     baseClean(name) {
       return String(name || "")
         .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")    // drop quote chars but keep words
-        .replace(/\./g, "")      // T. -> T
+        .replace(/["']/g, "")
+        .replace(/\./g, "")
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
@@ -557,7 +556,8 @@ export default {
       return last || "";
     },
 
-    /* ===== Fuzzy fallback: first-initial + last-name tokens ===== */
+    /* ===== Fuzzy fallbacks ===== */
+    // 1) Nickname-assisted last-name match, else single-letter-initial + last match
     fuzzyOpsByInitialAndLast(member) {
       const raw = this.nameKey(member?.name || "");
       const rankless = this.stripRank(raw);
@@ -569,30 +569,41 @@ export default {
       if (!first || !last) return null;
 
       const initial = first[0];
-      // find rows that contain BOTH the single-letter initial token and the last-name token
-      const matches = this.attendanceRowsClean.filter(r => {
-        // token match is safer than substring
+      const nickTokens = toks.slice(1, -1); // middle tokens like THY / KONG
+
+      // last-name candidates
+      const lastMatches = this.attendanceRowsClean.filter(r => r.tokenSet.has(last));
+      if (lastMatches.length === 1) return lastMatches[0].ops;
+
+      if (lastMatches.length > 1 && nickTokens.length) {
+        const nickSet = new Set(nickTokens);
+        const nickMatches = lastMatches.filter(r => r.tokens.some(t => nickSet.has(t)));
+        if (nickMatches.length === 1) return nickMatches[0].ops;
+        if (nickMatches.length > 1) {
+          return nickMatches.reduce((max, r) => (r.ops > max ? r.ops : max), -1);
+        }
+      }
+
+      // initial + last (single-letter token)
+      const initialMatches = this.attendanceRowsClean.filter(r => {
         const hasInitial = r.tokens.some(t => t.length === 1 && t === initial);
         const hasLast = r.tokenSet.has(last);
         return hasInitial && hasLast;
       });
-
-      if (matches.length === 1) return matches[0].ops;
-
-      // If multiple rows share same last name, pick the one with the highest ops (safest bias)
-      if (matches.length > 1) {
-        return matches.reduce((max, r) => (r.ops > max ? r.ops : max), -1);
+      if (initialMatches.length === 1) return initialMatches[0].ops;
+      if (initialMatches.length > 1) {
+        return initialMatches.reduce((max, r) => (r.ops > max ? r.ops : max), -1);
       }
       return null;
     },
 
     /* ===== Attendance lookup ===== */
     getOps(member) {
-      // 1) ID
+      // ID
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
-      // 2) Names with alias/collapse and variants
+      // Names (alias/collapse/variants)
       if (member?.name) {
         const raw = this.nameKey(member.name);
         const rankless = this.stripRank(raw);
@@ -613,16 +624,16 @@ export default {
           if (this.attendanceMap[k] !== undefined) return this.attendanceMap[k];
         }
       }
-      // 3) Fuzzy fallback
+      // Fuzzy
       const fuzzy = this.fuzzyOpsByInitialAndLast(member);
       if (Number.isFinite(fuzzy)) return fuzzy;
 
-      // 4) Last resort
+      // Last resort
       const direct = this.parseOps(member?.opsAttended);
       return direct !== null ? direct : null;
     },
 
-    /* ===== Promotions (unchanged rules) ===== */
+    /* ===== Promotions ===== */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
