@@ -170,7 +170,8 @@
           <div v-for="ft in activeFireteams" :key="ft.name" class="fireteam-block">
             <div class="fireteam-header">
               <span class="fireteam-title">{{ ft.name.toUpperCase() }}</span>
-              <span class="fireteam-count">{{ ft.slots.length }} SLOTS</span>
+              <!-- Count in parentheses so '1' and '4' cannot read as '14' -->
+              <span class="fireteam-count">({{ ft.slots.length }} SLOTS)</span>
             </div>
 
             <div class="squad-members-grid">
@@ -298,6 +299,9 @@
                 </template>
               </div>
             </div>
+
+            <!-- Divider between fireteams -->
+            <div class="fireteam-divider"></div>
           </div>
         </div>
 
@@ -320,15 +324,11 @@ export default {
   data() {
     return {
       activeSquad: null,
-
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
-
-      // per-member loadout state
       loadouts: {},
-
       loadoutOptions: {
         grenadier: { label: "Grenadier", points: 2, explosive: true },
         antitank:  { label: "Anti-Tank", points: 3, explosive: true },
@@ -342,18 +342,14 @@ export default {
   computed: {
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
-
       (this.orbat || []).forEach((sq) => {
         const n = String(sq.squad || "").trim().toLowerCase();
-
         if (n === "broadsword command") groups.broadswordCommand = sq;
         else if (n === "chalk actual") groups.chalkActual = sq;
         else if (["chalk 1","chalk 2","chalk 3","chalk 4"].includes(n)) groups.chalks.push(sq);
-        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n))
-          groups.support.push(sq);
+        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n)) groups.support.push(sq);
         else groups.other.push(sq);
       });
-
       groups.chalks.sort((a,b)=>a.squad.localeCompare(b.squad, undefined, {numeric:true}));
       groups.support.sort((a,b)=>a.squad.localeCompare(b.squad));
       groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
@@ -362,7 +358,6 @@ export default {
 
     activeFireteams() {
       if (!this.activeSquad) return [];
-
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
         const sorted = this.activeSquad.fireteams.slice().map((ft) => ({
           name: ft.name || "Element",
@@ -431,7 +426,7 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
-      // fallback when no slot grid present: group raw members by fireteam
+      // Fallback when no slot grid: group raw members by fireteam
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -444,18 +439,11 @@ export default {
 
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
+      let points = 0; const errors = []; const explosiveTaken = new Set();
 
-      let points = 0;
-      const errors = [];
-      const explosiveTaken = new Set();
-
-      const slots = [];
-      this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((s) => slots.push(s)));
-
-      slots.forEach((slot) => {
+      this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((slot) => {
         const member = slot.member;
         if (!member) return;
-
         const l = this.getLoadout(member);
 
         if (l.disposable) {
@@ -463,22 +451,19 @@ export default {
           if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable");
           explosiveTaken.add("disposable");
         }
-
         if (l.primary) {
           const def = this.loadoutOptions[l.primary];
           if (def) {
             points += def.points;
-
             if (def.explosive) {
               if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`);
               explosiveTaken.add(l.primary);
             }
           }
         }
-      });
+      }));
 
       if (points > 10) errors.push("Exceeds 10 point maximum");
-
       return { valid: errors.length === 0, points, errors };
     },
   },
@@ -663,8 +648,28 @@ export default {
 .loadout-status .warn { color: rgba(255,190,80,0.95); }
 .loadout-status .ok { color: rgba(120,255,170,0.9); }
 
-/* Cards grid inside modal — tighter min width to prevent overflow */
-.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+/* Scroll area (keeps very large squads contained) */
+.squad-modal-scroll { overflow: auto; padding-right: .4rem; margin-top: .8rem; max-height: calc(90vh - 200px); }
+
+/* Fireteam blocks */
+.fireteam-block { margin-bottom: 1.2rem; }
+.fireteam-header {
+  position: sticky; top: 0;
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: .35rem .25rem;
+  background: linear-gradient(to bottom, rgba(5,8,17,.92), rgba(5,8,17,.75));
+  z-index: 1;
+  border-top: 1px solid rgba(30,144,255,.35);
+  border-bottom: 1px solid rgba(30,144,255,.15);
+}
+.fireteam-title { font-weight: 700; letter-spacing: .06em; color: #e0f0ff; }
+.fireteam-count { color: #9ec5e6; font-size: .9rem; }
+
+/* visible separator between teams */
+.fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
+
+/* Cards grid inside modal — tighter min width and consistent gaps */
+.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .85rem; }
 
 /* Card */
 .member-card { background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
@@ -674,9 +679,8 @@ export default {
 .member-header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .9rem; }
 .member-header h3 { margin: 0; font-size: 1.1rem; color: #e0f0ff; word-break: break-word; }
 .rank-line { margin: 0.15rem 0 0; font-size: 0.88rem; color: #9ec5e6; display: flex; gap: .6rem; flex-wrap: wrap; }
-
 .member-rank-insignia-wrapper { width: 46px; height: 46px; display: grid; place-items: center; }
-.member-rank-insignia { max-width: 46px; max-height: 46px; object-fit: contain; } /* hard cap */
+.member-rank-insignia { max-width: 46px; max-height: 46px; object-fit: contain; }
 
 /* Body */
 .member-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.6rem; font-size: 0.9rem; }
@@ -704,6 +708,6 @@ export default {
 /* Footer */
 .member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
 
-/* Absolute safety belt: never let random images explode the layout */
+/* Safety belt: never let random images explode the layout */
 :deep(.squad-modal img) { max-width: 100%; height: auto; }
 </style>
