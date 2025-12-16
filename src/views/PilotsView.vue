@@ -1,4 +1,3 @@
-<!-- src/views/PilotsView.vue -->
 <template>
   <section id="members" class="section-container">
     <div style="height: 52px; overflow: hidden">
@@ -135,7 +134,7 @@
             <div class="rhombus-back">&nbsp;</div>
           </div>
 
-          <button class="squad-close" @click="closeSquad">✕</button>
+        <button class="squad-close" @click="closeSquad">✕</button>
         </div>
 
         <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
@@ -147,14 +146,8 @@
             </p>
 
             <div class="loadout-status">
-              <span class="points">
-                LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS
-              </span>
-              <span
-                v-if="!squadLoadoutStatus.valid"
-                class="warn"
-                :title="squadLoadoutStatus.errors.join(' • ')"
-              >
+              <span class="points">LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS</span>
+              <span v-if="!squadLoadoutStatus.valid" class="warn" :title="squadLoadoutStatus.errors.join(' • ')">
                 ⚠ LOADOUT INVALID
               </span>
               <span v-else class="ok">✓ VALID</span>
@@ -170,7 +163,6 @@
           <div v-for="ft in activeFireteams" :key="ft.name" class="fireteam-block">
             <div class="fireteam-header">
               <span class="fireteam-title">{{ ft.name.toUpperCase() }}</span>
-              <!-- Count in parentheses so '1' and '4' cannot read as '14' -->
               <span class="fireteam-count">({{ ft.slots.length }} SLOTS)</span>
             </div>
 
@@ -238,8 +230,9 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
+                      <!-- Ops + promo now use merged attendance -->
                       <div class="ops-promo" :class="{ imminent: opsToNextPromotion(slot.member) === 1 }">
-                        <p><strong>Ops Attended:</strong> {{ formatOps(slot.member?.opsAttended) }}</p>
+                        <p><strong>Ops Attended:</strong> {{ formatOps(getOps(slot.member)) }}</p>
                         <p>
                           <strong>Next Rank:</strong>
                           {{ nextPromotionRank(slot.member) || '—' }}
@@ -300,11 +293,9 @@
               </div>
             </div>
 
-            <!-- Divider between fireteams -->
             <div class="fireteam-divider"></div>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -318,8 +309,10 @@
 export default {
   name: "PilotsView",
   props: {
-    members: { type: Array, default: () => [] },
-    orbat: { type: Array, default: () => [] },
+    members: { type: Array, default: () => [] },    // roster (may include opsAttended)
+    orbat:   { type: Array, default: () => [] },
+    // Optional: raw attendance rows [{ name, ops }] if you pass them in later
+    attendance: { type: Array, default: () => [] },
   },
   data() {
     return {
@@ -340,6 +333,27 @@ export default {
     };
   },
   computed: {
+    // Build a fast lookup of opsAttended by normalized name and by id (if present)
+    attendanceMap() {
+      const map = Object.create(null);
+      // From members prop (preferred if populated)
+      (this.members || []).forEach(m => {
+        const ops = Number(m.opsAttended);
+        if (Number.isFinite(ops)) {
+          if (m.id) map[`ID:${m.id}`] = ops;
+          if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
+        }
+      });
+      // From optional attendance prop (fallback)
+      (this.attendance || []).forEach(row => {
+        const ops = Number(row?.ops ?? row?.attended ?? row?.value);
+        if (!Number.isFinite(ops)) return;
+        if (row?.id) map[`ID:${row.id}`] = ops;
+        if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
+      });
+      return map;
+    },
+
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
       (this.orbat || []).forEach((sq) => {
@@ -363,7 +377,6 @@ export default {
           name: ft.name || "Element",
           slots: (ft.slots || []).slice(),
         }));
-
         const orderKey = (n) => {
           const t = String(n || "").toLowerCase();
           if (t === "fireteam 1") return 0;
@@ -373,7 +386,6 @@ export default {
           if (t === "element") return 90;
           return 50;
         };
-
         sorted.sort((a,b)=>{
           const ka = orderKey(a.name), kb = orderKey(b.name);
           if (ka !== kb) return ka - kb;
@@ -387,87 +399,75 @@ export default {
           "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
           "HMC","HM1","HM2","HM3","HN","HA","HR",
         ];
-
         const normalizeRank = (r) => String(r || "").trim().toUpperCase().replace(/\s+/g, "");
-        const rankScore = (r) => {
-          const rr = normalizeRank(r);
-          const idx = rankOrder.indexOf(rr);
-          return idx === -1 ? 999 : idx;
-        };
-
-        const statusScore = (s) => {
-          const st = String(s || "").toUpperCase();
-          if (st === "FILLED") return 0;
-          if (st === "VACANT") return 1;
-          if (st === "CLOSED") return 2;
-          return 3;
-        };
-
+        const rankScore = (r) => { const rr = normalizeRank(r); const idx = rankOrder.indexOf(rr); return idx === -1 ? 999 : idx; };
+        const statusScore = (s) => { const st = String(s || "").toUpperCase(); if (st === "FILLED") return 0; if (st === "VACANT") return 1; if (st === "CLOSED") return 2; return 3; };
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
         sorted.forEach((ft) => {
           ft.slots = (ft.slots || []).slice().sort((a, b) => {
-            const as = statusScore(a.status);
-            const bs = statusScore(b.status);
+            const as = statusScore(a.status), bs = statusScore(b.status);
             if (as !== bs) return as - bs;
-
-            if (a.status !== "FILLED" || b.status !== "FILLED") {
-              return collator.compare(String(a.role || ""), String(b.role || ""));
-            }
-
-            const ar = rankScore(a.member?.rank);
-            const br = rankScore(b.member?.rank);
+            if (a.status !== "FILLED" || b.status !== "FILLED") return collator.compare(String(a.role || ""), String(b.role || ""));
+            const ar = rankScore(a.member?.rank), br = rankScore(b.member?.rank);
             if (ar !== br) return ar - br;
-
             return collator.compare(String(a.member?.name || ""), String(b.member?.name || ""));
           });
         });
-
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
-      // Fallback when no slot grid: group raw members by fireteam
+      // Fallback if no slot grid
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
         if (!map[ft]) map[ft] = [];
         map[ft].push({ status: "FILLED", role: m.slot || "Unassigned", member: m });
       });
-
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
 
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
       let points = 0; const errors = []; const explosiveTaken = new Set();
-
       this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((slot) => {
-        const member = slot.member;
-        if (!member) return;
+        const member = slot.member; if (!member) return;
         const l = this.getLoadout(member);
-
-        if (l.disposable) {
-          points += 1;
-          if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable");
-          explosiveTaken.add("disposable");
-        }
-        if (l.primary) {
-          const def = this.loadoutOptions[l.primary];
-          if (def) {
-            points += def.points;
-            if (def.explosive) {
-              if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`);
-              explosiveTaken.add(l.primary);
-            }
-          }
-        }
+        if (l.disposable) { points += 1; if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable"); explosiveTaken.add("disposable"); }
+        if (l.primary) { const def = this.loadoutOptions[l.primary]; if (def) { points += def.points; if (def.explosive) { if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`); explosiveTaken.add(l.primary); } } }
       }));
-
       if (points > 10) errors.push("Exceeds 10 point maximum");
       return { valid: errors.length === 0, points, errors };
     },
   },
   methods: {
+    /* ==== Attendance merge ==== */
+    nameKey(name) {
+      // normalize: remove quotes/dots, collapse spaces, uppercase
+      return String(name || "")
+        .replace(/["'.]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
+    },
+    getOps(member) {
+      // 1) ID match
+      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
+        return this.attendanceMap[`ID:${member.id}`];
+      }
+      // 2) Name match
+      if (member?.name) {
+        const nk = this.nameKey(member.name);
+        if (this.attendanceMap[`NM:${nk}`] !== undefined) {
+          return this.attendanceMap[`NM:${nk}`];
+        }
+      }
+      // 3) fallback to member.opsAttended if present
+      const direct = Number(member?.opsAttended);
+      return Number.isFinite(direct) ? direct : null;
+    },
+
+    /* ==== UI helpers ==== */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -499,6 +499,7 @@ export default {
       return "UNSC ELEMENT";
     },
 
+    /* ==== Certs & loadouts ==== */
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -531,6 +532,7 @@ export default {
       return opts;
     },
 
+    /* ==== Ranks / promotions ==== */
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
@@ -586,7 +588,7 @@ export default {
       return ladders[key] || null;
     },
     opsToNextPromotion(member) {
-      const ops = Number(member?.opsAttended);
+      const ops = this.getOps(member);
       if (!Number.isFinite(ops)) return null;
       const ladder = this.promotionLadderFor(member?.rank);
       if (!ladder || !Number.isFinite(ladder.nextAt)) return null;
@@ -607,7 +609,7 @@ export default {
 <style scoped>
 /* Layout */
 .section-container { height: 100vh; overflow-y: auto; padding: 2.5rem 3rem; color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
-.section-content_container { width: 100% !important; }
+.section_content_container { width: 100% !important; }
 .orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
 .hierarchy-container { width: 100%; margin-top: 2rem; }
 .orbat-row { margin-bottom: 3rem; }
@@ -634,13 +636,13 @@ export default {
 .squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
 .squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
 
-/* Modal shell */
+/* Modal */
 .squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .squad-modal { background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
 .squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
 
-/* Modal meta */
+/* Meta */
 .squad-modal-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(30,144,255,0.6); padding-bottom: 0.5rem; }
 .squad-modal-meta.invalid { border-bottom-color: rgba(255,190,80,0.9); }
 .loadout-status { margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center; font-size: 0.85rem; text-transform: uppercase; }
@@ -648,30 +650,18 @@ export default {
 .loadout-status .warn { color: rgba(255,190,80,0.95); }
 .loadout-status .ok { color: rgba(120,255,170,0.9); }
 
-/* Scroll area (keeps very large squads contained) */
+/* Scroll + Fireteam blocks */
 .squad-modal-scroll { overflow: auto; padding-right: .4rem; margin-top: .8rem; max-height: calc(90vh - 200px); }
-
-/* Fireteam blocks */
 .fireteam-block { margin-bottom: 1.2rem; }
-.fireteam-header {
-  position: sticky; top: 0;
-  display: flex; justify-content: space-between; align-items: baseline;
-  padding: .35rem .25rem;
-  background: linear-gradient(to bottom, rgba(5,8,17,.92), rgba(5,8,17,.75));
-  z-index: 1;
-  border-top: 1px solid rgba(30,144,255,.35);
-  border-bottom: 1px solid rgba(30,144,255,.15);
-}
+.fireteam-header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: baseline; padding: .35rem .25rem; background: linear-gradient(to bottom, rgba(5,8,17,.92), rgba(5,8,17,.75)); z-index: 1; border-top: 1px solid rgba(30,144,255,.35); border-bottom: 1px solid rgba(30,144,255,.15); }
 .fireteam-title { font-weight: 700; letter-spacing: .06em; color: #e0f0ff; }
 .fireteam-count { color: #9ec5e6; font-size: .9rem; }
-
-/* visible separator between teams */
 .fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
 
-/* Cards grid inside modal — tighter min width and consistent gaps */
+/* Cards grid */
 .squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .85rem; }
 
-/* Card */
+/* Cards */
 .member-card { background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
 .member-card.vacant, .member-card.closed { opacity: 0.9; border-left-color: rgba(30,144,255,0.35); }
 
@@ -686,7 +676,7 @@ export default {
 .member-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.6rem; font-size: 0.9rem; }
 .member-column p { margin: 0.18rem 0; }
 
-/* Ops / promo callout */
+/* Ops / promo */
 .ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
 .ops-promo.imminent { border-color: rgba(120,255,170,0.85); background: rgba(0,50,20,0.35); color: rgba(120,255,170,0.95); box-shadow: 0 0 10px rgba(120,255,170,0.15) inset; }
 
@@ -708,6 +698,6 @@ export default {
 /* Footer */
 .member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
 
-/* Safety belt: never let random images explode the layout */
+/* Safety belt */
 :deep(.squad-modal img) { max-width: 100%; height: auto; }
 </style>
