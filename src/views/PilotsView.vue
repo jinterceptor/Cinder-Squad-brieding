@@ -332,62 +332,6 @@ export default {
     };
   },
   computed: {
-    /* ---------- Pre-cleaned attendance rows ---------- */
-    attendanceRowsClean() {
-      const rows = [];
-      (this.attendance || []).forEach(row => {
-        const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
-        if (ops === null) return;
-        const name = row?.name ?? row?.A ?? "";
-        const clean = this.nameKey(name);
-        const tokens = clean.split(" ").filter(Boolean);
-        const tokenSet = new Set(tokens);
-        rows.push({ clean, tokens, tokenSet, ops });
-      });
-      return rows;
-    },
-
-    /* ---------- Map built ONLY from Attendance ---------- */
-    attendanceMap() {
-      const map = Object.create(null);
-      const addVariants = (cleanUpper, ops) => {
-        if (!cleanUpper) return;
-        const rankless = this.stripRank(cleanUpper);
-        const isKey = this.initialSurnameKey(rankless);
-        const lnKey = this.lastNameKey(rankless);
-        map[`NM:${cleanUpper}`] = ops;
-        map[`NR:${rankless}`] = ops;
-        if (isKey) map[`IS:${isKey}`] = ops;
-        if (lnKey) map[`LN:${lnKey}`] = ops;
-
-        const collapsed = this.collapseInitialNicknameSurname(rankless);
-        if (collapsed && collapsed !== rankless) {
-          const cis = this.initialSurnameKey(collapsed);
-          const cln = this.lastNameKey(collapsed);
-          map[`NR:${collapsed}`] = ops;
-          if (cis) map[`IS:${cis}`] = ops;
-          if (cln) map[`LN:${cln}`] = ops;
-        }
-        const alias = this.aliasCanonical(rankless);
-        if (alias) {
-          const ais = this.initialSurnameKey(alias);
-          const aln = this.lastNameKey(alias);
-          map[`AL:${alias}`] = ops;
-          if (ais) map[`IS:${ais}`] = ops;
-          if (aln) map[`LN:${aln}`] = ops;
-        }
-      };
-
-      (this.attendance || []).forEach(row => {
-        const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
-        if (ops === null) return;
-        if (row?.id) map[`ID:${row.id}`] = ops;
-        addVariants(this.nameKey(row?.name ?? row?.A), ops);
-      });
-      return map;
-    },
-
-    /* ---------- ORBAT groupings ---------- */
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
       (this.orbat || []).forEach((sq) => {
@@ -403,8 +347,6 @@ export default {
       groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
       return groups;
     },
-
-    /* ---------- Active squad's fireteams ---------- */
     activeFireteams() {
       if (!this.activeSquad) return [];
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
@@ -457,7 +399,6 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
-      // Fallback if no slot grid
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -466,8 +407,6 @@ export default {
       });
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
-
-    /* ---------- Squad points validity ---------- */
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
       let points = 0; const errors = []; const explosiveTaken = new Set();
@@ -482,7 +421,7 @@ export default {
     },
   },
   methods: {
-    /* ===== Parsing & normalization ===== */
+    /* -------------------- Normalization helpers -------------------- */
     parseOps(v) {
       if (v === null || v === undefined) return null;
       if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -493,138 +432,115 @@ export default {
       const n = parseInt(m[0], 10);
       return Number.isFinite(n) ? n : null;
     },
+    baseClean(name) {
+      return String(name || "")
+        .replace(/[“”„‟]/g, '"')
+        .replace(/[’‘]/g, "'")
+        .replace(/["']/g, "")  // strip quotes so "THY" → THY
+        .replace(/\./g, "")    // strip dots so T. → T
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
+    },
     stripRank(uppercased) {
       const rankPattern = /^(RCT|PVT|PFC|SPC(?:2|3|4)?|LCPL|CPL|SGT|SSGT|GYSGT|WO|CWO[2-5]|[12](?:ND|ST)LT|CAPT|MAJ|HR|HA|HN|HM[123]|HMC)\b[.\s,:-]*/i;
       let s = uppercased;
       while (rankPattern.test(s)) s = s.replace(rankPattern, "");
       return s.trim();
     },
-    baseClean(name) {
-      return String(name || "")
-        .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")
-        .replace(/\./g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toUpperCase();
-    },
-    nameKey(name) { return this.baseClean(name); },
-
-    collapseInitialNicknameSurname(cleanUpper) {
-      if (!cleanUpper) return "";
-      const toks = cleanUpper.split(" ").filter(Boolean);
+    collapseInitialNicknameSurname(ranklessUpper) {
+      // "T THY TYRSSON" -> "T TYRSSON"
+      const toks = ranklessUpper.split(" ").filter(Boolean);
       if (toks.length >= 3 && toks[0].length === 1) {
         return `${toks[0]} ${toks[toks.length - 1]}`;
       }
-      return cleanUpper;
+      return ranklessUpper;
     },
-
-    aliasCanonical(ranklessUpper) {
-      if (!ranklessUpper) return null;
-      const map = {
-        "T THY TYRSSON": "T TYRSSON",
-        "J KONG JAGRO": "J JAGRO",
-      };
-      return map[ranklessUpper] || null;
-    },
-
-    initialSurnameKey(cleanedUpperName) {
-      if (!cleanedUpperName) return "";
-      const SUFFIX = new Set(["JR","SR","III","IV","V"]);
-      const toks = cleanedUpperName.split(" ").filter(Boolean);
+    initialSurnameKey(ranklessUpper) {
+      const toks = ranklessUpper.split(" ").filter(Boolean);
       if (!toks.length) return "";
-      let last = toks[toks.length - 1];
-      if (SUFFIX.has(last) && toks.length >= 2) last = toks[toks.length - 2];
       const first = toks[0] || "";
-      if (!first || !last) return "";
-      return `${first[0]} ${last}`.trim();
+      const last = toks[toks.length - 1] || "";
+      return first && last ? `${first[0]} ${last}` : "";
     },
-    lastNameKey(cleanedUpperName) {
-      if (!cleanedUpperName) return "";
-      const SUFFIX = new Set(["JR","SR","III","IV","V"]);
-      const toks = cleanedUpperName.split(" ").filter(Boolean);
-      if (!toks.length) return "";
-      let last = toks[toks.length - 1];
-      if (SUFFIX.has(last) && toks.length >= 2) last = toks[toks.length - 2];
-      return last || "";
+    lastName(ranklessUpper) {
+      const toks = ranklessUpper.split(" ").filter(Boolean);
+      return toks.length ? toks[toks.length - 1] : "";
     },
 
-    /* ===== Heuristic resolver (handles quoted nicknames) ===== */
-    resolveOpsByHeuristics(member) {
-      const raw = this.nameKey(member?.name || "");
-      const rankless = this.stripRank(raw);
-      const toks = rankless.split(" ").filter(Boolean);
-      if (!toks.length) return null;
-
-      const first = toks[0];
-      const last = this.lastNameKey(rankless);
-      const initial = first ? first[0] : "";
-      const nickTokens = toks.slice(1, -1); // middle tokens like THY/KONG
-      const memberSet = new Set(toks);
-
-      let best = { score: -1, ops: null };
-      for (const r of this.attendanceRowsClean) {
-        let score = 0;
-
-        // strong signals
-        if (last && r.tokenSet.has(last)) score += 3;
-        if (initial && r.tokens.some(t => t.length === 1 && t === initial)) score += 2;
-
-        // nickname matches
-        if (nickTokens.length) {
-          nickTokens.forEach(n => { if (r.tokenSet.has(n)) score += 2; });
-        }
-
-        // general token overlap bonus
-        let overlap = 0;
-        for (const t of memberSet) if (r.tokenSet.has(t)) overlap++;
-        score += Math.min(overlap, 3); // cap
-
-        if (score > best.score || (score === best.score && r.ops > best.ops)) {
-          best = { score, ops: r.ops };
-        }
-      }
-
-      return best.score >= 3 ? best.ops : null;
-    },
-
-    /* ===== Attendance lookup ===== */
+    /* -------------------- Attendance matching -------------------- */
     getOps(member) {
-      // ID direct
-      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
-        return this.attendanceMap[`ID:${member.id}`];
-      }
+      if (!member?.name) return null;
 
-      if (member?.name) {
-        const raw = this.nameKey(member.name);
-        const rankless = this.stripRank(raw);
-        const collapsed = this.collapseInitialNicknameSurname(rankless);
-        const alias = this.aliasCanonical(rankless);
+      // Clean variants for the member
+      const cleaned = this.baseClean(member.name);
+      const rankless = this.stripRank(cleaned);
+      const collapsed = this.collapseInitialNicknameSurname(rankless);
+      const isKey    = this.initialSurnameKey(rankless);
+      const last     = this.lastName(rankless);
+      const nickSet  = new Set(rankless.split(" ").filter(Boolean).slice(1, -1)); // middle tokens (nicknames)
 
-        const tries = [
-          alias && `AL:${alias}`,
-          `NR:${rankless}`, `NM:${raw}`,
-          `IS:${this.initialSurnameKey(rankless)}`, `LN:${this.lastNameKey(rankless)}`,
-          `IS:${this.initialSurnameKey(raw)}`,      `LN:${this.lastNameKey(raw)}`,
-          collapsed && `NR:${collapsed}`,
-          collapsed && `IS:${this.initialSurnameKey(collapsed)}`,
-          collapsed && `LN:${this.lastNameKey(collapsed)}`,
-        ].filter(Boolean);
+      // One pass over attendance rows, compute best match
+      let bestScore = -1;
+      let bestOps = null;
 
-        for (const k of tries) {
-          if (this.attendanceMap[k] !== undefined) return this.attendanceMap[k];
+      for (const row of (this.attendance || [])) {
+        const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
+        if (ops === null) continue;
+
+        const rowName   = this.baseClean(row?.name ?? row?.A ?? "");
+        const rowRankless = this.stripRank(rowName);
+        const rowTokens = rowRankless.split(" ").filter(Boolean);
+        const rowSet    = new Set(rowTokens);
+
+        // Exact name (cleaned) match
+        if (rowName === cleaned) {
+          bestScore = 100; bestOps = ops; break;
+        }
+        // Exact rankless match
+        if (rowRankless === rankless) {
+          if (100 - 1 > bestScore) { bestScore = 99; bestOps = ops; }
+        }
+        // Collapsed "T TYRSSON" match
+        if (this.collapseInitialNicknameSurname(rowRankless) === collapsed) {
+          if (98 > bestScore) { bestScore = 98; bestOps = ops; }
+        }
+        // Initial + last name present
+        const rowIS = this.initialSurnameKey(rowRankless);
+        if (rowIS && rowIS === isKey) {
+          if (95 > bestScore) { bestScore = 95; bestOps = ops; }
+        }
+        // Last name + nickname token(s)
+        let score = 0;
+        if (last && rowSet.has(last)) score += 3;
+        if (isKey && rowIS === isKey) score += 2;
+        if (nickSet.size) {
+          let nickHits = 0;
+          nickSet.forEach(n => { if (rowSet.has(n)) nickHits++; });
+          score += Math.min(2 * nickHits, 6); // weight nicknames strongly
+        }
+        // small overlap bonus
+        let overlap = 0;
+        for (const t of rowSet) {
+          if (rankless.includes(t)) overlap++;
+        }
+        score += Math.min(overlap, 2);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestOps = ops;
+        } else if (score === bestScore && bestOps !== null && ops > bestOps) {
+          // tie-breaker: larger ops if same score
+          bestOps = ops;
         }
       }
 
-      // Final robust fallback for quoted-nickname cases (Thy/KONG)
-      const heur = this.resolveOpsByHeuristics(member);
-      if (Number.isFinite(heur)) return heur;
-
-      // No fallback to member.opsAttended
-      return null;
+      // If we never got a decent score, treat as null
+      if (bestScore < 3 && bestScore < 95) return null;
+      return bestOps;
     },
 
-    /* ===== Promotions ===== */
+    /* -------------------- Promotions -------------------- */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
@@ -660,12 +576,14 @@ export default {
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: "Officer, RTO; Platoon lead & experience" },
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: "Officer, RTO; Unit lead only" },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
+
         HA:  { nextRank: "HN",  nextAt: 2,  misc: "Assigned to Corpsman slot" },
         HN:  { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
         HM3: { nextRank: "HM2", nextAt: 20, misc: "Assigned to Corpsman slot" },
         HM2: { nextRank: "HM1", nextAt: 30, misc: "Assigned to Corpsman slot" },
         HM1: { nextRank: "HMC", nextAt: null, misc: "Medical; Medic Trainer" },
         HMC: { nextRank: null,  nextAt: null, misc: "Medical Corps lead" },
+
         WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
         CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
         CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
@@ -682,7 +600,7 @@ export default {
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* ===== UI utils ===== */
+    /* -------------------- UI utils -------------------- */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -737,30 +655,6 @@ export default {
       this.loadouts[id] = { ...curr, primary: value || "" };
     },
     loadoutLabel(key) { const def = this.loadoutOptions[key]; return def ? `${def.label} (${def.points}pt)` : key; },
-    availableLoadouts(member) {
-      const has = (label) => this.hasCert(member, this.certLabels.indexOf(label));
-      const opts = [];
-      if (has("Grenadier")) opts.push("grenadier");
-      if (has("Anti Tank")) opts.push("antitank");
-      if (has("Machine Gunner")) { opts.push("m247", "m247_50"); }
-      if (has("Combat Engineer")) opts.push("engineer");
-      if (has("Marksman")) opts.push("marksman");
-      return opts;
-    },
-
-    rankCode(rank) {
-      if (!rank) return null;
-      const key = rank.trim().toUpperCase();
-      const map = {
-        RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
-        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
-        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
-        "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
-        HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
-      };
-      return map[key] || null;
-    },
-    rankInsignia(rank) { const base = this.rankCode(rank); return base ? `/ranks/${base}.png` : null; },
 
     formatOps(v) {
       if (v === null || v === undefined) return "—";
