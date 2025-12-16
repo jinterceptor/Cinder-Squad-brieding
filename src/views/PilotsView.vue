@@ -1,3 +1,4 @@
+<!-- src/views/PilotsView.vue -->
 <template>
   <section id="members" class="section-container">
     <div style="height: 52px; overflow: hidden">
@@ -134,7 +135,7 @@
             <div class="rhombus-back">&nbsp;</div>
           </div>
 
-        <button class="squad-close" @click="closeSquad">✕</button>
+          <button class="squad-close" @click="closeSquad">✕</button>
         </div>
 
         <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
@@ -154,9 +155,7 @@
             </div>
           </div>
 
-          <div class="squad-tag">
-            <span>{{ squadInitials(activeSquad.squad) }}</span>
-          </div>
+          <div class="squad-tag"><span>{{ squadInitials(activeSquad.squad) }}</span></div>
         </div>
 
         <div class="squad-modal-scroll">
@@ -230,15 +229,21 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
-                      <!-- Ops + promo now use merged attendance -->
-                      <div class="ops-promo" :class="{ imminent: opsToNextPromotion(slot.member) === 1 }">
+                      <!-- Ops + promo -->
+                      <div
+                        class="ops-promo"
+                        :class="{ imminent: opsToNextPromotion(slot.member) === 1 || opsToNextPromotion(slot.member) === 0 }"
+                      >
                         <p><strong>Ops Attended:</strong> {{ formatOps(getOps(slot.member)) }}</p>
                         <p>
                           <strong>Next Rank:</strong>
-                          {{ nextPromotionRank(slot.member) || '—' }}
+                          {{ nextPromotion(slot.member)?.nextRank || '—' }}
                           <span v-if="opsToNextPromotion(slot.member) !== null">
                             ({{ opsToNextPromotion(slot.member) }} ops)
                           </span>
+                        </p>
+                        <p v-if="nextPromotion(slot.member)?.misc">
+                          <strong>Requirements:</strong> {{ nextPromotion(slot.member).misc }}
                         </p>
                       </div>
 
@@ -261,11 +266,7 @@
                           @change="setPrimary(slot.member, $event.target.value)"
                         >
                           <option value="">None / Standard</option>
-                          <option
-                            v-for="opt in availableLoadouts(slot.member)"
-                            :key="opt"
-                            :value="opt"
-                          >
+                          <option v-for="opt in availableLoadouts(slot.member)" :key="opt" :value="opt">
                             {{ loadoutLabel(opt) }}
                           </option>
                         </select>
@@ -311,8 +312,7 @@ export default {
   props: {
     members: { type: Array, default: () => [] },    // roster (may include opsAttended)
     orbat:   { type: Array, default: () => [] },
-    // Optional: raw attendance rows [{ name, ops }] if you pass them in later
-    attendance: { type: Array, default: () => [] },
+    attendance: { type: Array, default: () => [] }, // optional raw attendance rows
   },
   data() {
     return {
@@ -333,10 +333,9 @@ export default {
     };
   },
   computed: {
-    // Build a fast lookup of opsAttended by normalized name and by id (if present)
+    /* ---------- Attendance merge (ID + normalized name) ---------- */
     attendanceMap() {
       const map = Object.create(null);
-      // From members prop (preferred if populated)
       (this.members || []).forEach(m => {
         const ops = Number(m.opsAttended);
         if (Number.isFinite(ops)) {
@@ -344,7 +343,6 @@ export default {
           if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
         }
       });
-      // From optional attendance prop (fallback)
       (this.attendance || []).forEach(row => {
         const ops = Number(row?.ops ?? row?.attended ?? row?.value);
         if (!Number.isFinite(ops)) return;
@@ -354,6 +352,7 @@ export default {
       return map;
     },
 
+    /* ---------- ORBAT groupings ---------- */
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
       (this.orbat || []).forEach((sq) => {
@@ -370,6 +369,7 @@ export default {
       return groups;
     },
 
+    /* ---------- Active squad fireteams ---------- */
     activeFireteams() {
       if (!this.activeSquad) return [];
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
@@ -427,6 +427,7 @@ export default {
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
 
+    /* ---------- Squad points validity ---------- */
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
       let points = 0; const errors = []; const explosiveTaken = new Set();
@@ -441,9 +442,8 @@ export default {
     },
   },
   methods: {
-    /* ==== Attendance merge ==== */
+    /* ========== Attendance merge ========== */
     nameKey(name) {
-      // normalize: remove quotes/dots, collapse spaces, uppercase
       return String(name || "")
         .replace(/["'.]/g, "")
         .replace(/\s+/g, " ")
@@ -451,23 +451,94 @@ export default {
         .toUpperCase();
     },
     getOps(member) {
-      // 1) ID match
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
-      // 2) Name match
       if (member?.name) {
         const nk = this.nameKey(member.name);
         if (this.attendanceMap[`NM:${nk}`] !== undefined) {
           return this.attendanceMap[`NM:${nk}`];
         }
       }
-      // 3) fallback to member.opsAttended if present
       const direct = Number(member?.opsAttended);
       return Number.isFinite(direct) ? direct : null;
     },
 
-    /* ==== UI helpers ==== */
+    /* ========== Promotion rules ========== */
+    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
+
+    nextPromotion(member) {
+      const key = this.rankKey(member?.rank);
+      // canonicalize a few full names → abbreviations
+      const alias = {
+        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
+        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
+        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
+        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
+        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
+        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
+        HOSPITALCORPSMANTHIRDCLASS: "HM3",
+        HOSPITALCORPSMANSECONDCLASS: "HM2",
+        HOSPITALCORPSMANFIRSTCLASS: "HM1",
+        CHIEFHOSPITALCORPSMAN: "HMC",
+        WARRANTOFFICER: "WO",
+        CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
+        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
+      };
+      const rk = alias[key] || key;
+
+      // Your table (next rank, ops needed, misc requirements)
+      const rules = {
+        // Enlisted line
+        PVT:  { nextRank: "PFC",  nextAt: 2,  misc: null },
+        PFC:  { nextRank: "SPC",  nextAt: 10, misc: null },
+        SPC:  { nextRank: "SPC2", nextAt: 20, misc: null },
+        SPC2: { nextRank: "SPC3", nextAt: 30, misc: null },
+        // SPC3 → SPC4 has extra misc per your row
+        SPC3: { nextRank: "SPC4", nextAt: 40, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
+        // From SPC4 to NCO track (ops N/A, has misc)
+        SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
+
+        // NCOs — all N/A ops, role/experience gates
+        LCPL: { nextRank: "Cpl", nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
+        CPL:  { nextRank: "Sgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
+        SGT:  { nextRank: "SSgt",nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
+        SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
+        GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Officer, RTO; Support staff / Platoon lead" },
+
+        // Officers — N/A ops, role gates
+        "2NDLT": { nextRank: "1stLt", nextAt: null, misc: "Officer, RTO; Platoon lead & experience" },
+        "1STLT": { nextRank: "Capt",  nextAt: null, misc: "Officer, RTO; Unit lead only" },
+        CAPT:    { nextRank: null,    nextAt: null, misc: null },
+
+        // Medical line
+        HA:  { nextRank: "HN",  nextAt: 2,  misc: "Assigned to Corpsman slot" },
+        HN:  { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
+        HM3: { nextRank: "HM2", nextAt: 20, misc: "Assigned to Corpsman slot" },
+        HM2: { nextRank: "HM1", nextAt: 30, misc: "Assigned to Corpsman slot" },
+        HM1: { nextRank: "HMC", nextAt: null, misc: "Medical; Medic Trainer" },
+        HMC: { nextRank: null,  nextAt: null, misc: "Medical Corps lead" },
+
+        // Warrant
+        WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
+        CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
+        CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
+        CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
+        CWO5: { nextRank: null,   nextAt: null, misc: null },
+      };
+
+      return rules[rk] || { nextRank: null, nextAt: null, misc: null };
+    },
+
+    opsToNextPromotion(member) {
+      const ops = this.getOps(member);
+      const rule = this.nextPromotion(member);
+      if (!Number.isFinite(ops)) return null;
+      if (!Number.isFinite(rule.nextAt)) return null; // N/A
+      return Math.max(0, rule.nextAt - ops);
+    },
+
+    /* ========== UI + util helpers ========== */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -485,11 +556,13 @@ export default {
       return (sq.members || []).length;
     },
     slotKey(slot, idx) { return slot.member?.id || `${slot.status}-${slot.role}-${idx}`; },
+
     squadInitials(name) {
       if (!name) return "UNSC";
       const parts = String(name).trim().split(/\s+/);
       if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-      return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0])).join("").toUpperCase();
+      return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
+                  .join("").toUpperCase();
     },
     squadDescriptor(name) {
       const n = String(name || "").toLowerCase();
@@ -499,7 +572,7 @@ export default {
       return "UNSC ELEMENT";
     },
 
-    /* ==== Certs & loadouts ==== */
+    /* ========== Certs & loadouts ========== */
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -532,72 +605,21 @@ export default {
       return opts;
     },
 
-    /* ==== Ranks / promotions ==== */
+    /* ========== Rank insignia ========== */
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
-      const rankMap = {
+      const map = {
         RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
         LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
         WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
         "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
         HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
       };
-      return rankMap[key] || null;
+      return map[key] || null;
     },
-    rankInsignia(rank) { const fileBase = this.rankCode(rank); return fileBase ? `/ranks/${fileBase}.png` : null; },
+    rankInsignia(rank) { const base = this.rankCode(rank); return base ? `/ranks/${base}.png` : null; },
 
-    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
-    promotionLadderFor(rank) {
-      const r = this.rankKey(rank);
-      const alias = {
-        PRIVATE: "PVT", PVT: "PVT",
-        "PRIVATEFIRSTCLASS": "PFC", PFC: "PFC",
-        SPECIALIST: "SPC", SPC: "SPC",
-        "SPECIALIST2": "SPC2", SPC2: "SPC2",
-        "SPECIALIST3": "SPC3", SPC3: "SPC3",
-        "SPECIALIST4": "SPC4", SPC4: "SPC4",
-        HOSPITALMANAPPRENTICE: "HA", HA: "HA",
-        HOSPITALMAN: "HN", HN: "HN",
-        "HOSPITALCORPSMANTHIRDCLASS": "HM3", HM3: "HM3",
-        "HOSPITALCORPSMANSECONDCLASS": "HM2", HM2: "HM2",
-        WARRANTOFFICER: "WO", WO: "WO",
-        "CHIEFWARRANTOFFICER2": "CWO2", CWO2: "CWO2",
-        "CHIEFWARRANTOFFICER3": "CWO3", CWO3: "CWO3",
-        "CHIEFWARRANTOFFICER4": "CWO4", CWO4: "CWO4",
-      };
-      const key = alias[r] || r;
-
-      const ladders = {
-        PVT:  { nextAt: 2,  nextRank: "PFC" },
-        PFC:  { nextAt: 10, nextRank: "SPC" },
-        SPC:  { nextAt: 20, nextRank: "SPC2" },
-        SPC2: { nextAt: 30, nextRank: "SPC3" },
-        SPC3: { nextAt: 40, nextRank: "SPC4" },
-        SPC4: { nextAt: null, nextRank: null },
-        HA:   { nextAt: 2,  nextRank: "HN" },
-        HN:   { nextAt: 10, nextRank: "HM3" },
-        HM3:  { nextAt: 20, nextRank: "HM2" },
-        HM2:  { nextAt: 30, nextRank: null },
-        WO:   { nextAt: null, nextRank: null },
-        CWO2: { nextAt: 10, nextRank: "CWO3" },
-        CWO3: { nextAt: 20, nextRank: "CWO4" },
-        CWO4: { nextAt: 30, nextRank: null },
-      };
-
-      return ladders[key] || null;
-    },
-    opsToNextPromotion(member) {
-      const ops = this.getOps(member);
-      if (!Number.isFinite(ops)) return null;
-      const ladder = this.promotionLadderFor(member?.rank);
-      if (!ladder || !Number.isFinite(ladder.nextAt)) return null;
-      return Math.max(0, ladder.nextAt - ops);
-    },
-    nextPromotionRank(member) {
-      const ladder = this.promotionLadderFor(member?.rank);
-      return ladder?.nextRank || null;
-    },
     formatOps(v) {
       const n = Number(v);
       return Number.isFinite(n) ? n : "—";
@@ -609,7 +631,7 @@ export default {
 <style scoped>
 /* Layout */
 .section-container { height: 100vh; overflow-y: auto; padding: 2.5rem 3rem; color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
-.section_content_container { width: 100% !important; }
+.section-content_container { width: 100% !important; }
 .orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
 .hierarchy-container { width: 100%; margin-top: 2rem; }
 .orbat-row { margin-bottom: 3rem; }
