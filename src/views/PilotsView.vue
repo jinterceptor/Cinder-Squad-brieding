@@ -262,7 +262,8 @@
                             ({{ opsToNextPromotion(slot.member) }} ops)
                           </span>
                         </p>
-                        <p v-if="nextPromotion(slot.member)?.misc">
+                        <!-- FIX: add class="detail-line" so the label uses themed color -->
+                        <p v-if="nextPromotion(slot.member)?.misc" class="detail-line">
                           <strong>Requirements:</strong>
                           <span class="accent-strong">{{ nextPromotion(slot.member).misc }}</span>
                         </p>
