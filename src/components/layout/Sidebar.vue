@@ -1,3 +1,4 @@
+<!-- src/components/layout/Sidebar.vue -->
 <template>
   <div class="sidebar-page">
     <section class="sidebar-layout">
@@ -14,7 +15,8 @@
         <router-link
           class="clipped-bottom-right"
           to="/status"
-          @click.native="playBrowse"
+          @mouseenter="playBrowse"
+          @click="playClick"
         >
           <img src="/icons/orbital.svg" />
           <span>Status</span>
@@ -24,7 +26,8 @@
         <router-link
           class="clipped-bottom-right"
           to="/pilots"
-          @click.native="playBrowse"
+          @mouseenter="playBrowse"
+          @click="playClick"
         >
           <img src="/icons/license.svg" />
           <span>Roster</span>
@@ -34,7 +37,8 @@
         <router-link
           class="clipped-bottom-right"
           to="/events"
-          @click.native="playBrowse"
+          @mouseenter="playBrowse"
+          @click="playClick"
         >
           <img src="/icons/events.svg" />
           <span>Logs</span>
@@ -46,6 +50,7 @@
 
 <script>
 let browseAudio;
+let clickAudio;
 
 export default {
   props: {
@@ -64,20 +69,32 @@ export default {
   },
 
   mounted() {
-    // Create once, reuse forever (browser-gesture safe)
-    browseAudio = new Audio("/Orbat Main Menu Browse.ogg");
+    // Preload and reuse (gesture-safe once the user has interacted)
+    browseAudio = new Audio("/sound/Orbat Main Menu Browse.ogg");
     browseAudio.volume = 0.6;
+
+    clickAudio = new Audio("/sound/Orbat Main Menu Click.ogg");
+    clickAudio.volume = 0.7;
   },
 
   methods: {
     playBrowse() {
       if (!browseAudio) return;
-
-      // Restart sound cleanly
-      browseAudio.currentTime = 0;
-      browseAudio.play().catch(() => {
-        // Autoplay or focus restriction — fail silently
-      });
+      try {
+        browseAudio.currentTime = 0;
+        browseAudio.play();
+      } catch (_) {
+        /* ignore autoplay/focus errors */
+      }
+    },
+    playClick() {
+      if (!clickAudio) return;
+      try {
+        clickAudio.currentTime = 0;
+        clickAudio.play();
+      } catch (_) {
+        /* ignore autoplay/focus errors */
+      }
     },
   },
 };
