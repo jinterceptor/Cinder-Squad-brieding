@@ -262,7 +262,6 @@
                             ({{ opsToNextPromotion(slot.member) }} ops)
                           </span>
                         </p>
-                        <!-- FIX: add class="detail-line" so the label uses themed color -->
                         <p v-if="nextPromotion(slot.member)?.misc" class="detail-line">
                           <strong>Requirements:</strong>
                           <span class="accent-strong">{{ nextPromotion(slot.member).misc }}</span>
@@ -669,7 +668,8 @@ export default {
 
 /* Modal shell */
 .squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.squad-modal { background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
+/* widened to better fit 5-up grid */
+.squad-modal { background-color: #050811; color: #dce6f1; width: 95vw; max-width: 1860px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
 .squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
 
@@ -689,8 +689,24 @@ export default {
 .fireteam-count { color: #9ec5e6; font-size: .9rem; }
 .fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
 
-/* Cards grid – slightly wider to avoid wrapping */
-.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: .85rem; }
+/* Cards grid – set to 5-up, with responsive fallbacks */
+.squad-members-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .95rem;
+}
+@media (max-width: 1680px) {
+  .squad-members-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1350px) {
+  .squad-members-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 980px) {
+  .squad-members-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .squad-members-grid { grid-template-columns: 1fr; }
+}
 
 /* Cards */
 .member-card { position: relative; background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
@@ -733,9 +749,9 @@ export default {
 
 /* Info accents */
 .detail-line strong { color: #9ec5e6; }
-.role-accent { color: #55ff88; font-weight: 600; }     /* default: green */
-.role-corpsman { color: #ff6b6b; font-weight: 700; }   /* corpsman/medical: red */
-.date-accent { color: #55ff88; }                       /* join date now green */
+.role-accent { color: #55ff88; font-weight: 600; }
+.role-corpsman { color: #ff6b6b; font-weight: 700; }
+.date-accent { color: #55ff88; }
 .accent { color: #a3e7ff; }
 .accent-strong { color: #7fffd4; font-weight: 700; }
 
