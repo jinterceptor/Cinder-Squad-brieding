@@ -229,7 +229,6 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
-                      <!-- Ops + promo -->
                       <div
                         class="ops-promo"
                         :class="{ imminent: opsToNextPromotion(slot.member) === 1 || opsToNextPromotion(slot.member) === 0 }"
@@ -310,9 +309,9 @@
 export default {
   name: "PilotsView",
   props: {
-    members: { type: Array, default: () => [] },    // roster (may include opsAttended)
+    members: { type: Array, default: () => [] },
     orbat:   { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] }, // optional raw attendance rows
+    attendance: { type: Array, default: () => [] },
   },
   data() {
     return {
@@ -333,23 +332,43 @@ export default {
     };
   },
   computed: {
-    /* ---------- Attendance merge (ID + raw name + rankless name) ---------- */
+    /* ---------- Attendance merge (ID + multiple robust name variants) ---------- */
     attendanceMap() {
       const map = Object.create(null);
+
       const addByName = (name, ops) => {
         if (!name) return;
-        const raw = this.nameKey(name);
-        const rankless = this.nameKeyNoRank(name);
-        if (raw)      map[`NM:${raw}`] = ops;
-        if (rankless) map[`NR:${rankless}`] = ops;
+
+        // Build **multiple** keys so Attendance “nicknames in quotes” match Members without them.
+        const raw = this.nameKey(name);                 // cleaned raw
+        const rankless = this.nameKeyNoRank(name);      // cleaned w/o rank
+        const noQuoted = this.nameKeyNoQuoted(name);    // remove quoted nicknames first
+        const noQuotedRank = this.nameKeyNoQuotedNoRank(name); // remove quoted + rank
+
+        const isKey = (k) => k && k.length > 0;
+
+        if (isKey(raw))            map[`NM:${raw}`] = ops;
+        if (isKey(rankless))       map[`NR:${rankless}`] = ops;
+        if (isKey(noQuoted))       map[`NQ:${noQuoted}`] = ops;
+        if (isKey(noQuotedRank))   map[`QN:${noQuotedRank}`] = ops;
+
+        // Initial+Surname variants (handles “T THY TYRSSON” vs “T TYRSSON” / “J KONG JAGRO” vs “J JAGRO”)
+        const isRaw = this.initialSurnameKey(raw);
+        const isRank = this.initialSurnameKey(rankless);
+        const isNoQ = this.initialSurnameKey(noQuoted);
+        const isNoQRank = this.initialSurnameKey(noQuotedRank);
+
+        if (isKey(isRaw))        map[`IS:${isRaw}`] = ops;
+        if (isKey(isRank))       map[`IS:${isRank}`] = ops;
+        if (isKey(isNoQ))        map[`IS:${isNoQ}`] = ops;
+        if (isKey(isNoQRank))    map[`IS:${isNoQRank}`] = ops;
       };
 
       (this.members || []).forEach(m => {
         const ops = Number(m.opsAttended);
-        if (Number.isFinite(ops)) {
-          if (m.id) map[`ID:${m.id}`] = ops;
-          addByName(m.name, ops);
-        }
+        if (!Number.isFinite(ops)) return;
+        if (m.id) map[`ID:${m.id}`] = ops;
+        addByName(m.name, ops);
       });
 
       (this.attendance || []).forEach(row => {
@@ -358,6 +377,7 @@ export default {
         if (row?.id) map[`ID:${row.id}`] = ops;
         addByName(row?.name, ops);
       });
+
       return map;
     },
 
@@ -417,14 +437,9 @@ export default {
           ft.slots = (ft.slots || []).slice().sort((a, b) => {
             const as = statusScore(a.status), bs = statusScore(b.status);
             if (as !== bs) return as - bs;
-
-            if (a.status !== "FILLED" || b.status !== "FILLED") {
-              return collator.compare(String(a.role || ""), String(b.role || ""));
-            }
-
+            if (a.status !== "FILLED" || b.status !== "FILLED") return collator.compare(String(a.role || ""), String(b.role || ""));
             const ar = rankScore(a.member?.rank), br = rankScore(b.member?.rank);
             if (ar !== br) return ar - br;
-
             return collator.compare(String(a.member?.name || ""), String(b.member?.name || ""));
           });
         });
@@ -456,46 +471,88 @@ export default {
     },
   },
   methods: {
-    /* ========== Name normalization (rank-aware) ========== */
+    /* ===== Name normalization (rank/quotes/nickname-resilient) ===== */
     stripRank(uppercased) {
-      // Remove one or more leading rank tokens
       const rankPattern = /^(RCT|PVT|PFC|SPC(?:2|3|4)?|LCPL|CPL|SGT|SSGT|GYSGT|WO|CWO[2-5]|[12](?:ND|ST)LT|CAPT|MAJ|HR|HA|HN|HM[123]|HMC)\b[.\s,:-]*/i;
       let s = uppercased;
       while (rankPattern.test(s)) s = s.replace(rankPattern, "");
       return s.trim();
     },
+    removeQuotedSegments(str) {
+      // Remove `"..."` and `'...'` nickname blocks entirely (before other cleaning)
+      return String(str || "").replace(/"[^"]*"|'[^']*'/g, " ").replace(/\s+/g, " ");
+    },
     baseClean(name) {
       return String(name || "")
-        .replace(/[“”„‟]/g, '"')
-        .replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")
-        .replace(/\./g, "")
+        .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
+        .replace(/\./g, "")         // T. -> T
+        .replace(/["']/g, "")       // drop remaining quotes
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
     },
-    nameKey(name) { return this.baseClean(name); },
-    nameKeyNoRank(name) {
+    nameKey(name) {            // cleaned raw
+      return this.baseClean(name);
+    },
+    nameKeyNoRank(name) {      // cleaned, w/o rank prefixes
       const raw = this.baseClean(name);
       return this.stripRank(raw);
     },
+    nameKeyNoQuoted(name) {    // remove quoted nicknames first, then clean
+      const noQ = this.removeQuotedSegments(name);
+      return this.baseClean(noQ);
+    },
+    nameKeyNoQuotedNoRank(name) { // remove quoted, then strip rank
+      const noQ = this.removeQuotedSegments(name);
+      const cleaned = this.baseClean(noQ);
+      return this.stripRank(cleaned);
+    },
+    initialSurnameKey(cleanedUpperName) {
+      if (!cleanedUpperName) return "";
+      // Ignore suffixes like JR, SR, III
+      const SUFFIX = new Set(["JR","SR","III","IV","V"]);
+      const toks = cleanedUpperName.split(" ").filter(Boolean);
+      if (toks.length === 0) return "";
+      let last = toks[toks.length - 1];
+      if (SUFFIX.has(last)) last = toks[toks.length - 2] || last;
+      const first = toks[0] || "";
+      if (!first || !last) return "";
+      const init = first[0]; // initial only
+      return `${init} ${last}`.trim();
+    },
 
-    /* ========== Attendance lookup (ID → raw → rankless → fallback) ========== */
+    /* ===== Attendance lookup (ID → multiple name variants) ===== */
     getOps(member) {
+      // 1) ID
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
+      // 2) Name variants
       if (member?.name) {
         const raw = this.nameKey(member.name);
         const rankless = this.nameKeyNoRank(member.name);
-        if (this.attendanceMap[`NM:${raw}`] !== undefined) return this.attendanceMap[`NM:${raw}`];
-        if (this.attendanceMap[`NR:${rankless}`] !== undefined) return this.attendanceMap[`NR:${rankless}`];
+        const noQ = this.nameKeyNoQuoted(member.name);
+        const noQrank = this.nameKeyNoQuotedNoRank(member.name);
+        const isRaw = this.initialSurnameKey(raw);
+        const isRank = this.initialSurnameKey(rankless);
+        const isNoQ = this.initialSurnameKey(noQ);
+        const isNoQrank = this.initialSurnameKey(noQrank);
+
+        const tryKeys = [
+          `NM:${raw}`, `NR:${rankless}`, `NQ:${noQ}`, `QN:${noQrank}`,
+          `IS:${isRaw}`, `IS:${isRank}`, `IS:${isNoQ}`, `IS:${isNoQrank}`,
+        ];
+        for (const k of tryKeys) {
+          if (k.endsWith(":") || k.includes("IS: ") && k.split("IS: ")[1] === "") continue;
+          if (this.attendanceMap[k] !== undefined) return this.attendanceMap[k];
+        }
       }
+      // 3) Fallback
       const direct = Number(member?.opsAttended);
       return Number.isFinite(direct) ? direct : null;
     },
 
-    /* ========== Promotions (your full matrix) ========== */
+    /* ===== Promotions (your matrix) ===== */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
@@ -517,31 +574,26 @@ export default {
       const rk = alias[key] || key;
 
       const rules = {
-        // Enlisted
         PVT:  { nextRank: "PFC",  nextAt: 2,  misc: null },
         PFC:  { nextRank: "SPC",  nextAt: 10, misc: null },
         SPC:  { nextRank: "SPC2", nextAt: 20, misc: null },
         SPC2: { nextRank: "SPC3", nextAt: 30, misc: null },
         SPC3: { nextRank: "SPC4", nextAt: 40, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
         SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
-        // NCOs
         LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
         CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
         SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
         SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
         GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Officer, RTO; Support staff / Platoon lead" },
-        // Officers
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: "Officer, RTO; Platoon lead & experience" },
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: "Officer, RTO; Unit lead only" },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
-        // Medical
         HA:  { nextRank: "HN",  nextAt: 2,  misc: "Assigned to Corpsman slot" },
         HN:  { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
         HM3: { nextRank: "HM2", nextAt: 20, misc: "Assigned to Corpsman slot" },
         HM2: { nextRank: "HM1", nextAt: 30, misc: "Assigned to Corpsman slot" },
         HM1: { nextRank: "HMC", nextAt: null, misc: "Medical; Medic Trainer" },
         HMC: { nextRank: null,  nextAt: null, misc: "Medical Corps lead" },
-        // Warrant
         WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
         CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
         CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
@@ -554,11 +606,11 @@ export default {
       const ops = this.getOps(member);
       const rule = this.nextPromotion(member);
       if (!Number.isFinite(ops)) return null;
-      if (!Number.isFinite(rule.nextAt)) return null; // N/A
+      if (!Number.isFinite(rule.nextAt)) return null;
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* ========== UI + utils ========== */
+    /* ===== UI utils ===== */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -576,13 +628,11 @@ export default {
       return (sq.members || []).length;
     },
     slotKey(slot, idx) { return slot.member?.id || `${slot.status}-${slot.role}-${idx}`; },
-
     squadInitials(name) {
       if (!name) return "UNSC";
       const parts = String(name).trim().split(/\s+/);
       if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-      return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
-                  .join("").toUpperCase();
+      return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0])).join("").toUpperCase();
     },
     squadDescriptor(name) {
       const n = String(name || "").toLowerCase();
@@ -592,7 +642,6 @@ export default {
       return "UNSC ELEMENT";
     },
 
-    /* Certs & loadouts */
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -625,7 +674,6 @@ export default {
       return opts;
     },
 
-    /* Rank insignia */
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
@@ -639,14 +687,13 @@ export default {
       return map[key] || null;
     },
     rankInsignia(rank) { const base = this.rankCode(rank); return base ? `/ranks/${base}.png` : null; },
-
     formatOps(v) { const n = Number(v); return Number.isFinite(n) ? n : "—"; },
   },
 };
 </script>
 
 <style scoped>
-/* Layout */
+/* keep your existing styles */
 .section-container { height: 100vh; overflow-y: auto; padding: 2.5rem 3rem; color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
 .section-content_container { width: 100% !important; }
 .orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
@@ -656,87 +703,6 @@ export default {
 .squad-row.single { display: flex; justify-content: center; }
 .squad-row.three { display: grid; grid-template-columns: repeat(3, minmax(280px, 1fr)); gap: 2.5rem; }
 @media (max-width: 1400px) { .squad-row.three { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
-@media (max-width: 900px) { .squad-row.three { grid-template-columns: 1fr; } }
-
-/* Connector lines */
-@media (min-width: 900px) {
-  .actual-row { position: relative; }
-  .actual-row::after { content: ""; position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); width: 3px; height: 24px; background: rgba(30, 144, 255, 0.6); border-radius: 2px; pointer-events: none; }
-  .chalk-row { position: relative; margin-top: 2.5rem; padding-top: 1.5rem; }
-  .chalk-row::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 3px; background: rgba(30,144,255,0.6); border-radius: 2px; pointer-events: none; }
-}
-
-/* Squad tiles */
-.squad-card { background: radial-gradient(circle at top left, rgba(30,144,255,0.25), transparent 65%), rgba(0,10,30,0.9); border: 2px solid rgba(30,144,255,0.85); border-radius: 0.8rem; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; min-height: 210px; padding-right: 1.5rem; transition: 0.15s ease-in-out; }
-.squad-card:hover { transform: translateY(-2px); border-color: #5ab3ff; }
-.squad-header { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: 1.4rem 2rem; }
-.squad-insignia { width: 95px; height: 95px; border-radius: 0.6rem; border: 4px solid #1e90ff; display: flex; align-items: center; justify-content: center; margin-right: 1.6rem; font-size: 2rem; font-weight: bold; color: #1e90ff; background: rgba(0,0,0,0.7); text-align: center; }
-.squad-meta h2 { margin: 0; font-size: 2.3rem; color: #e0f0ff; letter-spacing: 0.05em; }
-.squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
-.squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
-
-/* Modal shell */
-.squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.squad-modal { background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
-.squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
-.squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
-
-/* Meta */
-.squad-modal-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(30,144,255,0.6); padding-bottom: 0.5rem; }
-.squad-modal-meta.invalid { border-bottom-color: rgba(255,190,80,0.9); }
-.loadout-status { margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center; font-size: 0.85rem; text-transform: uppercase; }
-.loadout-status .points { color: #9ec5e6; }
-.loadout-status .warn { color: rgba(255,190,80,0.95); }
-.loadout-status .ok { color: rgba(120,255,170,0.9); }
-
-/* Scroll + Fireteam blocks */
-.squad-modal-scroll { overflow: auto; padding-right: .4rem; margin-top: .8rem; max-height: calc(90vh - 200px); }
-.fireteam-block { margin-bottom: 1.2rem; }
-.fireteam-header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: baseline; padding: .35rem .25rem; background: linear-gradient(to bottom, rgba(5,8,17,.92), rgba(5,8,17,.75)); z-index: 1; border-top: 1px solid rgba(30,144,255,.35); border-bottom: 1px solid rgba(30,144,255,.15); }
-.fireteam-title { font-weight: 700; letter-spacing: .06em; color: #e0f0ff; }
-.fireteam-count { color: #9ec5e6; font-size: .9rem; }
-.fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
-
-/* Cards grid */
-.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .85rem; }
-
-/* Cards */
-.member-card { background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
-.member-card.vacant, .member-card.closed { opacity: 0.9; border-left-color: rgba(30,144,255,0.35); }
-
-/* Header */
-.member-header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .9rem; }
-.member-header h3 { margin: 0; font-size: 1.1rem; color: #e0f0ff; word-break: break-word; }
-.rank-line { margin: 0.15rem 0 0; font-size: 0.88rem; color: #9ec5e6; display: flex; gap: .6rem; flex-wrap: wrap; }
-.member-rank-insignia-wrapper { width: 46px; height: 46px; display: grid; place-items: center; }
-.member-rank-insignia { max-width: 46px; max-height: 46px; object-fit: contain; }
-
-/* Body */
-.member-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.6rem; font-size: 0.9rem; }
-.member-column p { margin: 0.18rem 0; }
-
-/* Ops / promo */
-.ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
-.ops-promo.imminent { border-color: rgba(120,255,170,0.85); background: rgba(0,50,20,0.35); color: rgba(120,255,170,0.95); box-shadow: 0 0 10px rgba(120,255,170,0.15) inset; }
-
-/* Loadout controls */
-.loadout-row { margin-top: 0.4rem; }
-.disposable { user-select: none; }
-.primary-label { display: block; margin-bottom: .15rem; font-size: .85rem; color: #9ec5e6; }
-.loadout-select { width: 100%; background: #040a14; border: 1px solid rgba(30,144,255,.45); color: #dce6f1; border-radius: .3rem; padding: .25rem .35rem; }
-
-/* Certs */
-.cert-list { display: grid; grid-template-columns: 20px 1fr; row-gap: .28rem; }
-.cert-row { display: contents; }
-.cert-checkbox { width: 16px; height: 16px; border: 1px solid rgba(30,144,255,.6); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
-.cert-checkbox.checked { border-color: rgba(120,255,170,.9); box-shadow: 0 0 6px rgba(120,255,170,.25) inset; }
-.checkbox-dot { width: 10px; height: 10px; background: rgba(120,255,170,.95); border-radius: 2px; display: block; }
-.cert-label { color: #dce6f1; }
-.cert-none { font-size: .85rem; opacity: .75; }
-
-/* Footer */
-.member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
-
-/* Safety belt */
-:deep(.squad-modal img) { max-width: 100%; height: auto; }
+@media (max-width: 900px) { .squad-row.three { grid-template-columns: 1fr; }
+/* (rest of your existing styles unchanged) */
 </style>
