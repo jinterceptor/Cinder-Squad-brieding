@@ -310,7 +310,7 @@ export default {
   name: "PilotsView",
   props: {
     members: { type: Array, default: () => [] },
-    orbat:   { type: Array, default: () => [] },
+    orbat: { type: Array, default: () => [] },
     attendance: { type: Array, default: () => [] },
   },
   data() {
@@ -323,19 +323,18 @@ export default {
       loadouts: {},
       loadoutOptions: {
         grenadier: { label: "Grenadier", points: 2, explosive: true },
-        antitank:  { label: "Anti-Tank", points: 3, explosive: true },
-        m247:      { label: "M247 SAW", points: 3 },
-        m247_50:   { label: "M247 .50", points: 5 },
-        engineer:  { label: "Combat Engineer", points: 2 },
-        marksman:  { label: "Marksman", points: 2 },
+        antitank: { label: "Anti-Tank", points: 3, explosive: true },
+        m247: { label: "M247 SAW", points: 3 },
+        m247_50: { label: "M247 .50", points: 5 },
+        engineer: { label: "Combat Engineer", points: 2 },
+        marksman: { label: "Marksman", points: 2 },
       },
     };
   },
   computed: {
-    /* ---------- Pre-cleaned attendance rows for fuzzy fallback ---------- */
     attendanceRowsClean() {
       const rows = [];
-      (this.attendance || []).forEach(row => {
+      (this.attendance || []).forEach((row) => {
         const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
         if (ops === null) return;
         const name = row?.name ?? row?.A ?? "";
@@ -346,11 +345,8 @@ export default {
       });
       return rows;
     },
-
-    /* ---------- Fast map ---------- */
     attendanceMap() {
       const map = Object.create(null);
-
       const addVariants = (cleanUpper, ops) => {
         if (!cleanUpper) return;
         const rankless = this.stripRank(cleanUpper);
@@ -379,14 +375,14 @@ export default {
         }
       };
 
-      (this.members || []).forEach(m => {
+      (this.members || []).forEach((m) => {
         const ops = this.parseOps(m.opsAttended);
         if (ops === null) return;
         if (m.id) map[`ID:${m.id}`] = ops;
         addVariants(this.nameKey(m.name), ops);
       });
 
-      (this.attendance || []).forEach(row => {
+      (this.attendance || []).forEach((row) => {
         const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
         if (ops === null) return;
         if (row?.id) map[`ID:${row.id}`] = ops;
@@ -395,25 +391,21 @@ export default {
 
       return map;
     },
-
-    /* ---------- ORBAT groupings ---------- */
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
       (this.orbat || []).forEach((sq) => {
         const n = String(sq.squad || "").trim().toLowerCase();
         if (n === "broadsword command") groups.broadswordCommand = sq;
         else if (n === "chalk actual") groups.chalkActual = sq;
-        else if (["chalk 1","chalk 2","chalk 3","chalk 4"].includes(n)) groups.chalks.push(sq);
-        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n)) groups.support.push(sq);
+        else if (["chalk 1", "chalk 2", "chalk 3", "chalk 4"].includes(n)) groups.chalks.push(sq);
+        else if (["broadsword", "wyvern", "wyvern air wing", "caladrius", "ifrit"].includes(n)) groups.support.push(sq);
         else groups.other.push(sq);
       });
-      groups.chalks.sort((a,b)=>a.squad.localeCompare(b.squad, undefined, {numeric:true}));
-      groups.support.sort((a,b)=>a.squad.localeCompare(b.squad));
-      groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
+      groups.chalks.sort((a, b) => a.squad.localeCompare(b.squad, undefined, { numeric: true }));
+      groups.support.sort((a, b) => a.squad.localeCompare(b.squad));
+      groups.other.sort((a, b) => a.squad.localeCompare(b.squad));
       return groups;
     },
-
-    /* ---------- Active squad fireteams ---------- */
     activeFireteams() {
       if (!this.activeSquad) return [];
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
@@ -430,10 +422,10 @@ export default {
           if (t === "element") return 90;
           return 50;
         };
-        sorted.sort((a,b)=>{
+        sorted.sort((a, b) => {
           const ka = orderKey(a.name), kb = orderKey(b.name);
           if (ka !== kb) return ka - kb;
-          return String(a.name).localeCompare(String(b.name), undefined, {numeric:true});
+          return String(a.name).localeCompare(String(b.name), undefined, { numeric: true });
         });
 
         const rankOrder = [
@@ -444,8 +436,18 @@ export default {
           "HMC","HM1","HM2","HM3","HN","HA","HR",
         ];
         const normalizeRank = (r) => String(r || "").trim().toUpperCase().replace(/\s+/g, "");
-        const rankScore = (r) => { const rr = normalizeRank(r); const idx = rankOrder.indexOf(rr); return idx === -1 ? 999 : idx; };
-        const statusScore = (s) => { const st = String(s || "").toUpperCase(); if (st === "FILLED") return 0; if (st === "VACANT") return 1; if (st === "CLOSED") return 2; return 3; };
+        const rankScore = (r) => {
+          const rr = normalizeRank(r);
+          const idx = rankOrder.indexOf(rr);
+          return idx === -1 ? 999 : idx;
+        };
+        const statusScore = (s) => {
+          const st = String(s || "").toUpperCase();
+          if (st === "FILLED") return 0;
+          if (st === "VACANT") return 1;
+          if (st === "CLOSED") return 2;
+          return 3;
+        };
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
         sorted.forEach((ft) => {
@@ -466,7 +468,6 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
-      // Fallback if no slot grid
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -475,23 +476,39 @@ export default {
       });
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
-
-    /* ---------- Squad points validity ---------- */
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
-      let points = 0; const errors = []; const explosiveTaken = new Set();
-      this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((slot) => {
-        const member = slot.member; if (!member) return;
-        const l = this.getLoadout(member);
-        if (l.disposable) { points += 1; if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable"); explosiveTaken.add("disposable"); }
-        if (l.primary) { const def = this.loadoutOptions[l.primary]; if (def) { points += def.points; if (def.explosive) { if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`); explosiveTaken.add(l.primary); } } }
-      }));
+      let points = 0;
+      const errors = [];
+      const explosiveTaken = new Set();
+      this.activeFireteams.forEach((ft) =>
+        (ft.slots || []).forEach((slot) => {
+          const member = slot.member;
+          if (!member) return;
+          const l = this.getLoadout(member);
+          if (l.disposable) {
+            points += 1;
+            if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable");
+            explosiveTaken.add("disposable");
+          }
+          if (l.primary) {
+            const def = this.loadoutOptions[l.primary];
+            if (def) {
+              points += def.points;
+              if (def.explosive) {
+                if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`);
+                explosiveTaken.add(l.primary);
+              }
+            }
+          }
+        }),
+      );
       if (points > 10) errors.push("Exceeds 10 point maximum");
       return { valid: errors.length === 0, points, errors };
     },
   },
   methods: {
-    /* ===== Parsing & normalization ===== */
+    /* parsing */
     parseOps(v) {
       if (v === null || v === undefined) return null;
       if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -503,22 +520,25 @@ export default {
       return Number.isFinite(n) ? n : null;
     },
     stripRank(uppercased) {
-      const rankPattern = /^(RCT|PVT|PFC|SPC(?:2|3|4)?|LCPL|CPL|SGT|SSGT|GYSGT|WO|CWO[2-5]|[12](?:ND|ST)LT|CAPT|MAJ|HR|HA|HN|HM[123]|HMC)\b[.\s,:-]*/i;
+      const rankPattern =
+        /^(RCT|PVT|PFC|SPC(?:2|3|4)?|LCPL|CPL|SGT|SSGT|GYSGT|WO|CWO[2-5]|[12](?:ND|ST)LT|CAPT|MAJ|HR|HA|HN|HM[123]|HMC)\b[.\s,:-]*/i;
       let s = uppercased;
       while (rankPattern.test(s)) s = s.replace(rankPattern, "");
       return s.trim();
     },
     baseClean(name) {
       return String(name || "")
-        .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
+        .replace(/[“”„‟]/g, '"')
+        .replace(/[’‘]/g, "'")
         .replace(/["']/g, "")
         .replace(/\./g, "")
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
     },
-    nameKey(name) { return this.baseClean(name); },
-
+    nameKey(name) {
+      return this.baseClean(name);
+    },
     collapseInitialNicknameSurname(cleanUpper) {
       if (!cleanUpper) return "";
       const toks = cleanUpper.split(" ").filter(Boolean);
@@ -537,7 +557,7 @@ export default {
     },
     initialSurnameKey(cleanedUpperName) {
       if (!cleanedUpperName) return "";
-      const SUFFIX = new Set(["JR","SR","III","IV","V"]);
+      const SUFFIX = new Set(["JR", "SR", "III", "IV", "V"]);
       const toks = cleanedUpperName.split(" ").filter(Boolean);
       if (!toks.length) return "";
       let last = toks[toks.length - 1];
@@ -548,7 +568,7 @@ export default {
     },
     lastNameKey(cleanedUpperName) {
       if (!cleanedUpperName) return "";
-      const SUFFIX = new Set(["JR","SR","III","IV","V"]);
+      const SUFFIX = new Set(["JR", "SR", "III", "IV", "V"]);
       const toks = cleanedUpperName.split(" ").filter(Boolean);
       if (!toks.length) return "";
       let last = toks[toks.length - 1];
@@ -556,8 +576,7 @@ export default {
       return last || "";
     },
 
-    /* ===== Fuzzy fallbacks ===== */
-    // 1) Nickname-assisted last-name match, else single-letter-initial + last match
+    /* fuzzy */
     fuzzyOpsByInitialAndLast(member) {
       const raw = this.nameKey(member?.name || "");
       const rankless = this.stripRank(raw);
@@ -569,24 +588,22 @@ export default {
       if (!first || !last) return null;
 
       const initial = first[0];
-      const nickTokens = toks.slice(1, -1); // middle tokens like THY / KONG
+      const nickTokens = toks.slice(1, -1);
 
-      // last-name candidates
-      const lastMatches = this.attendanceRowsClean.filter(r => r.tokenSet.has(last));
+      const lastMatches = this.attendanceRowsClean.filter((r) => r.tokenSet.has(last));
       if (lastMatches.length === 1) return lastMatches[0].ops;
 
       if (lastMatches.length > 1 && nickTokens.length) {
         const nickSet = new Set(nickTokens);
-        const nickMatches = lastMatches.filter(r => r.tokens.some(t => nickSet.has(t)));
+        const nickMatches = lastMatches.filter((r) => r.tokens.some((t) => nickSet.has(t)));
         if (nickMatches.length === 1) return nickMatches[0].ops;
         if (nickMatches.length > 1) {
           return nickMatches.reduce((max, r) => (r.ops > max ? r.ops : max), -1);
         }
       }
 
-      // initial + last (single-letter token)
-      const initialMatches = this.attendanceRowsClean.filter(r => {
-        const hasInitial = r.tokens.some(t => t.length === 1 && t === initial);
+      const initialMatches = this.attendanceRowsClean.filter((r) => {
+        const hasInitial = r.tokens.some((t) => t.length === 1 && t === initial);
         const hasLast = r.tokenSet.has(last);
         return hasInitial && hasLast;
       });
@@ -597,13 +614,11 @@ export default {
       return null;
     },
 
-    /* ===== Attendance lookup ===== */
+    /* lookup */
     getOps(member) {
-      // ID
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
-      // Names (alias/collapse/variants)
       if (member?.name) {
         const raw = this.nameKey(member.name);
         const rankless = this.stripRank(raw);
@@ -612,9 +627,12 @@ export default {
 
         const tries = [
           alias && `AL:${alias}`,
-          `NR:${rankless}`, `NM:${raw}`,
-          `IS:${this.initialSurnameKey(rankless)}`, `LN:${this.lastNameKey(rankless)}`,
-          `IS:${this.initialSurnameKey(raw)}`,      `LN:${this.lastNameKey(raw)}`,
+          `NR:${rankless}`,
+          `NM:${raw}`,
+          `IS:${this.initialSurnameKey(rankless)}`,
+          `LN:${this.lastNameKey(rankless)}`,
+          `IS:${this.initialSurnameKey(raw)}`,
+          `LN:${this.lastNameKey(raw)}`,
           collapsed && `NR:${collapsed}`,
           collapsed && `IS:${this.initialSurnameKey(collapsed)}`,
           collapsed && `LN:${this.lastNameKey(collapsed)}`,
@@ -624,62 +642,76 @@ export default {
           if (this.attendanceMap[k] !== undefined) return this.attendanceMap[k];
         }
       }
-      // Fuzzy
       const fuzzy = this.fuzzyOpsByInitialAndLast(member);
       if (Number.isFinite(fuzzy)) return fuzzy;
 
-      // Last resort
-      const direct = this.parseOps(member?.opsAttended);
-      return direct !== null ? direct : null;
+      // IMPORTANT FIX: do NOT fall back to member.opsAttended (can be stale/0)
+      return null;
     },
 
-    /* ===== Promotions ===== */
-    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
+    /* promos */
+    rankKey(rank) {
+      return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, "");
+    },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
       const alias = {
-        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
-        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
-        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
-        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
-        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
-        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
+        PRIVATE: "PVT",
+        PRIVATEFIRSTCLASS: "PFC",
+        SPECIALIST: "SPC",
+        SPECIALIST2: "SPC2",
+        SPECIALIST3: "SPC3",
+        SPECIALIST4: "SPC4",
+        LANCECORPORAL: "LCPL",
+        CORPORAL: "CPL",
+        SERGEANT: "SGT",
+        STAFFSERGEANT: "SSGT",
+        GUNNYSERGEANT: "GYSGT",
+        SECONDLIEUTENANT: "2NDLT",
+        FIRSTLIEUTENANT: "1STLT",
+        CAPTAIN: "CAPT",
+        HOSPITALMANAPPRENTICE: "HA",
+        HOSPITALMAN: "HN",
         HOSPITALCORPSMANTHIRDCLASS: "HM3",
         HOSPITALCORPSMANSECONDCLASS: "HM2",
         HOSPITALCORPSMANFIRSTCLASS: "HM1",
         CHIEFHOSPITALCORPSMAN: "HMC",
         WARRANTOFFICER: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
+        CHIEFWARRANTOFFICER2: "CWO2",
+        CHIEFWARRANTOFFICER3: "CWO3",
+        CHIEFWARRANTOFFICER4: "CWO4",
+        CHIEFWARRANTOFFICER5: "CWO5",
       };
       const rk = alias[key] || key;
 
       const rules = {
-        PVT:  { nextRank: "PFC",  nextAt: 2,  misc: null },
-        PFC:  { nextRank: "SPC",  nextAt: 10, misc: null },
-        SPC:  { nextRank: "SPC2", nextAt: 20, misc: null },
+        PVT: { nextRank: "PFC", nextAt: 2, misc: null },
+        PFC: { nextRank: "SPC", nextAt: 10, misc: null },
+        SPC: { nextRank: "SPC2", nextAt: 20, misc: null },
         SPC2: { nextRank: "SPC3", nextAt: 30, misc: null },
         SPC3: { nextRank: "SPC4", nextAt: 40, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
         SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
-        LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
-        CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
-        SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
-        SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
-        GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Officer, RTO; Support staff / Platoon lead" },
+        LCPL: { nextRank: "Cpl", nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
+        CPL: { nextRank: "Sgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
+        SGT: { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
+        SSGT: { nextRank: "GySgt", nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
+        GYSGT: { nextRank: "2ndLt", nextAt: null, misc: "Officer, RTO; Support staff / Platoon lead" },
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: "Officer, RTO; Platoon lead & experience" },
-        "1STLT": { nextRank: "Capt",  nextAt: null, misc: "Officer, RTO; Unit lead only" },
-        CAPT:    { nextRank: null,    nextAt: null, misc: null },
-        HA:  { nextRank: "HN",  nextAt: 2,  misc: "Assigned to Corpsman slot" },
-        HN:  { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
+        "1STLT": { nextRank: "Capt", nextAt: null, misc: "Officer, RTO; Unit lead only" },
+        CAPT: { nextRank: null, nextAt: null, misc: null },
+
+        HA: { nextRank: "HN", nextAt: 2, misc: "Assigned to Corpsman slot" },
+        HN: { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
         HM3: { nextRank: "HM2", nextAt: 20, misc: "Assigned to Corpsman slot" },
         HM2: { nextRank: "HM1", nextAt: 30, misc: "Assigned to Corpsman slot" },
         HM1: { nextRank: "HMC", nextAt: null, misc: "Medical; Medic Trainer" },
-        HMC: { nextRank: null,  nextAt: null, misc: "Medical Corps lead" },
-        WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
+        HMC: { nextRank: null, nextAt: null, misc: "Medical Corps lead" },
+
+        WO: { nextRank: "CWO2", nextAt: 10, misc: null },
         CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
         CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
         CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
-        CWO5: { nextRank: null,   nextAt: null, misc: null },
+        CWO5: { nextRank: null, nextAt: null, misc: null },
       };
       return rules[rk] || { nextRank: null, nextAt: null, misc: null };
     },
@@ -691,15 +723,22 @@ export default {
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* ===== UI utils ===== */
+    /* ui */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
-      try { a.currentTime = 0; a.play().catch(() => {}); } catch {}
+      try {
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      } catch {}
     },
-    openSquad(sq) { this.playOrbatClick(); this.activeSquad = sq; },
-    closeSquad() { this.activeSquad = null; },
-
+    openSquad(sq) {
+      this.playOrbatClick();
+      this.activeSquad = sq;
+    },
+    closeSquad() {
+      this.activeSquad = null;
+    },
     personnelCount(sq) {
       if (sq.fireteams && sq.fireteams.length) {
         let count = 0;
@@ -708,14 +747,17 @@ export default {
       }
       return (sq.members || []).length;
     },
-    slotKey(slot, idx) { return slot.member?.id || `${slot.status}-${slot.role}-${idx}`; },
-
+    slotKey(slot, idx) {
+      return slot.member?.id || `${slot.status}-${slot.role}-${idx}`;
+    },
     squadInitials(name) {
       if (!name) return "UNSC";
       const parts = String(name).trim().split(/\s+/);
       if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-      return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
-                  .join("").toUpperCase();
+      return parts
+        .map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
+        .join("")
+        .toUpperCase();
     },
     squadDescriptor(name) {
       const n = String(name || "").toLowerCase();
@@ -724,7 +766,6 @@ export default {
       if (n.includes("command") || n.includes("actual")) return "COMMAND ELEMENT";
       return "UNSC ELEMENT";
     },
-
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -736,41 +777,76 @@ export default {
       return this.loadouts[id];
     },
     toggleDisposable(member) {
-      const id = member?.id; if (!id) return;
+      const id = member?.id;
+      if (!id) return;
       const curr = this.getLoadout(member);
       this.loadouts[id] = { ...curr, disposable: !curr.disposable };
     },
     setPrimary(member, value) {
-      const id = member?.id; if (!id) return;
+      const id = member?.id;
+      if (!id) return;
       const curr = this.getLoadout(member);
       this.loadouts[id] = { ...curr, primary: value || "" };
     },
-    loadoutLabel(key) { const def = this.loadoutOptions[key]; return def ? `${def.label} (${def.points}pt)` : key; },
+    loadoutLabel(key) {
+      const def = this.loadoutOptions[key];
+      return def ? `${def.label} (${def.points}pt)` : key;
+    },
     availableLoadouts(member) {
       const has = (label) => this.hasCert(member, this.certLabels.indexOf(label));
       const opts = [];
       if (has("Grenadier")) opts.push("grenadier");
       if (has("Anti Tank")) opts.push("antitank");
-      if (has("Machine Gunner")) { opts.push("m247", "m247_50"); }
+      if (has("Machine Gunner")) {
+        opts.push("m247", "m247_50");
+      }
       if (has("Combat Engineer")) opts.push("engineer");
       if (has("Marksman")) opts.push("marksman");
       return opts;
     },
-
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
       const map = {
-        RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
-        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
-        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
-        "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
-        HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
+        RCT: "Rct",
+        PVT: "Pvt",
+        PFC: "PFC",
+        SPC: "Spc",
+        SPC2: "Spc2",
+        SPC3: "Spc3",
+        SPC4: "Spc4",
+        LCPL: "LCpl",
+        CPL: "Cpl",
+        SGT: "Sgt",
+        SSGT: "SSgt",
+        GYSGT: "GySgt",
+        WO: "WO",
+        CWO2: "CWO2",
+        CWO3: "CWO3",
+        CWO4: "CWO4",
+        CWO5: "CWO5",
+        "2NDLT": "2ndLt",
+        "1STLT": "1stLt",
+        CAPT: "Capt",
+        MAJ: "Maj",
+        HR: "HR",
+        HA: "HA",
+        HN: "HN",
+        HM3: "HM3",
+        HM2: "HM2",
+        HM1: "HM1",
+        HMC: "HMC",
       };
       return map[key] || null;
     },
-    rankInsignia(rank) { const base = this.rankCode(rank); return base ? `/ranks/${base}.png` : null; },
-    formatOps(v) { const n = Number(v); return Number.isFinite(n) ? n : "—"; },
+    rankInsignia(rank) {
+      const base = this.rankCode(rank);
+      return base ? `/ranks/${base}.png` : null;
+    },
+    formatOps(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : "—";
+    },
   },
 };
 </script>
