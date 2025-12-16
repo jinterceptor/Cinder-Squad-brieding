@@ -52,8 +52,9 @@
     </div>
   </template>
 
+  <!-- updated path -->
   <audio ref="startupAudio" preload="auto">
-    <source src="/startup.ogg" type="audio/ogg" />
+    <source src="/sound/startup.ogg" type="audio/ogg" />
   </audio>
 </template>
 
@@ -100,10 +101,16 @@ export default {
   },
   methods: {
     authorize() {
+      // prevent entering site while admin modal is open
+      if (this.showAdminModal) return;
+
       if (this.isFading) return;
       this.isFading = true;
       const a = this.$refs.startupAudio;
-      if (a && typeof a.play === "function") { a.currentTime = 0; a.play().catch(() => {}); }
+      if (a && typeof a.play === "function") {
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      }
       setTimeout(() => {
         this.showLogin = false;
         this.isFading = false;
@@ -124,13 +131,18 @@ export default {
     },
     setTitleFavicon(title, favicon) {
       document.title = title;
-      const link = document.createElement("link"); link.rel = "icon"; link.href = favicon; document.head.appendChild(link);
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.href = favicon;
+      document.head.appendChild(link);
     },
 
     loadOpsCSV(opsUrl) {
       return new Promise((resolve) => {
         Papa.parse(opsUrl, {
-          download: true, skipEmptyLines: true, header: false,
+          download: true,
+          skipEmptyLines: true,
+          header: false,
           complete: (results) => {
             const rows = (results.data || []).slice(1);
             const opsMap = {};
@@ -138,7 +150,8 @@ export default {
               const rawName = String(row[0] || "").trim();
               const rawOps = String(row[2] || "").trim();
               if (!rawName) return;
-              const ops = Number(rawOps); if (Number.isNaN(ops)) return;
+              const ops = Number(rawOps);
+              if (Number.isNaN(ops)) return;
               const quoted = rawName.match(/"([^"]+)"/);
               const nameCore = quoted ? quoted[1] : rawName;
               const key = String(nameCore).replace(/"/g, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -162,10 +175,10 @@ export default {
         PVT: { nextAt: 2, nextRank: "PFC" }, PFC: { nextAt: 10, nextRank: "SPC" },
         SPC: { nextAt: 20, nextRank: "SPC2" }, SPC2: { nextAt: 30, nextRank: "SPC3" },
         SPC3: { nextAt: 40, nextRank: "SPC4" }, SPC4: { nextAt: 50, nextRank: null },
-        HA: { nextAt: 2, nextRank: "HN" }, HN: { nextAt: 10, nextRank: "HM3" },
+        HA:  { nextAt: 2, nextRank: "HN" }, HN:  { nextAt: 10, nextRank: "HM3" },
         HM3: { nextAt: 20, nextRank: "HM2" }, HM2: { nextAt: 30, nextRank: null },
-        CWO2: { nextAt: 10, nextRank: "CWO3" }, CWO3: { nextAt: 20, nextRank: "CWO4" },
-        CWO4: { nextAt: 30, nextRank: null },
+        CWO2:{ nextAt: 10, nextRank: "CWO3" }, CWO3:{ nextAt: 20, nextRank: "CWO4" },
+        CWO4:{ nextAt: 30, nextRank: null },
       })[r] || null;
     },
     opsToNextPromotion(member) {
@@ -175,28 +188,41 @@ export default {
       if (!ladder || !ladder.nextAt) return null;
       return Math.max(0, ladder.nextAt - ops);
     },
-    nextPromotionRank(member) { const ladder = this.promotionLadderFor(member?.rank); return ladder?.nextRank || null; },
+    nextPromotionRank(member) {
+      const ladder = this.promotionLadderFor(member?.rank);
+      return ladder?.nextRank || null;
+    },
 
     loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
-          download: true, skipEmptyLines: true, header: false,
+          download: true,
+          skipEmptyLines: true,
+          header: false,
           complete: (results) => {
             const rows = (results.data || []).slice(2);
             const CERT_COLUMNS = 13;
             const usedUNSCIds = new Set();
-            this.members = rows.map((row) => {
-              const name = String(row[1] || "").trim(); if (!name) return null;
-              const oldId = String(row[4] || "").trim();
-              return {
-                rank: String(row[0] || "").trim(),
-                name,
-                joinDate: String(row[3] || "").trim(),
-                id: this.makeUNSCId(oldId, name, usedUNSCIds),
-                certifications: row.slice(5, 5 + CERT_COLUMNS).map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
-                squad: "", fireteam: "", slot: "", opsAttended: 0,
-              };
-            }).filter(Boolean);
+            this.members = rows
+              .map((row) => {
+                const name = String(row[1] || "").trim();
+                if (!name) return null;
+                const oldId = String(row[4] || "").trim();
+                return {
+                  rank: String(row[0] || "").trim(),
+                  name,
+                  joinDate: String(row[3] || "").trim(),
+                  id: this.makeUNSCId(oldId, name, usedUNSCIds),
+                  certifications: row
+                    .slice(5, 5 + CERT_COLUMNS)
+                    .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
+                  squad: "",
+                  fireteam: "",
+                  slot: "",
+                  opsAttended: 0,
+                };
+              })
+              .filter(Boolean);
             resolve(this.members);
           },
           error: reject,
@@ -207,19 +233,24 @@ export default {
     loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
-          download: true, skipEmptyLines: false, header: false,
+          download: true,
+          skipEmptyLines: false,
+          header: false,
           complete: (results) => {
             const rows = results.data || [];
             const findCol = (row, names) => {
               const wanted = names.map((n) => this.normalize(n));
               return row.findIndex((c) => wanted.includes(this.normalize(c)));
             };
+
             let membershipHeaderRowIndex = -1, memberCol = -1, squadCol = -1;
             for (let i = 0; i < 2; i++) {
               const r = rows[i] || [];
               const m = findCol(r, ["Squad Member"]);
               const s = findCol(r, ["Squads"]);
-              if (m !== -1 && s !== -1) { membershipHeaderRowIndex = i; memberCol = m; squadCol = s; break; }
+              if (m !== -1 && s !== -1) {
+                membershipHeaderRowIndex = i; memberCol = m; squadCol = s; break;
+              }
             }
             if (membershipHeaderRowIndex === -1) { resolve([]); return; }
 
