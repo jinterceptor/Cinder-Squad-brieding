@@ -190,7 +190,7 @@
                         <strong>Role:</strong>
                         <span
                           class="role-accent"
-                          :class="{ 'accent-med': isCorpsmanRole(slot.role) }"
+                          :class="{ 'role-corpsman': isMedicalRank(slot.role) || isCorpsmanRole(slot.role) }"
                         >
                           {{ slot.role }}
                         </span>
@@ -234,7 +234,7 @@
                         <strong>Role:</strong>
                         <span
                           class="role-accent"
-                          :class="{ 'accent-med': isMedicalRank(slot.member?.rank) || isCorpsmanRole(slot.role || slot.member?.slot) }"
+                          :class="{ 'role-corpsman': isMedicalRank(slot.member?.rank) || isCorpsmanRole(slot.role || slot.member?.slot) }"
                         >
                           {{ slot.role || slot.member?.slot || 'Unassigned' }}
                         </span>
@@ -253,7 +253,7 @@
                           <strong>Ops Attended:</strong>
                           <span class="accent-strong">{{ formatOps(getOps(slot.member)) }}</span>
                         </p>
-                        <p class="detail-line">
+                        <p class="detail-line next-rank-line">
                           <strong>Next Rank:</strong>
                           <span class="accent-strong">
                             {{ nextPromotion(slot.member)?.nextRank || '—' }}
@@ -264,7 +264,7 @@
                         </p>
                         <p v-if="nextPromotion(slot.member)?.misc">
                           <strong>Requirements:</strong>
-                          <span class="accent">{{ nextPromotion(slot.member).misc }}</span>
+                          <span class="requirements-value">{{ nextPromotion(slot.member).misc }}</span>
                         </p>
                       </div>
 
@@ -508,6 +508,7 @@ export default {
         SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
         SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
         GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Support staff / Platoon lead" },
+
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: null },
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
@@ -536,8 +537,9 @@ export default {
     },
 
     /* Medical role detection */
-    isMedicalRank(rank) {
-      const r = String(rank || "").toUpperCase();
+    isMedicalRank(rankOrRole) {
+      const r = String(rankOrRole || "").toUpperCase();
+      // works for rank OR role text that includes HM* abbreviations
       return ["HR","HA","HN","HM3","HM2","HM1","HMC"].includes(r);
     },
     isCorpsmanRole(role) {
@@ -687,7 +689,7 @@ export default {
 .fireteam-count { color: #9ec5e6; font-size: .9rem; }
 .fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
 
-/* Cards grid – widened slightly to avoid Join Date wrapping */
+/* Cards grid – slightly wider to avoid wrapping */
 .squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: .85rem; }
 
 /* Cards */
@@ -707,14 +709,16 @@ export default {
 
 /* Info accents */
 .detail-line strong { color: #9ec5e6; }
-.role-accent { color: #a3e7ff; }             /* role value color */
-.accent-med { color: #8af5cf; font-weight: 600; }  /* medical role highlight */
-.date-accent { color: #c3d7ff; }             /* join date value color */
-.accent { color: #a3e7ff; }                  /* generic value color */
+.role-accent { color: #55ff88; font-weight: 600; }     /* default: green for non-medical roles */
+.role-corpsman { color: #ff6b6b; font-weight: 700; }   /* corpsman/medical: red */
+.date-accent { color: #c3d7ff; }
+.accent { color: #a3e7ff; }
 .accent-strong { color: #7fffd4; font-weight: 700; }
+.requirements-value { color: #55ff88; }                /* only the value in Requirements is green */
 
-/* Keep Join Date on one line */
+/* Keep on one line */
 .join-date { white-space: nowrap; }
+.next-rank-line { white-space: nowrap; } /* why: prevent wrapping of rank + ops remainder */
 
 /* Ops / promo */
 .ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
