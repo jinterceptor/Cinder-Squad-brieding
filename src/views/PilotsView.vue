@@ -135,7 +135,7 @@
             <div class="rhombus-back">&nbsp;</div>
           </div>
 
-          <button class="squad-close" @click="closeSquad">✕</button>
+        <button class="squad-close" @click="closeSquad">✕</button>
         </div>
 
         <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
@@ -309,9 +309,9 @@
 export default {
   name: "PilotsView",
   props: {
-    members: { type: Array, default: () => [] },
+    members: { type: Array, default: () => [] },    // roster (may include opsAttended)
     orbat:   { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] },
+    attendance: { type: Array, default: () => [] }, // optional raw attendance rows
   },
   data() {
     return {
@@ -339,26 +339,21 @@ export default {
       const addByName = (name, ops) => {
         if (!name) return;
 
-        const raw = this.nameKey(name);
-        const rankless = this.nameKeyNoRank(name);
-        const noQuoted = this.nameKeyNoQuoted(name);
-        const noQuotedRank = this.nameKeyNoQuotedNoRank(name);
+        const raw       = this.nameKey(name);          // e.g., SGT T THY TYRSSON
+        const noRank    = this.nameKeyNoRank(name);    // e.g., T THY TYRSSON
+        const isRaw     = this.initialSurnameKey(raw);     // e.g., T TYRSSON
+        const isNoRank  = this.initialSurnameKey(noRank);  // e.g., T TYRSSON
+        const lnRaw     = this.lastNameKey(raw);           // e.g., TYRSSON
+        const lnNoRank  = this.lastNameKey(noRank);        // e.g., TYRSSON
 
         const keys = [
-          raw && `NM:${raw}`,
-          rankless && `NR:${rankless}`,
-          noQuoted && `NQ:${noQuoted}`,
-          noQuotedRank && `QN:${noQuotedRank}`,
+          raw     && `NM:${raw}`,
+          noRank  && `NR:${noRank}`,
+          isRaw   && `IS:${isRaw}`,
+          isNoRank&& `IS:${isNoRank}`,
+          lnRaw   && `LN:${lnRaw}`,
+          lnNoRank&& `LN:${lnNoRank}`,
         ].filter(Boolean);
-
-        // initial+surname variants
-        const initials = [
-          this.initialSurnameKey(raw),
-          this.initialSurnameKey(rankless),
-          this.initialSurnameKey(noQuoted),
-          this.initialSurnameKey(noQuotedRank),
-        ].filter(Boolean);
-        initials.forEach(k => keys.push(`IS:${k}`));
 
         keys.forEach(k => { map[k] = ops; });
       };
@@ -475,31 +470,27 @@ export default {
     },
   },
   methods: {
-    /* ===== Name normalization (rank/quotes/nickname-resilient) ===== */
+    /* ===== Name normalization (keep quoted content; drop quotes) ===== */
     stripRank(uppercased) {
       const rankPattern = /^(RCT|PVT|PFC|SPC(?:2|3|4)?|LCPL|CPL|SGT|SSGT|GYSGT|WO|CWO[2-5]|[12](?:ND|ST)LT|CAPT|MAJ|HR|HA|HN|HM[123]|HMC)\b[.\s,:-]*/i;
       let s = uppercased;
       while (rankPattern.test(s)) s = s.replace(rankPattern, "");
       return s.trim();
     },
-    removeQuotedSegments(str) {
-      // Remove "..." and '...' nickname blocks entirely before other cleaning
-      return String(str || "").replace(/"[^"]*"|'[^']*'/g, " ").replace(/\s+/g, " ");
-    },
     baseClean(name) {
       return String(name || "")
         .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
+        .replace(/["']/g, "")    // drop quote chars but KEEP words
         .replace(/\./g, "")      // T. -> T
-        .replace(/["']/g, "")    // drop remaining quotes
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
     },
-    nameKey(name) { return this.baseClean(name); },
-    nameKeyNoRank(name) { return this.stripRank(this.baseClean(name)); },
-    nameKeyNoQuoted(name) { return this.baseClean(this.removeQuotedSegments(name)); },
-    nameKeyNoQuotedNoRank(name) {
-      return this.stripRank(this.baseClean(this.removeQuotedSegments(name)));
+    nameKey(name) {                 // cleaned raw
+      return this.baseClean(name);
+    },
+    nameKeyNoRank(name) {           // cleaned, w/o rank prefixes
+      return this.stripRank(this.baseClean(name));
     },
     initialSurnameKey(cleanedUpperName) {
       if (!cleanedUpperName) return "";
@@ -512,39 +503,43 @@ export default {
       if (!first || !last) return "";
       return `${first[0]} ${last}`.trim();
     },
+    lastNameKey(cleanedUpperName) {
+      if (!cleanedUpperName) return "";
+      const SUFFIX = new Set(["JR","SR","III","IV","V"]);
+      const toks = cleanedUpperName.split(" ").filter(Boolean);
+      if (!toks.length) return "";
+      let last = toks[toks.length - 1];
+      if (SUFFIX.has(last) && toks.length >= 2) last = toks[toks.length - 2];
+      return last || "";
+    },
 
     /* ===== Attendance lookup (ID → multiple name variants) ===== */
     getOps(member) {
-      // ID
+      // 1) ID
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
-      // Names
+      // 2) Names
       if (member?.name) {
-        const raw = this.nameKey(member.name);
-        const rankless = this.nameKeyNoRank(member.name);
-        const noQ = this.nameKeyNoQuoted(member.name);
-        const noQrank = this.nameKeyNoQuotedNoRank(member.name);
-
-        const candidates = [
-          `NM:${raw}`, `NR:${rankless}`, `NQ:${noQ}`, `QN:${noQrank}`,
+        const raw     = this.nameKey(member.name);
+        const noRank  = this.nameKeyNoRank(member.name);
+        const tries = [
+          `NM:${raw}`, `NR:${noRank}`,
           `IS:${this.initialSurnameKey(raw)}`,
-          `IS:${this.initialSurnameKey(rankless)}`,
-          `IS:${this.initialSurnameKey(noQ)}`,
-          `IS:${this.initialSurnameKey(noQrank)}`,
-        ];
-
-        for (const k of candidates) {
-          if (k.endsWith(":")) continue; // skip empty
+          `IS:${this.initialSurnameKey(noRank)}`,
+          `LN:${this.lastNameKey(raw)}`,
+          `LN:${this.lastNameKey(noRank)}`,
+        ].filter(k => !k.endsWith(":"));
+        for (const k of tries) {
           if (this.attendanceMap[k] !== undefined) return this.attendanceMap[k];
         }
       }
-      // Fallback
+      // 3) Fallback
       const direct = Number(member?.opsAttended);
       return Number.isFinite(direct) ? direct : null;
     },
 
-    /* ===== Promotions (your matrix) ===== */
+    /* ===== Promotions (matrix unchanged) ===== */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
