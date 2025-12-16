@@ -1,3 +1,4 @@
+<!-- src/views/StatusView.vue -->
 <template>
   <div
     id="status"
@@ -98,13 +99,10 @@ export default {
 </script>
 
 <style scoped>
-/* Keep your existing theme; only override markdown heading colors here. */
-/* Vue 3 scoped deep selectors for markdown content: */
-.markdown :deep(h1) { color: #1e90ff; }   /* DodgerBlue-ish title */
-.markdown :deep(h2) { color: #9ec5e6; }   /* Desaturated blue subtitle */
+/* Only change ### headings inside the markdown block; leave # and ## as-is */
+.markdown :deep(h3) { color: #9ec5e6; }
 
-/* If your build uses the legacy deep combinator, uncomment these:
-::v-deep(.markdown h1) { color: #1e90ff; }
-::v-deep(.markdown h2) { color: #9ec5e6; }
+/* If your setup uses legacy deep selector, use this instead:
+::v-deep(.markdown h3) { color: #9ec5e6; }
 */
 </style>
