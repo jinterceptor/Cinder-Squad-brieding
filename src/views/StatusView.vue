@@ -25,7 +25,7 @@
       </div>
     </section>
 
-    <!-- Current Assignment (markdown preserved + heading handling) -->
+    <!-- Current Assignment (markdown preserved + heading-level handling) -->
     <section id="assignment" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/deployable.svg" />
@@ -36,14 +36,51 @@
       </div>
     </section>
 
-    <!-- Status Overview (markdown-only to match universal theming) -->
+    <!-- Status Overview -->
     <section id="overview" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/orbital.svg" />
         <h1>Current Status</h1>
       </div>
       <div class="section-content-container">
-        <vue-markdown-it :source="overviewMarkdown" class="markdown" />
+        <div class="status-grid">
+          <div class="status-block">
+            <p><strong>Active Members:</strong> {{ stats.activeMembers }}</p>
+            <p><strong>Reserves:</strong> {{ stats.reservesMembers }}</p>
+            <p><strong>Elements:</strong> {{ stats.totalElements }}</p>
+          </div>
+
+          <div class="status-block">
+            <p><strong>Fireteams (with slots):</strong> {{ stats.totalFireteams }}</p>
+            <p><strong>Filled Slots:</strong> {{ stats.filledSlots }}</p>
+            <p><strong>Free Slots:</strong> {{ stats.vacantSlots }}</p>
+          </div>
+
+          <div class="status-block">
+            <p><strong>Total Personnel:</strong> {{ stats.totalMembers }}</p>
+            <p><strong>Fill Rate:</strong> {{ stats.fillRate }}%</p>
+            <p><strong>Active Mission:</strong> {{ currentAssignment ? currentAssignment.name : 'None' }}</p>
+          </div>
+        </div>
+
+        <div class="promotions">
+          <h3 class="promotions-title">Upcoming Promotions</h3>
+          <div v-if="upcomingPromotions.length" class="promotions-list">
+            <div
+              v-for="(p, i) in upcomingPromotions"
+              :key="p.id || p.name + i"
+              class="promotion-row"
+              :class="{ eligible: p.opsToNext === 0, imminent: p.opsToNext === 1 }"
+              title="Ops attended pulled from Attendance sheet"
+            >
+              <span class="p-name">{{ p.name }}</span>
+              <span class="p-ranks">{{ p.rank }} → {{ p.nextRank || '—' }}</span>
+              <span class="p-ops" v-if="p.opsToNext > 0">{{ p.opsToNext }} ops</span>
+              <span class="p-ops" v-else>ELIGIBLE</span>
+            </div>
+          </div>
+          <div v-else class="promotions-empty">No upcoming promotions detected.</div>
+        </div>
       </div>
     </section>
   </div>
@@ -63,7 +100,7 @@ export default {
     events: { type: Array, required: true },
     members: { type: Array, default: () => [] },
     orbat: { type: Array, default: () => [] },
-    reserves: { type: Array, default: () => [] }, // optional count source
+    reserves: { type: Array, default: () => [] },
   },
   data() {
     return {
@@ -74,23 +111,11 @@ export default {
     };
   },
   computed: {
-    /* Current Assignment */
     currentAssignment() {
       const ms = (this.missions || []).slice();
       const active = ms.find((m) => String(m.status || "").toUpperCase().includes("ACTIVE"));
       return active || (ms.length ? ms[ms.length - 1] : null);
     },
-
-    /* Upcoming Op quick info (used in overview) */
-    upcomingOp() {
-      const es = (this.events || []).slice();
-      return es.length ? es[0] : null;
-    },
-    upcomingOpTitle() { return this.upcomingOp ? (this.upcomingOp.title || "TBD") : "None"; }
-    ,
-    upcomingOpTime() { return this.upcomingOp ? (this.upcomingOp.time || "TBD") : "—"; },
-
-    /* Rollups */
     stats() {
       const members = this.members || [];
       const orbat = this.orbat || [];
@@ -99,20 +124,18 @@ export default {
         ? this.reserves.length
         : members.filter((m) => String(m.squad || "").toLowerCase() === "reserves").length;
 
-      const activeMembers = members.length - reservesMembers;
+      const activeMembers = members.filter((m) => String(m.squad || "").toLowerCase() !== "reserves").length;
 
-      let totalFireteams = 0;
-      let filledSlots = 0;
-      let vacantSlots = 0;
-
+      let totalFireteams = 0, filledSlots = 0, vacantSlots = 0;
       orbat.forEach((sq) => {
-        (sq.fireteams || []).forEach((ft) => {
+        const fts = sq.fireteams || [];
+        fts.forEach((ft) => {
           const slots = ft.slots || [];
           if (slots.length) totalFireteams += 1;
           slots.forEach((s) => {
             const st = String(s.status || "").toUpperCase();
-            if (st === "FILLED" && s.member) filledSlots++;
-            else if (st === "VACANT") vacantSlots++;
+            if (st === "FILLED" && s.member) filledSlots += 1;
+            else if (st === "VACANT") vacantSlots += 1;
           });
         });
       });
@@ -122,39 +145,15 @@ export default {
 
       return {
         totalMembers: members.length,
-        activeMembers,
-        reservesMembers,
         totalElements: orbat.length,
         totalFireteams,
         filledSlots,
         vacantSlots,
         fillRate,
+        activeMembers,
+        reservesMembers,
       };
     },
-
-    elementSummaries() {
-      const rows = [];
-      (this.orbat || []).forEach((sq) => {
-        let filled = 0, vacant = 0;
-        if (sq.fireteams && sq.fireteams.length) {
-          sq.fireteams.forEach((ft) => {
-            (ft.slots || []).forEach((s) => {
-              const st = String(s.status || "").toUpperCase();
-              if (st === "FILLED" && s.member) filled++;
-              else if (st === "VACANT") vacant++;
-            });
-          });
-        } else {
-          filled = (sq.members || []).length;
-        }
-        rows.push({ name: sq.squad, filled, vacant });
-      });
-      rows.sort((a, b) =>
-        String(a.name).localeCompare(String(b.name), undefined, { numeric: true })
-      );
-      return rows;
-    },
-
     upcomingPromotions() {
       const list = [];
       (this.members || []).forEach((m) => {
@@ -179,52 +178,11 @@ export default {
       });
       return list.slice(0, 10);
     },
-
-    /* Markdown for the overview (so it matches Current Assignment styling) */
-    overviewMarkdown() {
-      const s = this.stats;
-      const activeMission = this.currentAssignment ? this.currentAssignment.name : "None";
-      const opTitle = this.upcomingOpTitle;
-      const opTime = this.upcomingOpTime;
-
-      const lines = [];
-
-      lines.push(`### Strength Overview`);
-      lines.push(`**Personnel:** ${s.totalMembers}  ·  **Active:** ${s.activeMembers}  ·  **Reserves:** ${s.reservesMembers}`);
-      lines.push(`**Elements:** ${s.totalElements}  ·  **Fireteams:** ${s.totalFireteams}`);
-      lines.push(`**Filled Slots:** ${s.filledSlots}  ·  **Vacant Slots:** ${s.vacantSlots}  ·  **Fill Rate:** ${s.fillRate}%`);
-      lines.push("");
-      lines.push(`**Active Mission:** ${activeMission}`);
-      lines.push(`**Upcoming Operation:** ${opTitle} — ${opTime}`);
-      lines.push("");
-
-      if (this.elementSummaries.length) {
-        lines.push(`### Elements`);
-        this.elementSummaries.slice(0, 24).forEach((row) => {
-          const vac = row.vacant > 0 ? ` · ${row.vacant} vacant` : "";
-          lines.push(`- ${row.name} — ${row.filled} filled${vac}`);
-        });
-        lines.push("");
-      }
-
-      lines.push(`### Upcoming Promotions`);
-      if (this.upcomingPromotions.length) {
-        this.upcomingPromotions.forEach((p) => {
-          const suffix = p.opsToNext > 0 ? ` (${p.opsToNext} ops)` : ` — **ELIGIBLE**`;
-          lines.push(`- **${p.name}** — ${p.rank} → ${p.nextRank || "—"}${suffix}`);
-        });
-      } else {
-        lines.push(`- None detected`);
-      }
-
-      return lines.join("\n");
-    },
   },
   created() {
     this.setAnimate();
   },
   beforeUpdate() {
-    // keep Current Assignment markdown in sync with selection
     this.selectMission(this.missionSlug);
   },
   mounted() {
@@ -257,7 +215,7 @@ export default {
       if (statusAnimated === null) window.sessionStorage.setItem("statusAnimated", true);
     },
 
-    /* Promotion helpers (same ladder you’ve standardized) */
+    /* Promotion helpers (same ladder) */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     promotionLadderFor(rank) {
       const r = this.rankKey(rank);
@@ -286,10 +244,12 @@ export default {
         SPC2: { nextAt: 30, nextRank: "SPC3" },
         SPC3: { nextAt: 40, nextRank: "SPC4" },
         SPC4: { nextAt: null, nextRank: null },
+
         HA:   { nextAt: 2,  nextRank: "HN" },
         HN:   { nextAt: 10, nextRank: "HM3" },
         HM3:  { nextAt: 20, nextRank: "HM2" },
         HM2:  { nextAt: 30, nextRank: null },
+
         WO:   { nextAt: null, nextRank: null },
         CWO2: { nextAt: 10, nextRank: "CWO3" },
         CWO3: { nextAt: 20, nextRank: "CWO4" },
@@ -314,10 +274,52 @@ export default {
 </script>
 
 <style scoped>
-/* Keep your global theme; only retain the markdown h3 override you asked for */
-.markdown :deep(h3) { color: #9ec5e6; }
+/* Overview layout */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: .8rem;
+  margin-top: .2rem;
+}
+.status-block {
+  border: 1px dashed rgba(30,144,255,0.35);
+  background: rgba(0,0,0,0.15);
+  border-radius: .35rem;
+  padding: .5rem .6rem;
+}
 
-/* If your setup uses the legacy deep selector:
+/* Promotions list */
+.promotions { margin-top: 1rem; }
+.promotions-title { margin: 0 0 .4rem; letter-spacing: .06em; color: #dce6f1; } /* force themed heading */
+.promotions-list { display: grid; gap: .35rem; }
+.promotion-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  gap: .6rem;
+  align-items: center;
+  border: 1px dashed rgba(30,144,255,0.35);
+  background: rgba(0,0,0,0.15);
+  border-radius: .35rem;
+  padding: .35rem .5rem;
+  color: #dce6f1; /* ensure default text follows theme (was black) */
+}
+.promotion-row.eligible {
+  border-color: rgba(120,255,170,0.85);
+  box-shadow: 0 0 8px rgba(120,255,170,0.15) inset;
+}
+.promotion-row.imminent {
+  border-color: rgba(255,190,80,0.85);
+  box-shadow: 0 0 8px rgba(255,190,80,0.12) inset;
+}
+
+/* Accents remain */
+.p-name { color: #e0f0ff; }
+.p-ranks { color: #9ec5e6; }
+.p-ops { color: #cfdcea; }
+
+/* Markdown h3 override (leave h1/h2 as-is) */
+.markdown :deep(h3) { color: #9ec5e6; }
+/* If legacy deep selector is needed:
 ::v-deep(.markdown h3) { color: #9ec5e6; }
 */
 </style>
