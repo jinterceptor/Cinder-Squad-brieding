@@ -310,7 +310,7 @@
 
     <!-- UI SFX -->
     <audio ref="orbatClickAudio" preload="auto">
-      <source src="/Orbat Main Menu Click.ogg" type="audio/ogg" />
+      <source src="/sound/Orbat Main Menu Click.ogg" type="audio/ogg" />
     </audio>
   </section>
 </template>
