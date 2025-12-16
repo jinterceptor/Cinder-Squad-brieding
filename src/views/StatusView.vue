@@ -1,17 +1,12 @@
-<!-- src/views/StatusView.vue -->
 <template>
   <div
-    id="statusView"
+    id="status"
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
     class="content-container"
   >
-    <!-- MISSION LOG (unchanged visuals) -->
-    <section
-      id="missions"
-      class="section-container"
-      :style="{ 'animation-delay': animationDelay }"
-    >
+    <!-- Mission Log (unchanged visuals) -->
+    <section id="missions" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/campaign.svg" />
         <h1>Mission Log</h1>
@@ -29,94 +24,77 @@
       </div>
     </section>
 
-    <!-- CURRENT ASSIGNMENT (uses Mission.vue for identical styling) -->
-    <section
-      id="assignment"
-      class="section-container"
-      :style="{ 'animation-delay': animationDelay }"
-    >
+    <!-- Current Assignment (markdown renderer preserved) -->
+    <section id="assignment" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
-        <img src="/icons/orbital.svg" />
+        <img src="/icons/deployable.svg" />
         <h1>Current Assignment</h1>
       </div>
       <div class="section-content-container">
-        <div v-if="currentAssignment">
-          <!-- Reuse Mission component so card/box styles match your log -->
-          <div class="mission-list-container">
-            <Mission
-              :mission="currentAssignment"
-              :selected="currentAssignment.slug"
-              @click="noop"
-            />
-          </div>
-        </div>
-        <div v-else class="assignment-empty">
-          No mission data available.
-        </div>
+        <vue-markdown-it :source="missionMarkdown" class="markdown" />
       </div>
     </section>
   </div>
 </template>
 
 <script>
+import { VueMarkdownIt } from '@f3ve/vue-markdown-it';
 import Mission from "@/components/Mission.vue";
 
 export default {
   name: "StatusView",
-  components: { Mission },
+  components: {
+    VueMarkdownIt,
+    Mission,
+  },
   props: {
-    animate: { type: Boolean, default: false },
-    initialSlug: { type: String, default: "" },
-    missions: { type: Array, default: () => [] },
-    events: { type: Array, default: () => [] },
-    members: { type: Array, default: () => [] },
-    orbat: { type: Array, default: () => [] },
-    // still accepted; no UI for it now
-    reserves: { type: Array, default: () => [] },
+    animate: { type: Boolean, required: true },
+    initialSlug: { type: String, required: true },
+    missions: { type: Array, required: true },
+    events: { type: Array, required: true },
+    // Removed pilots/clocks/reserves: not needed anymore
   },
   data() {
     return {
-      missionSlug: this.initialSlug || "",
-      animateView: false,
-      animationDelay: "0.2s",
+      missionSlug: this.initialSlug,
+      animateView: this.animate,
+      animationDelay: "1.75s",
+      missionMarkdown: "",
     };
   },
-  computed: {
-    // Prefer ACTIVE mission; else most recent entry
-    currentAssignment() {
-      const ms = (this.missions || []).slice();
-      const active = ms.find((m) =>
-        String(m.status || "").toUpperCase().includes("ACTIVE")
-      );
-      return active || (ms.length ? ms[ms.length - 1] : null);
-    },
+  created() {
+    this.setAnimate();
   },
-  watch: {
-    initialSlug(slug) {
-      if (!slug) return;
-      this.missionSlug = slug;
-      const el = document.querySelector(`#m-${slug.replace(/[^\w-]/g, "")}`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    },
+  beforeUpdate() {
+    // initial set
+    this.selectMission(this.missionSlug);
   },
   mounted() {
-    if (this.animate) this.animateView = true;
-    const statusAnimated = window.sessionStorage.getItem("statusAnimated");
-    if (statusAnimated) this.animationDelay = "0s";
-    else window.sessionStorage.setItem("statusAnimated", "true");
+    // set on mount
+    if (this.missions.length > 0) {
+      this.selectMission(this.missions[0].slug);
+    }
   },
   methods: {
     selectMission(slug) {
       this.missionSlug = slug;
+      const m = this.missions.find((x) => x.slug === this.missionSlug);
+      this.missionMarkdown = m ? m.content : "";
     },
-    noop() {
-      /* keep click inert for the featured card */
+    setAnimate() {
+      if (this.animate) this.animateView = true;
+      const statusAnimated = window.sessionStorage.getItem("statusAnimated");
+      if (statusAnimated) {
+        this.animationDelay = "0s";
+      }
+      if (statusAnimated === null) {
+        window.sessionStorage.setItem("statusAnimated", true);
+      }
     },
   },
 };
 </script>
 
 <style scoped>
-/* No new styles; rely on your existing global theme */
-.assignment-empty { color: #9ec5e6; opacity: .85; }
+/* No new styles; your existing global theme handles layout and boxes */
 </style>
