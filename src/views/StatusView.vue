@@ -128,8 +128,7 @@ export default {
 
       let totalFireteams = 0, filledSlots = 0, vacantSlots = 0;
       orbat.forEach((sq) => {
-        const fts = sq.fireteams || [];
-        fts.forEach((ft) => {
+        (sq.fireteams || []).forEach((ft) => {
           const slots = ft.slots || [];
           if (slots.length) totalFireteams += 1;
           slots.forEach((s) => {
@@ -215,7 +214,7 @@ export default {
       if (statusAnimated === null) window.sessionStorage.setItem("statusAnimated", true);
     },
 
-    /* Promotion helpers (same ladder) */
+    /* Promotion helpers */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     promotionLadderFor(rank) {
       const r = this.rankKey(rank);
@@ -286,11 +285,14 @@ export default {
   background: rgba(0,0,0,0.15);
   border-radius: .35rem;
   padding: .5rem .6rem;
+  color: #dce6f1; /* ensure themed text (was black) */
 }
+.status-block p { margin: .25rem 0; color: #dce6f1; } /* force white-ish */
+.status-block strong { color: #e0f0ff; } /* accent like assignment */
 
 /* Promotions list */
 .promotions { margin-top: 1rem; }
-.promotions-title { margin: 0 0 .4rem; letter-spacing: .06em; color: #dce6f1; } /* force themed heading */
+.promotions-title { margin: 0 0 .4rem; letter-spacing: .06em; color: #dce6f1; }
 .promotions-list { display: grid; gap: .35rem; }
 .promotion-row {
   display: grid;
@@ -301,7 +303,7 @@ export default {
   background: rgba(0,0,0,0.15);
   border-radius: .35rem;
   padding: .35rem .5rem;
-  color: #dce6f1; /* ensure default text follows theme (was black) */
+  color: #dce6f1; /* ensure default text follows theme */
 }
 .promotion-row.eligible {
   border-color: rgba(120,255,170,0.85);
