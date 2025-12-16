@@ -287,7 +287,7 @@
 
                   <div class="member-footer">
                     <span>BIOMETRIC RECORD VALID</span>
-                    <span>UNSC SYSTEMS DATABASE</span>
+                    <span>UNSC ORBAT</span>
                   </div>
                 </template>
               </div>
@@ -421,7 +421,7 @@ export default {
     },
   },
   methods: {
-    /* -------------------- Normalization helpers -------------------- */
+    /* ------------ Normalization helpers ------------ */
     parseOps(v) {
       if (v === null || v === undefined) return null;
       if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -467,11 +467,11 @@ export default {
       return toks.length ? toks[toks.length - 1] : "";
     },
 
-    /* -------------------- Attendance matching -------------------- */
+    /* ------------ Attendance matching ------------ */
     getOps(member) {
       if (!member?.name) return null;
 
-      const cleaned = this.baseClean(member.name);
+      const cleaned  = this.baseClean(member.name);
       const rankless = this.stripRank(cleaned);
       const collapsed = this.collapseInitialNicknameSurname(rankless);
       const isKey    = this.initialSurnameKey(rankless);
@@ -519,7 +519,7 @@ export default {
       return bestOps;
     },
 
-    /* -------------------- Promotions -------------------- */
+    /* ------------ Promotions ------------ */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
@@ -579,7 +579,7 @@ export default {
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* -------------------- UI utils -------------------- */
+    /* ------------ UI utils ------------ */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -635,7 +635,18 @@ export default {
     },
     loadoutLabel(key) { const def = this.loadoutOptions[key]; return def ? `${def.label} (${def.points}pt)` : key; },
 
-    /* renamed to avoid collisions with any data/computed name */
+    /* keep this as a METHOD (not data/computed) so template can call it */
+    availableLoadouts(member) {
+      const has = (label) => this.hasCert(member, this.certLabels.indexOf(label));
+      const opts = [];
+      if (has("Grenadier")) opts.push("grenadier");
+      if (has("Anti Tank")) opts.push("antitank");
+      if (has("Machine Gunner")) { opts.push("m247", "m247_50"); }
+      if (has("Combat Engineer")) opts.push("engineer");
+      if (has("Marksman")) opts.push("marksman");
+      return opts;
+    },
+
     getRankInsigniaUrl(rank) {
       const key = String(rank || "").trim().toUpperCase();
       const map = {
