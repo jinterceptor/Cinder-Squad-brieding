@@ -264,7 +264,7 @@
                         </p>
                         <p v-if="nextPromotion(slot.member)?.misc">
                           <strong>Requirements:</strong>
-                          <span class="requirements-value">{{ nextPromotion(slot.member).misc }}</span>
+                          <span class="accent-strong">{{ nextPromotion(slot.member).misc }}</span>
                         </p>
                       </div>
 
@@ -734,10 +734,9 @@ export default {
 .detail-line strong { color: #9ec5e6; }
 .role-accent { color: #55ff88; font-weight: 600; }     /* default: green */
 .role-corpsman { color: #ff6b6b; font-weight: 700; }   /* corpsman/medical: red */
-.date-accent { color: #c3d7ff; }
+.date-accent { color: #55ff88; }                       /* join date now green */
 .accent { color: #a3e7ff; }
 .accent-strong { color: #7fffd4; font-weight: 700; }
-.requirements-value { color: #55ff88; }                /* only the value is green */
 
 /* Keep on one line */
 .join-date { white-space: nowrap; }
