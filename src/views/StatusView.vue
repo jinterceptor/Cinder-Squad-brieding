@@ -24,13 +24,14 @@
       </div>
     </section>
 
-    <!-- Current Assignment (markdown renderer preserved) -->
+    <!-- Current Assignment (markdown renderer preserved + heading-level handling) -->
     <section id="assignment" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/deployable.svg" />
         <h1>Current Assignment</h1>
       </div>
       <div class="section-content-container">
+        <!-- Same .markdown wrapper so your existing CSS for #/##/### applies -->
         <vue-markdown-it :source="missionMarkdown" class="markdown" />
       </div>
     </section>
@@ -43,16 +44,12 @@ import Mission from "@/components/Mission.vue";
 
 export default {
   name: "StatusView",
-  components: {
-    VueMarkdownIt,
-    Mission,
-  },
+  components: { VueMarkdownIt, Mission },
   props: {
     animate: { type: Boolean, required: true },
     initialSlug: { type: String, required: true },
     missions: { type: Array, required: true },
-    events: { type: Array, required: true },
-    // Removed pilots/clocks/reserves: not needed anymore
+    events: { type: Array, required: true }, // kept for prop shape parity
   },
   data() {
     return {
@@ -66,11 +63,10 @@ export default {
     this.setAnimate();
   },
   beforeUpdate() {
-    // initial set
+    // keep current-assignment in sync with selection
     this.selectMission(this.missionSlug);
   },
   mounted() {
-    // set on mount
     if (this.missions.length > 0) {
       this.selectMission(this.missions[0].slug);
     }
@@ -79,8 +75,30 @@ export default {
     selectMission(slug) {
       this.missionSlug = slug;
       const m = this.missions.find((x) => x.slug === this.missionSlug);
-      this.missionMarkdown = m ? m.content : "";
+      this.missionMarkdown = this.buildAssignmentMarkdown(m);
     },
+
+    // Preserve heading-level styling:
+    // - If body already starts with a '#' heading, use it as-is (dev-authored titles/subtitles remain).
+    // - Otherwise, synthesize "# {name}" and "## {status}" above the body for consistent title/subtitle styling.
+    buildAssignmentMarkdown(mission) {
+      if (!mission) return "";
+      const body = String(mission.content || "").trim();
+      const startsWithHeading = /^#{1,6}\s+/.test(body);
+
+      if (startsWithHeading) {
+        return body;
+      }
+
+      const name = (mission.name || "").trim();
+      const status = (mission.status || "").trim();
+
+      const titleLine = name ? `# ${name}\n\n` : "";
+      const subtitleLine = status ? `## ${status}\n\n` : "";
+
+      return `${titleLine}${subtitleLine}${body}`.trim();
+    },
+
     setAnimate() {
       if (this.animate) this.animateView = true;
       const statusAnimated = window.sessionStorage.getItem("statusAnimated");
@@ -96,5 +114,5 @@ export default {
 </script>
 
 <style scoped>
-/* No new styles; your existing global theme handles layout and boxes */
+/* No new styles; your global .markdown h1/h2/h3 rules keep the title/subtitle look. */
 </style>
