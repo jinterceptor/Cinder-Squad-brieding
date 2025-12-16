@@ -1,5 +1,7 @@
+<!-- src/views/PilotsView.vue -->
 <template>
   <section id="members" class="section-container">
+    <!-- Header -->
     <div style="height: 52px; overflow: hidden">
       <div class="section-header clipped-medium-backward-pilot">
         <img src="/icons/license.svg" alt="Members Icon" />
@@ -13,6 +15,7 @@
         <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
 
         <div v-else class="hierarchy-container">
+          <!-- TOP: BROADSWORD COMMAND -->
           <div v-if="hierarchy.broadswordCommand" class="orbat-row center-row actual-row">
             <div class="squad-row single">
               <div class="squad-card" @click="openSquad(hierarchy.broadswordCommand)">
@@ -30,6 +33,7 @@
             </div>
           </div>
 
+          <!-- TOP: CHALK ACTUAL -->
           <div v-if="hierarchy.chalkActual" class="orbat-row center-row actual-row">
             <div class="squad-row single">
               <div class="squad-card" @click="openSquad(hierarchy.chalkActual)">
@@ -47,9 +51,15 @@
             </div>
           </div>
 
+          <!-- CHALKS 1–4 -->
           <div v-if="hierarchy.chalks.length" class="orbat-row chalk-row">
             <div class="squad-row three">
-              <div v-for="sq in hierarchy.chalks" :key="sq.squad" class="squad-card" @click="openSquad(sq)">
+              <div
+                v-for="sq in hierarchy.chalks"
+                :key="sq.squad"
+                class="squad-card"
+                @click="openSquad(sq)"
+              >
                 <div class="squad-header">
                   <div class="squad-insignia">
                     <span>{{ squadInitials(sq.squad) }}</span>
@@ -64,9 +74,15 @@
             </div>
           </div>
 
+          <!-- SUPPORT -->
           <div v-if="hierarchy.support.length" class="orbat-row">
             <div class="squad-row three">
-              <div v-for="sq in hierarchy.support" :key="sq.squad" class="squad-card" @click="openSquad(sq)">
+              <div
+                v-for="sq in hierarchy.support"
+                :key="sq.squad"
+                class="squad-card"
+                @click="openSquad(sq)"
+              >
                 <div class="squad-header">
                   <div class="squad-insignia">
                     <span>{{ squadInitials(sq.squad) }}</span>
@@ -81,9 +97,15 @@
             </div>
           </div>
 
+          <!-- OTHER -->
           <div v-if="hierarchy.other.length" class="orbat-row">
             <div class="squad-row three">
-              <div v-for="sq in hierarchy.other" :key="sq.squad" class="squad-card" @click="openSquad(sq)">
+              <div
+                v-for="sq in hierarchy.other"
+                :key="sq.squad"
+                class="squad-card"
+                @click="openSquad(sq)"
+              >
                 <div class="squad-header">
                   <div class="squad-insignia">
                     <span>{{ squadInitials(sq.squad) }}</span>
@@ -102,6 +124,7 @@
       </div>
     </div>
 
+    <!-- FULLSCREEN OVERLAY -->
     <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
       <div class="squad-modal">
         <div class="squad-modal-header">
@@ -112,6 +135,7 @@
             </div>
             <div class="rhombus-back">&nbsp;</div>
           </div>
+
           <button class="squad-close" @click="closeSquad">✕</button>
         </div>
 
@@ -122,14 +146,22 @@
               {{ squadDescriptor(activeSquad.squad) }} ·
               {{ personnelCount(activeSquad) }} PERSONNEL
             </p>
+
             <div class="loadout-status">
-              <span class="points">LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS</span>
-              <span v-if="!squadLoadoutStatus.valid" class="warn" :title="squadLoadoutStatus.errors.join(' • ')">
+              <span class="points">
+                LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS
+              </span>
+              <span
+                v-if="!squadLoadoutStatus.valid"
+                class="warn"
+                :title="squadLoadoutStatus.errors.join(' • ')"
+              >
                 ⚠ LOADOUT INVALID
               </span>
               <span v-else class="ok">✓ VALID</span>
             </div>
           </div>
+
           <div class="squad-tag">
             <span>{{ squadInitials(activeSquad.squad) }}</span>
           </div>
@@ -149,6 +181,7 @@
                 class="member-card"
                 :class="{ vacant: slot.status === 'VACANT', closed: slot.status === 'CLOSED' }"
               >
+                <!-- VACANT/CLOSED tile -->
                 <template v-if="slot.status === 'VACANT' || slot.status === 'CLOSED'">
                   <div class="member-header">
                     <div class="member-header-text">
@@ -178,6 +211,7 @@
                   </div>
                 </template>
 
+                <!-- FILLED tile -->
                 <template v-else>
                   <div class="member-header">
                     <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
@@ -204,7 +238,8 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
-                      <div class="ops-promo">
+                      <!-- Ops & Promotion -->
+                      <div class="ops-promo" :class="{ imminent: opsToNextPromotion(slot.member) === 1 }">
                         <p><strong>Ops Attended:</strong> {{ formatOps(slot.member?.opsAttended) }}</p>
                         <p>
                           <strong>Next Rank:</strong>
@@ -215,6 +250,7 @@
                         </p>
                       </div>
 
+                      <!-- DISPOSABLE CHECKBOX -->
                       <div class="loadout-row">
                         <label class="disposable">
                           <input
@@ -226,6 +262,7 @@
                         </label>
                       </div>
 
+                      <!-- PRIMARY LOADOUT SELECT -->
                       <div class="loadout-row">
                         <label class="primary-label">Assigned Loadout</label>
                         <select
@@ -234,7 +271,11 @@
                           @change="setPrimary(slot.member, $event.target.value)"
                         >
                           <option value="">None / Standard</option>
-                          <option v-for="opt in availableLoadouts(slot.member)" :key="opt" :value="opt">
+                          <option
+                            v-for="opt in availableLoadouts(slot.member)"
+                            :key="opt"
+                            :value="opt"
+                          >
                             {{ loadoutLabel(opt) }}
                           </option>
                         </select>
@@ -267,6 +308,7 @@
       </div>
     </div>
 
+    <!-- UI SFX -->
     <audio ref="orbatClickAudio" preload="auto">
       <source src="/Orbat Main Menu Click.ogg" type="audio/ogg" />
     </audio>
@@ -283,11 +325,14 @@ export default {
   data() {
     return {
       activeSquad: null,
+
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
+
       loadouts: {},
+
       loadoutOptions: {
         grenadier: { label: "Grenadier", points: 2, explosive: true },
         antitank: { label: "Anti-Tank", points: 3, explosive: true },
@@ -301,26 +346,33 @@ export default {
   computed: {
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
+
       (this.orbat || []).forEach((sq) => {
         const n = String(sq.squad || "").trim().toLowerCase();
+
         if (n === "broadsword command") groups.broadswordCommand = sq;
         else if (n === "chalk actual") groups.chalkActual = sq;
         else if (["chalk 1","chalk 2","chalk 3","chalk 4"].includes(n)) groups.chalks.push(sq);
-        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n)) groups.support.push(sq);
+        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n))
+          groups.support.push(sq);
         else groups.other.push(sq);
       });
+
       groups.chalks.sort((a,b)=>a.squad.localeCompare(b.squad, undefined, {numeric:true}));
       groups.support.sort((a,b)=>a.squad.localeCompare(b.squad));
       groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
       return groups;
     },
+
     activeFireteams() {
       if (!this.activeSquad) return [];
+
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
         const sorted = this.activeSquad.fireteams.slice().map((ft) => ({
           name: ft.name || "Element",
           slots: (ft.slots || []).slice(),
         }));
+
         const orderKey = (n) => {
           const t = String(n || "").toLowerCase();
           if (t === "fireteam 1") return 0;
@@ -330,11 +382,13 @@ export default {
           if (t === "element") return 90;
           return 50;
         };
+
         sorted.sort((a,b)=>{
           const ka = orderKey(a.name), kb = orderKey(b.name);
           if (ka !== kb) return ka - kb;
           return String(a.name).localeCompare(String(b.name), undefined, {numeric:true});
         });
+
         const rankOrder = [
           "MAJ","CAPT","1STLT","2NDLT",
           "CWO5","CWO4","CWO3","CWO2","WO",
@@ -342,12 +396,14 @@ export default {
           "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
           "HMC","HM1","HM2","HM3","HN","HA","HR",
         ];
+
         const normalizeRank = (r) => String(r || "").trim().toUpperCase().replace(/\s+/g, "");
         const rankScore = (r) => {
           const rr = normalizeRank(r);
           const idx = rankOrder.indexOf(rr);
           return idx === -1 ? 999 : idx;
         };
+
         const statusScore = (s) => {
           const st = String(s || "").toUpperCase();
           if (st === "FILLED") return 0;
@@ -355,51 +411,67 @@ export default {
           if (st === "CLOSED") return 2;
           return 3;
         };
+
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
         sorted.forEach((ft) => {
           ft.slots = (ft.slots || []).slice().sort((a, b) => {
             const as = statusScore(a.status);
             const bs = statusScore(b.status);
             if (as !== bs) return as - bs;
+
             if (a.status !== "FILLED" || b.status !== "FILLED") {
               return collator.compare(String(a.role || ""), String(b.role || ""));
             }
+
             const ar = rankScore(a.member?.rank);
             const br = rankScore(b.member?.rank);
             if (ar !== br) return ar - br;
+
             return collator.compare(String(a.member?.name || ""), String(b.member?.name || ""));
           });
         });
+
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
+
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
         map[ft] ??= [];
         map[ft].push({ status: "FILLED", role: m.slot || "Unassigned", member: m });
       });
+
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
+
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
+
       let points = 0;
       const errors = [];
       const explosiveTaken = new Set();
+
       const slots = [];
       this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((s) => slots.push(s)));
+
       slots.forEach((slot) => {
         const member = slot.member;
         if (!member) return;
+
         const l = this.getLoadout(member);
+
         if (l.disposable) {
           points += 1;
           if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable");
           explosiveTaken.add("disposable");
         }
+
         if (l.primary) {
           const def = this.loadoutOptions[l.primary];
           if (def) {
             points += def.points;
+
             if (def.explosive) {
               if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`);
               explosiveTaken.add(l.primary);
@@ -407,19 +479,23 @@ export default {
           }
         }
       });
+
       if (points > 10) errors.push("Exceeds 10 point maximum");
+
       return { valid: errors.length === 0, points, errors };
     },
   },
   methods: {
+    /* UX */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
-      try { a.currentTime = 0; a.play().catch(() => {}); } catch {}
+      try { a.currentTime = 0; a.play().catch(() => {}); } catch { /* ignore */ }
     },
     openSquad(sq) { this.playOrbatClick(); this.activeSquad = sq; },
     closeSquad() { this.activeSquad = null; },
 
+    /* ORBAT helpers */
     personnelCount(sq) {
       if (sq.fireteams && sq.fireteams.length) {
         let count = 0;
@@ -443,6 +519,7 @@ export default {
       return "UNSC ELEMENT";
     },
 
+    /* Certs / Loadouts */
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -475,6 +552,7 @@ export default {
       return opts;
     },
 
+    /* Ranks / Insignia */
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
@@ -489,96 +567,198 @@ export default {
     },
     rankInsignia(rank) { const fileBase = this.rankCode(rank); return fileBase ? `/ranks/${fileBase}.png` : null; },
 
-    /* Ops & promotion helpers */
-    formatOps(v) {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : "—";
-    },
+    /* Ops & promotion helpers (exactly per your table) */
     rankKey(rank) {
-      return String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
+      return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, "");
     },
     promotionLadderFor(rank) {
+      // Why: unify variants like 'Pvt', 'Spc2', 'CWO3' to table-driven thresholds.
       const r = this.rankKey(rank);
+
+      // Abbreviation normalization (covers common variants)
+      const alias = {
+        PRIVATE: "PVT", PVT: "PVT",
+        "PRIVATEFIRSTCLASS": "PFC", PFC: "PFC",
+        SPECIALIST: "SPC", SPC: "SPC",
+        "SPECIALIST2": "SPC2", SPC2: "SPC2",
+        "SPECIALIST3": "SPC3", SPC3: "SPC3",
+        "SPECIALIST4": "SPC4", SPC4: "SPC4",
+
+        HOSPITALMANAPPRENTICE: "HA", HA: "HA",
+        HOSPITALMAN: "HN", HN: "HN",
+        "HOSPITALCORPSMANTHIRDCLASS": "HM3", HM3: "HM3",
+        "HOSPITALCORPSMANSECONDCLASS": "HM2", HM2: "HM2",
+
+        WARRANTOFFICER: "WO", WO: "WO",
+        "CHIEFWARRANTOFFICER2": "CWO2", CWO2: "CWO2",
+        "CHIEFWARRANTOFFICER3": "CWO3", CWO3: "CWO3",
+        "CHIEFWARRANTOFFICER4": "CWO4", CWO4: "CWO4",
+      };
+      const key = alias[r] || r;
+
       const ladders = {
+        // Enlisted
         PVT:  { nextAt: 2,  nextRank: "PFC" },
         PFC:  { nextAt: 10, nextRank: "SPC" },
         SPC:  { nextAt: 20, nextRank: "SPC2" },
         SPC2: { nextAt: 30, nextRank: "SPC3" },
         SPC3: { nextAt: 40, nextRank: "SPC4" },
-        SPC4: { nextAt: 50, nextRank: null },
+        SPC4: { nextAt: null, nextRank: null },
+
+        // Medical
         HA:   { nextAt: 2,  nextRank: "HN" },
         HN:   { nextAt: 10, nextRank: "HM3" },
         HM3:  { nextAt: 20, nextRank: "HM2" },
         HM2:  { nextAt: 30, nextRank: null },
+
+        // Warrant / Pilot
+        WO:   { nextAt: null, nextRank: null }, // N/A per your sheet
         CWO2: { nextAt: 10, nextRank: "CWO3" },
         CWO3: { nextAt: 20, nextRank: "CWO4" },
         CWO4: { nextAt: 30, nextRank: null },
       };
-      return ladders[r] || null;
+
+      return ladders[key] || null;
     },
     opsToNextPromotion(member) {
       const ops = Number(member?.opsAttended);
       if (!Number.isFinite(ops)) return null;
       const ladder = this.promotionLadderFor(member?.rank);
-      if (!ladder || !ladder.nextAt) return null;
+      if (!ladder || !Number.isFinite(ladder.nextAt)) return null;
       return Math.max(0, ladder.nextAt - ops);
     },
     nextPromotionRank(member) {
       const ladder = this.promotionLadderFor(member?.rank);
       return ladder?.nextRank || null;
     },
+    formatOps(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : "—";
+    },
   },
 };
 </script>
 
 <style scoped>
-.section-container { height: 100vh; overflow-y: auto; padding: 2.5rem 3rem; color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
+/* keep structure/styles; only tweak ops-promo colors */
+.section-container {
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2.5rem 3rem;
+  color: #dce6f1;
+  font-family: "Consolas", "Courier New", monospace;
+  width: 100% !important;
+  max-width: 2200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
 .section-content-container { width: 100% !important; }
 .orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
 .hierarchy-container { width: 100%; margin-top: 2rem; }
 .orbat-row { margin-bottom: 3rem; }
 .center-row { display: flex; justify-content: center; }
 .squad-row.single { display: flex; justify-content: center; }
-.squad-row.three { display: grid; grid-template-columns: repeat(3, minmax(280px, 1fr)); gap: 2.5rem; }
+.squad-row.three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(280px, 1fr));
+  gap: 2.5rem;
+}
 @media (max-width: 1400px) { .squad-row.three { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
 @media (max-width: 900px) { .squad-row.three { grid-template-columns: 1fr; } }
 @media (min-width: 900px) {
   .actual-row { position: relative; }
-  .actual-row::after { content: ""; position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); width: 3px; height: 24px; background: rgba(30, 144, 255, 0.6); border-radius: 2px; pointer-events: none; }
+  .actual-row::after {
+    content: "";
+    position: absolute;
+    bottom: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 24px;
+    background: rgba(30, 144, 255, 0.6);
+    border-radius: 2px;
+    pointer-events: none;
+  }
   .chalk-row { position: relative; margin-top: 2.5rem; padding-top: 1.5rem; }
-  .chalk-row::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 3px; background: rgba(30, 144, 255, 0.6); border-radius: 2px; pointer-events: none; }
+  .chalk-row::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 8%; right: 8%;
+    height: 3px; background: rgba(30, 144, 255, 0.6);
+    border-radius: 2px; pointer-events: none;
+  }
 }
-.squad-card { background: radial-gradient(circle at top left, rgba(30, 144, 255, 0.25), transparent 65%), rgba(0, 10, 30, 0.9); border: 2px solid rgba(30, 144, 255, 0.85); border-radius: 0.8rem; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; min-height: 210px; padding-right: 1.5rem; transition: 0.15s ease-in-out; }
+.squad-card {
+  background: radial-gradient(circle at top left, rgba(30, 144, 255, 0.25), transparent 65%),
+    rgba(0, 10, 30, 0.9);
+  border: 2px solid rgba(30, 144, 255, 0.85);
+  border-radius: 0.8rem;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  min-height: 210px;
+  padding-right: 1.5rem;
+  transition: 0.15s ease-in-out;
+}
 .squad-card:hover { transform: translateY(-2px); border-color: #5ab3ff; }
-.squad-header { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: 1.4rem 2rem; }
-.squad-insignia { width: 95px; height: 95px; border-radius: 0.6rem; border: 4px solid #1e90ff; display: flex; align-items: center; justify-content: center; margin-right: 1.6rem; font-size: 2rem; font-weight: bold; color: #1e90ff; background: rgba(0,0,0,0.7); text-align: center; }
+.squad-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  padding: 1.4rem 2rem;
+}
+.squad-insignia {
+  width: 95px; height: 95px; border-radius: 0.6rem; border: 4px solid #1e90ff;
+  display: flex; align-items: center; justify-content: center; margin-right: 1.6rem;
+  font-size: 2rem; font-weight: bold; color: #1e90ff; background: rgba(0, 0, 0, 0.7); text-align: center;
+}
 .squad-meta h2 { margin: 0; font-size: 2.3rem; color: #e0f0ff; letter-spacing: 0.05em; }
 .squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
 .squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
-.squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.squad-modal { background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
+
+.squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; }
+.squad-modal {
+  background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh;
+  border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0, 0, 0, 0.9); padding: 1.5rem 2rem 2rem 2rem;
+  display: flex; flex-direction: column;
+}
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
 .squad-header-left { display: flex; align-items: center; }
 .squad-header-left img { width: 48px; margin-right: 0.5rem; }
-.squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
-.squad-modal-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(30,144,255,0.6); padding-bottom: 0.5rem; }
+.squad-close {
+  background: transparent; border: 1px solid rgba(220, 230, 241, 0.4); color: #dce6f1;
+  border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer;
+}
+.squad-modal-meta {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(30, 144, 255, 0.6); padding-bottom: 0.5rem;
+}
 .squad-modal-meta.invalid { border-bottom-color: rgba(255, 190, 80, 0.9); }
-.loadout-status { margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center; font-size: 0.85rem; text-transform: uppercase; }
+.loadout-status { margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center;
+  font-size: 0.85rem; text-transform: uppercase; }
 .loadout-status .points { color: #9ec5e6; }
 .loadout-status .warn { color: rgba(255, 190, 80, 0.95); }
 .loadout-status .ok { color: rgba(120, 255, 170, 0.9); }
+
 .squad-title h2 { margin: 0; font-size: 1.8rem; letter-spacing: 0.08em; }
 .squad-title .subtitle { margin: 0.25rem 0 0; font-size: 0.95rem; color: #9ec5e6; text-transform: uppercase; }
 .squad-tag { border: 2px solid #1e90ff; border-radius: 0.4rem; padding: 0.35rem 0.8rem; font-size: 0.95rem; color: #1e90ff; }
+
 .squad-modal-scroll { margin-top: 0.5rem; flex: 1; overflow-y: auto; padding-right: 0.5rem; }
+
 .fireteam-block { margin-bottom: 1.25rem; }
-.fireteam-header { display: flex; justify-content: space-between; align-items: baseline; border-left: 4px solid rgba(30,144,255,0.9); background: rgba(0,10,30,0.65); padding: 0.55rem 0.8rem; border-radius: 0.35rem; margin-bottom: 0.75rem; }
+.fireteam-header { display: flex; justify-content: space-between; align-items: baseline;
+  border-left: 4px solid rgba(30, 144, 255, 0.9); background: rgba(0, 10, 30, 0.65);
+  padding: 0.55rem 0.8rem; border-radius: 0.35rem; margin-bottom: 0.75rem; }
 .fireteam-title { letter-spacing: 0.12em; color: #e0f0ff; font-size: 0.95rem; }
 .fireteam-count { font-size: 0.8rem; color: #7aa7c7; }
+
 .squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 1rem; }
-.member-card { background: rgba(0,10,30,0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
-.member-card.vacant, .member-card.closed { border-left-color: rgba(180,180,180,0.8); opacity: 0.85; }
+.member-card { background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
+.member-card.vacant, .member-card.closed { border-left-color: rgba(180, 180, 180, 0.8); opacity: 0.85; }
 .member-card.closed { opacity: 0.6; filter: grayscale(0.2); }
+
 .member-header { display: flex; align-items: center; gap: 0.75rem; }
 .member-rank-insignia { width: 40px; height: 40px; object-fit: contain; }
 .member-header-text h3 { margin: 0; font-size: 1.2rem; color: #1e90ff; }
@@ -586,20 +766,45 @@ export default {
 .rank-line { margin: 0.2rem 0 0; font-size: 0.9rem; color: #9ec5e6; }
 .rank { margin-right: 0.6rem; }
 .id { opacity: 0.8; }
+
 .member-body { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.6rem; font-size: 0.9rem; }
 .member-column.left p, .member-column.right p { margin: 0.18rem 0; }
-.ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
+
+/* Ops & Promotion block */
+.ops-promo {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px dashed rgba(30,144,255,0.45);
+  border-radius: 0.35rem;
+  background: rgba(0,10,30,0.35);
+}
+.ops-promo.imminent {
+  /* next op is a promotion */
+  border-color: rgba(120,255,170,0.85);
+  background: rgba(0,50,20,0.35);
+  color: rgba(120,255,170,0.95);
+  box-shadow: 0 0 10px rgba(120,255,170,0.15) inset;
+}
+
 .loadout-row { margin-top: 0.55rem; display: flex; flex-direction: column; gap: 0.25rem; }
 .primary-label { font-size: 0.75rem; opacity: 0.85; text-transform: uppercase; }
-.loadout-select { background: rgba(0,0,0,0.35); color: #dce6f1; border: 1px solid rgba(122,167,199,0.55); border-radius: 0.3rem; padding: 0.35rem 0.45rem; outline: none; }
+.loadout-select {
+  background: rgba(0, 0, 0, 0.35); color: #dce6f1; border: 1px solid rgba(122, 167, 199, 0.55);
+  border-radius: 0.3rem; padding: 0.35rem 0.45rem; outline: none;
+}
 .disposable { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: #9ec5e6; }
 .disposable input { transform: translateY(1px); }
+
 .cert-list { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.2rem; }
 .cert-row { display: flex; align-items: center; font-size: 0.8rem; }
-.cert-checkbox { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #7aa7c7; display: inline-flex; align-items: center; justify-content: center; margin-right: 0.3rem; box-sizing: border-box; }
-.cert-checkbox.checked { border-color: #1e90ff; background: rgba(30,144,255,0.15); }
+.cert-checkbox {
+  width: 14px; height: 14px; border-radius: 3px; border: 1px solid #7aa7c7;
+  display: inline-flex; align-items: center; justify-content: center; margin-right: 0.3rem; box-sizing: border-box;
+}
+.cert-checkbox.checked { border-color: #1e90ff; background: rgba(30, 144, 255, 0.15); }
 .checkbox-dot { width: 8px; height: 8px; border-radius: 2px; background: #1e90ff; }
 .cert-label { white-space: nowrap; }
 .cert-none { font-size: 0.8rem; opacity: 0.75; }
+
 .member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
 </style>
