@@ -504,27 +504,27 @@ export default {
         CPL:  { nextRank: "Sgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
         SGT:  { nextRank: "SSgt",nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
         SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
-        GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Officer, RTO; Support staff / Platoon lead" },
+        GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Support staff / Platoon lead" },
 
         // Officers — N/A ops, role gates
-        "2NDLT": { nextRank: "1stLt", nextAt: null, misc: "Officer, RTO; Platoon lead & experience" },
-        "1STLT": { nextRank: "Capt",  nextAt: null, misc: "Officer, RTO; Unit lead only" },
+        "2NDLT": { nextRank: "1stLt", nextAt: null, misc: null },
+        "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
 
         // Medical line
-        HA:  { nextRank: "HN",  nextAt: 2,  misc: "Assigned to Corpsman slot" },
-        HN:  { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
-        HM3: { nextRank: "HM2", nextAt: 20, misc: "Assigned to Corpsman slot" },
-        HM2: { nextRank: "HM1", nextAt: 30, misc: "Assigned to Corpsman slot" },
-        HM1: { nextRank: "HMC", nextAt: null, misc: "Medical; Medic Trainer" },
-        HMC: { nextRank: null,  nextAt: null, misc: "Medical Corps lead" },
+        HA:  { nextRank: "HN",  nextAt: 2,  misc: null },
+        HN:  { nextRank: "HM3", nextAt: 10, misc: null },
+        HM3: { nextRank: "HM2", nextAt: 20, misc: null },
+        HM2: { nextRank: "HM1", nextAt: 30, misc: null },
+        HM1: { nextRank: "HMC", nextAt: null, misc: "Assigned to Corpsman slot & Medic Trainer" },
+        HMC: { nextRank: null,  nextAt: null, misc: null },
 
         // Warrant
         WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
         CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
         CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
         CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
-        CWO5: { nextRank: null,   nextAt: null, misc: null },
+        CWO5: { nextRank: null,   nextAt: null, misc: "Flight Lead" },
       };
 
       return rules[rk] || { nextRank: null, nextAt: null, misc: null };
