@@ -205,9 +205,9 @@
                 <!-- FILLED -->
                 <template v-else>
                   <div class="member-header">
-                    <div class="member-rank-insignia-wrapper" v-if="getRankInsigniaUrl(slot.member?.rank)">
+                    <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
                       <img
-                        :src="getRankInsigniaUrl(slot.member.rank)"
+                        :src="rankInsignia(slot.member.rank)"
                         :alt="slot.member.rank + ' insignia'"
                         class="member-rank-insignia"
                       />
@@ -229,6 +229,7 @@
                       <p><strong>Role:</strong> {{ slot.role || slot.member?.slot || 'Unassigned' }}</p>
                       <p><strong>Join Date:</strong> {{ slot.member?.joinDate || 'Unknown' }}</p>
 
+                      <!-- Ops + promo -->
                       <div
                         class="ops-promo"
                         :class="{ imminent: opsToNextPromotion(slot.member) === 1 || opsToNextPromotion(slot.member) === 0 }"
@@ -287,7 +288,7 @@
 
                   <div class="member-footer">
                     <span>BIOMETRIC RECORD VALID</span>
-                    <span>UNSC ORBAT</span>
+                    <span>UNSC SYSTEMS DATABASE</span>
                   </div>
                 </template>
               </div>
@@ -309,9 +310,9 @@
 export default {
   name: "PilotsView",
   props: {
-    members: { type: Array, default: () => [] },
+    members: { type: Array, default: () => [] },    // roster (may include opsAttended)
     orbat:   { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] }, // Attendance: Column A (name), Column C (ops)
+    attendance: { type: Array, default: () => [] }, // optional raw attendance rows
   },
   data() {
     return {
@@ -332,6 +333,26 @@ export default {
     };
   },
   computed: {
+    /* ---------- Attendance merge (ID + normalized name) ---------- */
+    attendanceMap() {
+      const map = Object.create(null);
+      (this.members || []).forEach(m => {
+        const ops = Number(m.opsAttended);
+        if (Number.isFinite(ops)) {
+          if (m.id) map[`ID:${m.id}`] = ops;
+          if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
+        }
+      });
+      (this.attendance || []).forEach(row => {
+        const ops = Number(row?.ops ?? row?.attended ?? row?.value);
+        if (!Number.isFinite(ops)) return;
+        if (row?.id) map[`ID:${row.id}`] = ops;
+        if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
+      });
+      return map;
+    },
+
+    /* ---------- ORBAT groupings ---------- */
     hierarchy() {
       const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
       (this.orbat || []).forEach((sq) => {
@@ -347,6 +368,8 @@ export default {
       groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
       return groups;
     },
+
+    /* ---------- Active squad fireteams ---------- */
     activeFireteams() {
       if (!this.activeSquad) return [];
       if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
@@ -385,20 +408,16 @@ export default {
           ft.slots = (ft.slots || []).slice().sort((a, b) => {
             const as = statusScore(a.status), bs = statusScore(b.status);
             if (as !== bs) return as - bs;
-
-            if (a.status !== "FILLED" || b.status !== "FILLED") {
-              return collator.compare(String(a.role || ""), String(b.role || ""));
-            }
-
+            if (a.status !== "FILLED" || b.status !== "FILLED") return collator.compare(String(a.role || ""), String(b.role || ""));
             const ar = rankScore(a.member?.rank), br = rankScore(b.member?.rank);
             if (ar !== br) return ar - br;
-
             return collator.compare(String(a.member?.name || ""), String(b.member?.name || ""));
           });
         });
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
+      // Fallback if no slot grid
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
@@ -407,6 +426,8 @@ export default {
       });
       return Object.entries(map).map(([name, slots]) => ({ name, slots }));
     },
+
+    /* ---------- Squad points validity ---------- */
     squadLoadoutStatus() {
       if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
       let points = 0; const errors = []; const explosiveTaken = new Set();
@@ -421,67 +442,34 @@ export default {
     },
   },
   methods: {
-    /* -------------------- Basic ops parsing (rollback) -------------------- */
-    parseOps(v) {
-      if (v === null || v === undefined) return null;
-      if (typeof v === "number" && Number.isFinite(v)) return v;
-      const s = String(v).trim();
-      if (!s) return null;
-      const m = s.match(/-?\d+/);
-      if (!m) return null;
-      const n = parseInt(m[0], 10);
-      return Number.isFinite(n) ? n : null;
-    },
-    baseClean(name) {
+    /* ========== Attendance merge ========== */
+    nameKey(name) {
       return String(name || "")
-        .replace(/[“”„‟]/g, '"')
-        .replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")  // strip quotes
-        .replace(/\./g, "")    // strip dots (e.g., T. -> T)
+        .replace(/["'.]/g, "")
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
     },
-    stripRank(uppercased) {
-      // remove leading rank(s)
-      const rankPattern = /^(RCT|PVT|PFC|SPC(?:2|3|4)?|LCPL|CPL|SGT|SSGT|GYSGT|WO|CWO[2-5]|[12](?:ND|ST)LT|CAPT|MAJ|HR|HA|HN|HM[123]|HMC)\b[.\s,:-]*/i;
-      let s = uppercased;
-      while (rankPattern.test(s)) s = s.replace(rankPattern, "");
-      return s.trim();
-    },
-    normalizedName(s) {
-      // Basic normalization that worked before (no nickname heuristics)
-      return this.stripRank(this.baseClean(s));
-    },
-
     getOps(member) {
-      if (!member?.name) return null;
-      const target = this.normalizedName(member.name);
-      if (!target) return null;
-
-      let best = null;
-      for (const row of (this.attendance || [])) {
-        // Strictly read Attendance: Column A (name), Column C (ops); small fallbacks allowed
-        const rawName = row?.A ?? row?.a ?? row?.name ?? row?.Name ?? "";
-        const rawOps  = row?.C ?? row?.c ?? row?.ops ?? row?.attended ?? row?.value ?? null;
-
-        const rowName = this.normalizedName(rawName);
-        const rowOps  = this.parseOps(rawOps);
-
-        if (!rowName || rowOps === null) continue;
-
-        if (rowName === target) {
-          best = rowOps;
-          break; // exact normalized match
+      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
+        return this.attendanceMap[`ID:${member.id}`];
+      }
+      if (member?.name) {
+        const nk = this.nameKey(member.name);
+        if (this.attendanceMap[`NM:${nk}`] !== undefined) {
+          return this.attendanceMap[`NM:${nk}`];
         }
       }
-      return best;
+      const direct = Number(member?.opsAttended);
+      return Number.isFinite(direct) ? direct : null;
     },
 
-    /* -------------------- Promotions -------------------- */
+    /* ========== Promotion rules ========== */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
+
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
+      // canonicalize a few full names → abbreviations
       const alias = {
         PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
         SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
@@ -499,22 +487,31 @@ export default {
       };
       const rk = alias[key] || key;
 
+      // Your table (next rank, ops needed, misc requirements)
       const rules = {
+        // Enlisted line
         PVT:  { nextRank: "PFC",  nextAt: 2,  misc: null },
         PFC:  { nextRank: "SPC",  nextAt: 10, misc: null },
         SPC:  { nextRank: "SPC2", nextAt: 20, misc: null },
         SPC2: { nextRank: "SPC3", nextAt: 30, misc: null },
+        // SPC3 → SPC4 has extra misc per your row
         SPC3: { nextRank: "SPC4", nextAt: 40, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
+        // From SPC4 to NCO track (ops N/A, has misc)
         SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
-        LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
-        CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
-        SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
+
+        // NCOs — all N/A ops, role/experience gates
+        LCPL: { nextRank: "Cpl", nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
+        CPL:  { nextRank: "Sgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
+        SGT:  { nextRank: "SSgt",nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
         SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
         GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Officer, RTO; Support staff / Platoon lead" },
+
+        // Officers — N/A ops, role gates
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: "Officer, RTO; Platoon lead & experience" },
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: "Officer, RTO; Unit lead only" },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
 
+        // Medical line
         HA:  { nextRank: "HN",  nextAt: 2,  misc: "Assigned to Corpsman slot" },
         HN:  { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
         HM3: { nextRank: "HM2", nextAt: 20, misc: "Assigned to Corpsman slot" },
@@ -522,23 +519,26 @@ export default {
         HM1: { nextRank: "HMC", nextAt: null, misc: "Medical; Medic Trainer" },
         HMC: { nextRank: null,  nextAt: null, misc: "Medical Corps lead" },
 
+        // Warrant
         WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
         CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
         CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
         CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
         CWO5: { nextRank: null,   nextAt: null, misc: null },
       };
+
       return rules[rk] || { nextRank: null, nextAt: null, misc: null };
     },
+
     opsToNextPromotion(member) {
       const ops = this.getOps(member);
       const rule = this.nextPromotion(member);
       if (!Number.isFinite(ops)) return null;
-      if (!Number.isFinite(rule.nextAt)) return null;
+      if (!Number.isFinite(rule.nextAt)) return null; // N/A
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* -------------------- UI utils -------------------- */
+    /* ========== UI + util helpers ========== */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -572,6 +572,7 @@ export default {
       return "UNSC ELEMENT";
     },
 
+    /* ========== Certs & loadouts ========== */
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -593,7 +594,6 @@ export default {
       this.loadouts[id] = { ...curr, primary: value || "" };
     },
     loadoutLabel(key) { const def = this.loadoutOptions[key]; return def ? `${def.label} (${def.points}pt)` : key; },
-
     availableLoadouts(member) {
       const has = (label) => this.hasCert(member, this.certLabels.indexOf(label));
       const opts = [];
@@ -605,8 +605,10 @@ export default {
       return opts;
     },
 
-    getRankInsigniaUrl(rank) {
-      const key = String(rank || "").trim().toUpperCase();
+    /* ========== Rank insignia ========== */
+    rankCode(rank) {
+      if (!rank) return null;
+      const key = rank.trim().toUpperCase();
       const map = {
         RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
         LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
@@ -614,12 +616,11 @@ export default {
         "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
         HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
       };
-      const base = map[key];
-      return base ? `/ranks/${base}.png` : null;
+      return map[key] || null;
     },
+    rankInsignia(rank) { const base = this.rankCode(rank); return base ? `/ranks/${base}.png` : null; },
 
     formatOps(v) {
-      if (v === null || v === undefined) return "—";
       const n = Number(v);
       return Number.isFinite(n) ? n : "—";
     },
@@ -657,7 +658,7 @@ export default {
 .squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
 .squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
 
-/* Modal shell */
+/* Modal */
 .squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .squad-modal { background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
