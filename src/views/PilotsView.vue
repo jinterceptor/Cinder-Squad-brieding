@@ -135,7 +135,7 @@
             <div class="rhombus-back">&nbsp;</div>
           </div>
 
-        <button class="squad-close" @click="closeSquad">✕</button>
+          <button class="squad-close" @click="closeSquad">✕</button>
         </div>
 
         <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
@@ -309,9 +309,9 @@
 export default {
   name: "PilotsView",
   props: {
-    members: { type: Array, default: () => [] },    // roster (may include opsAttended)
+    members: { type: Array, default: () => [] },
     orbat:   { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] }, // optional raw attendance rows
+    attendance: { type: Array, default: () => [] },
   },
   data() {
     return {
@@ -339,37 +339,39 @@ export default {
       const addByName = (name, ops) => {
         if (!name) return;
 
-        const raw       = this.nameKey(name);          // e.g., SGT T THY TYRSSON
-        const noRank    = this.nameKeyNoRank(name);    // e.g., T THY TYRSSON
-        const isRaw     = this.initialSurnameKey(raw);     // e.g., T TYRSSON
-        const isNoRank  = this.initialSurnameKey(noRank);  // e.g., T TYRSSON
-        const lnRaw     = this.lastNameKey(raw);           // e.g., TYRSSON
-        const lnNoRank  = this.lastNameKey(noRank);        // e.g., TYRSSON
+        const raw     = this.nameKey(name);
+        const noRank  = this.nameKeyNoRank(name);
+        const isRaw   = this.initialSurnameKey(raw);
+        const isNo    = this.initialSurnameKey(noRank);
+        const lnRaw   = this.lastNameKey(raw);
+        const lnNo    = this.lastNameKey(noRank);
 
         const keys = [
-          raw     && `NM:${raw}`,
-          noRank  && `NR:${noRank}`,
-          isRaw   && `IS:${isRaw}`,
-          isNoRank&& `IS:${isNoRank}`,
-          lnRaw   && `LN:${lnRaw}`,
-          lnNoRank&& `LN:${lnNoRank}`,
+          raw    && `NM:${raw}`,
+          noRank && `NR:${noRank}`,
+          isRaw  && `IS:${isRaw}`,
+          isNo   && `IS:${isNo}`,
+          lnRaw  && `LN:${lnRaw}`,
+          lnNo   && `LN:${lnNo}`,
         ].filter(Boolean);
 
         keys.forEach(k => { map[k] = ops; });
       };
 
       (this.members || []).forEach(m => {
-        const ops = Number(m.opsAttended);
-        if (!Number.isFinite(ops)) return;
-        if (m.id) map[`ID:${m.id}`] = ops;
-        addByName(m.name, ops);
+        const ops = this.parseOps(m.opsAttended);
+        if (ops !== null) {
+          if (m.id) map[`ID:${m.id}`] = ops;
+          addByName(m.name, ops);
+        }
       });
 
       (this.attendance || []).forEach(row => {
-        const ops = Number(row?.ops ?? row?.attended ?? row?.value);
-        if (!Number.isFinite(ops)) return;
-        if (row?.id) map[`ID:${row.id}`] = ops;
-        addByName(row?.name, ops);
+        const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
+        if (ops !== null) {
+          if (row?.id) map[`ID:${row.id}`] = ops;
+          addByName(row?.name ?? row?.A, ops);
+        }
       });
 
       return map;
@@ -470,7 +472,18 @@ export default {
     },
   },
   methods: {
-    /* ===== Name normalization (keep quoted content; drop quotes) ===== */
+    /* ===== Parsing & normalization ===== */
+    parseOps(v) {
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      const s = String(v).trim();
+      if (s === "") return null;
+      // extract first integer (handles "24", "24 ops", "24.0", "24,", etc.)
+      const m = s.match(/-?\d+/);
+      if (!m) return null;
+      const n = parseInt(m[0], 10);
+      return Number.isFinite(n) ? n : null;
+    },
     stripRank(uppercased) {
       const rankPattern = /^(RCT|PVT|PFC|SPC(?:2|3|4)?|LCPL|CPL|SGT|SSGT|GYSGT|WO|CWO[2-5]|[12](?:ND|ST)LT|CAPT|MAJ|HR|HA|HN|HM[123]|HMC)\b[.\s,:-]*/i;
       let s = uppercased;
@@ -480,18 +493,14 @@ export default {
     baseClean(name) {
       return String(name || "")
         .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")    // drop quote chars but KEEP words
+        .replace(/["']/g, "")    // drop quote chars but keep content
         .replace(/\./g, "")      // T. -> T
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
     },
-    nameKey(name) {                 // cleaned raw
-      return this.baseClean(name);
-    },
-    nameKeyNoRank(name) {           // cleaned, w/o rank prefixes
-      return this.stripRank(this.baseClean(name));
-    },
+    nameKey(name) { return this.baseClean(name); },
+    nameKeyNoRank(name) { return this.stripRank(this.baseClean(name)); },
     initialSurnameKey(cleanedUpperName) {
       if (!cleanedUpperName) return "";
       const SUFFIX = new Set(["JR","SR","III","IV","V"]);
@@ -513,7 +522,7 @@ export default {
       return last || "";
     },
 
-    /* ===== Attendance lookup (ID → multiple name variants) ===== */
+    /* ===== Attendance lookup ===== */
     getOps(member) {
       // 1) ID
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
@@ -535,11 +544,11 @@ export default {
         }
       }
       // 3) Fallback
-      const direct = Number(member?.opsAttended);
-      return Number.isFinite(direct) ? direct : null;
+      const direct = this.parseOps(member?.opsAttended);
+      return direct !== null ? direct : null;
     },
 
-    /* ===== Promotions (matrix unchanged) ===== */
+    /* ===== Promotions (unchanged) ===== */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
@@ -561,31 +570,26 @@ export default {
       const rk = alias[key] || key;
 
       const rules = {
-        // Enlisted
         PVT:  { nextRank: "PFC",  nextAt: 2,  misc: null },
         PFC:  { nextRank: "SPC",  nextAt: 10, misc: null },
         SPC:  { nextRank: "SPC2", nextAt: 20, misc: null },
         SPC2: { nextRank: "SPC3", nextAt: 30, misc: null },
         SPC3: { nextRank: "SPC4", nextAt: 40, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
         SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
-        // NCOs
         LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
         CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
         SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
         SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
         GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Officer, RTO; Support staff / Platoon lead" },
-        // Officers
         "2NDLT": { nextRank: "1stLt", nextAt: null, misc: "Officer, RTO; Platoon lead & experience" },
         "1STLT": { nextRank: "Capt",  nextAt: null, misc: "Officer, RTO; Unit lead only" },
         CAPT:    { nextRank: null,    nextAt: null, misc: null },
-        // Medical
         HA:  { nextRank: "HN",  nextAt: 2,  misc: "Assigned to Corpsman slot" },
         HN:  { nextRank: "HM3", nextAt: 10, misc: "Assigned to Corpsman slot" },
         HM3: { nextRank: "HM2", nextAt: 20, misc: "Assigned to Corpsman slot" },
         HM2: { nextRank: "HM1", nextAt: 30, misc: "Assigned to Corpsman slot" },
         HM1: { nextRank: "HMC", nextAt: null, misc: "Medical; Medic Trainer" },
         HMC: { nextRank: null,  nextAt: null, misc: "Medical Corps lead" },
-        // Warrant
         WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
         CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
         CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
@@ -598,7 +602,7 @@ export default {
       const ops = this.getOps(member);
       const rule = this.nextPromotion(member);
       if (!Number.isFinite(ops)) return null;
-      if (!Number.isFinite(rule.nextAt)) return null; // N/A track
+      if (!Number.isFinite(rule.nextAt)) return null;
       return Math.max(0, rule.nextAt - ops);
     },
 
