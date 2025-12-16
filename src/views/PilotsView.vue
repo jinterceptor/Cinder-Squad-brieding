@@ -332,46 +332,56 @@ export default {
     };
   },
   computed: {
-    /* ---------- Attendance merge (ID + robust name variants) ---------- */
+    /* ---------- Attendance merge (ID + robust name variants + alias) ---------- */
     attendanceMap() {
       const map = Object.create(null);
 
-      const addByName = (name, ops) => {
-        if (!name) return;
+      const addVariants = (cleanUpper, ops) => {
+        if (!cleanUpper) return;
+        const isKey = this.initialSurnameKey(cleanUpper);
+        const lnKey = this.lastNameKey(cleanUpper);
+        map[`NM:${cleanUpper}`] = ops;
+        const rankless = this.stripRank(cleanUpper);
+        map[`NR:${rankless}`] = ops;
+        if (isKey) map[`IS:${isKey}`] = ops;
+        if (lnKey) map[`LN:${lnKey}`] = ops;
 
-        const raw     = this.nameKey(name);
-        const noRank  = this.nameKeyNoRank(name);
-        const isRaw   = this.initialSurnameKey(raw);
-        const isNo    = this.initialSurnameKey(noRank);
-        const lnRaw   = this.lastNameKey(raw);
-        const lnNo    = this.lastNameKey(noRank);
+        // collapse Initial + Nickname + Surname → Initial + Surname
+        const collapsed = this.collapseInitialNicknameSurname(rankless);
+        if (collapsed && collapsed !== rankless) {
+          const cis = this.initialSurnameKey(collapsed);
+          const cln = this.lastNameKey(collapsed);
+          map[`NR:${collapsed}`] = ops;
+          if (cis) map[`IS:${cis}`] = ops;
+          if (cln) map[`LN:${cln}`] = ops;
+        }
 
-        const keys = [
-          raw    && `NM:${raw}`,
-          noRank && `NR:${noRank}`,
-          isRaw  && `IS:${isRaw}`,
-          isNo   && `IS:${isNo}`,
-          lnRaw  && `LN:${lnRaw}`,
-          lnNo   && `LN:${lnNo}`,
-        ].filter(Boolean);
-
-        keys.forEach(k => { map[k] = ops; });
+        // explicit aliases
+        const alias = this.aliasCanonical(rankless);
+        if (alias) {
+          const ais = this.initialSurnameKey(alias);
+          const aln = this.lastNameKey(alias);
+          map[`AL:${alias}`] = ops;
+          if (ais) map[`IS:${ais}`] = ops;
+          if (aln) map[`LN:${aln}`] = ops;
+        }
       };
 
       (this.members || []).forEach(m => {
         const ops = this.parseOps(m.opsAttended);
-        if (ops !== null) {
-          if (m.id) map[`ID:${m.id}`] = ops;
-          addByName(m.name, ops);
-        }
+        if (ops === null) return;
+        if (m.id) map[`ID:${m.id}`] = ops;
+        const clean = this.nameKey(m.name);
+        addVariants(clean, ops);
       });
 
       (this.attendance || []).forEach(row => {
         const ops = this.parseOps(row?.ops ?? row?.attended ?? row?.value ?? row?.C);
-        if (ops !== null) {
-          if (row?.id) map[`ID:${row.id}`] = ops;
-          addByName(row?.name ?? row?.A, ops);
-        }
+        if (ops === null) return;
+        if (row?.id) map[`ID:${row.id}`] = ops;
+        const name = row?.name ?? row?.A;
+        const clean = this.nameKey(name);
+        addVariants(clean, ops);
       });
 
       return map;
@@ -478,8 +488,7 @@ export default {
       if (typeof v === "number" && Number.isFinite(v)) return v;
       const s = String(v).trim();
       if (s === "") return null;
-      // extract first integer (handles "24", "24 ops", "24.0", "24,", etc.)
-      const m = s.match(/-?\d+/);
+      const m = s.match(/-?\d+/); // first integer
       if (!m) return null;
       const n = parseInt(m[0], 10);
       return Number.isFinite(n) ? n : null;
@@ -493,14 +502,35 @@ export default {
     baseClean(name) {
       return String(name || "")
         .replace(/[“”„‟]/g, '"').replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")    // drop quote chars but keep content
+        .replace(/["']/g, "")    // drop quote chars but KEEP words
         .replace(/\./g, "")      // T. -> T
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
     },
     nameKey(name) { return this.baseClean(name); },
-    nameKeyNoRank(name) { return this.stripRank(this.baseClean(name)); },
+
+    /* Collapse “T THY TYRSSON” → “T TYRSSON” when first token is 1 char and we have >=3 tokens. */
+    collapseInitialNicknameSurname(cleanUpper) {
+      if (!cleanUpper) return "";
+      const toks = cleanUpper.split(" ").filter(Boolean);
+      if (toks.length >= 3 && toks[0].length === 1) {
+        // keep first and last only
+        return `${toks[0]} ${toks[toks.length - 1]}`;
+      }
+      return cleanUpper;
+    },
+
+    /* Explicit alias map (uppercased, rankless). Add more if needed. */
+    aliasCanonical(ranklessUpper) {
+      if (!ranklessUpper) return null;
+      const map = {
+        "T THY TYRSSON": "T TYRSSON",
+        "J KONG JAGRO": "J JAGRO",
+      };
+      return map[ranklessUpper] || null;
+    },
+
     initialSurnameKey(cleanedUpperName) {
       if (!cleanedUpperName) return "";
       const SUFFIX = new Set(["JR","SR","III","IV","V"]);
@@ -528,18 +558,29 @@ export default {
       if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
-      // 2) Names
+      // 2) Names: try alias/collapse first
       if (member?.name) {
-        const raw     = this.nameKey(member.name);
-        const noRank  = this.nameKeyNoRank(member.name);
+        const raw = this.nameKey(member.name);        // includes rank
+        const rankless = this.stripRank(raw);
+
+        const collapsed = this.collapseInitialNicknameSurname(rankless);
+        const alias = this.aliasCanonical(rankless);
+
         const tries = [
-          `NM:${raw}`, `NR:${noRank}`,
-          `IS:${this.initialSurnameKey(raw)}`,
-          `IS:${this.initialSurnameKey(noRank)}`,
-          `LN:${this.lastNameKey(raw)}`,
-          `LN:${this.lastNameKey(noRank)}`,
-        ].filter(k => !k.endsWith(":"));
+          alias && `AL:${alias}`,
+          // direct rankless/raw
+          `NR:${rankless}`, `NM:${raw}`,
+          // initial+surname, last-name
+          `IS:${this.initialSurnameKey(rankless)}`, `LN:${this.lastNameKey(rankless)}`,
+          `IS:${this.initialSurnameKey(raw)}`,      `LN:${this.lastNameKey(raw)}`,
+          // collapsed
+          collapsed && `NR:${collapsed}`,
+          collapsed && `IS:${this.initialSurnameKey(collapsed)}`,
+          collapsed && `LN:${this.lastNameKey(collapsed)}`,
+        ].filter(Boolean);
+
         for (const k of tries) {
+          if (k.endsWith(":")) continue;
           if (this.attendanceMap[k] !== undefined) return this.attendanceMap[k];
         }
       }
@@ -548,7 +589,7 @@ export default {
       return direct !== null ? direct : null;
     },
 
-    /* ===== Promotions (unchanged) ===== */
+    /* ===== Promotions (unchanged rules) ===== */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
