@@ -1,4 +1,3 @@
-<!-- src/views/StatusView.vue -->
 <template>
   <div
     id="status"
@@ -32,6 +31,7 @@
         <h1>Current Assignment</h1>
       </div>
       <div class="section-content-container">
+        <!-- Same .markdown wrapper so your existing CSS for #/##/### applies -->
         <vue-markdown-it :source="missionMarkdown" class="markdown" />
       </div>
     </section>
@@ -49,7 +49,7 @@ export default {
     animate: { type: Boolean, required: true },
     initialSlug: { type: String, required: true },
     missions: { type: Array, required: true },
-    events: { type: Array, required: true }, // kept for parity
+    events: { type: Array, required: true }, // kept for prop shape parity
   },
   data() {
     return {
@@ -63,6 +63,7 @@ export default {
     this.setAnimate();
   },
   beforeUpdate() {
+    // keep current-assignment in sync with selection
     this.selectMission(this.missionSlug);
   },
   mounted() {
@@ -76,33 +77,42 @@ export default {
       const m = this.missions.find((x) => x.slug === this.missionSlug);
       this.missionMarkdown = this.buildAssignmentMarkdown(m);
     },
+
+    // Preserve heading-level styling:
+    // - If body already starts with a '#' heading, use it as-is (dev-authored titles/subtitles remain).
+    // - Otherwise, synthesize "# {name}" and "## {status}" above the body for consistent title/subtitle styling.
     buildAssignmentMarkdown(mission) {
       if (!mission) return "";
       const body = String(mission.content || "").trim();
       const startsWithHeading = /^#{1,6}\s+/.test(body);
-      if (startsWithHeading) return body;
+
+      if (startsWithHeading) {
+        return body;
+      }
 
       const name = (mission.name || "").trim();
       const status = (mission.status || "").trim();
+
       const titleLine = name ? `# ${name}\n\n` : "";
       const subtitleLine = status ? `## ${status}\n\n` : "";
+
       return `${titleLine}${subtitleLine}${body}`.trim();
     },
+
     setAnimate() {
       if (this.animate) this.animateView = true;
       const statusAnimated = window.sessionStorage.getItem("statusAnimated");
-      if (statusAnimated) this.animationDelay = "0s";
-      if (statusAnimated === null) window.sessionStorage.setItem("statusAnimated", true);
+      if (statusAnimated) {
+        this.animationDelay = "0s";
+      }
+      if (statusAnimated === null) {
+        window.sessionStorage.setItem("statusAnimated", true);
+      }
     },
   },
 };
 </script>
 
 <style scoped>
-/* Only change ### headings inside the markdown block; leave # and ## as-is */
-.markdown :deep(h3) { color: #9ec5e6; }
-
-/* If your setup uses legacy deep selector, use this instead:
-::v-deep(.markdown h3) { color: #9ec5e6; }
-*/
+/* No new styles; your global .markdown h1/h2/h3 rules keep the title/subtitle look. */
 </style>
