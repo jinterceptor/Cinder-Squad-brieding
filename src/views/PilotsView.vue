@@ -1,3 +1,4 @@
+<!-- src/views/PilotsView.vue -->
 <template>
   <section id="members" class="section-container">
     <div style="height: 52px; overflow: hidden">
@@ -13,6 +14,7 @@
         <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
 
         <div v-else class="hierarchy-container">
+          <!-- BROADSWORD COMMAND -->
           <div v-if="hierarchy.broadswordCommand" class="orbat-row center-row actual-row">
             <div class="squad-row single">
               <div class="squad-card" @click="openSquad(hierarchy.broadswordCommand)">
@@ -30,6 +32,7 @@
             </div>
           </div>
 
+          <!-- CHALK ACTUAL -->
           <div v-if="hierarchy.chalkActual" class="orbat-row center-row actual-row">
             <div class="squad-row single">
               <div class="squad-card" @click="openSquad(hierarchy.chalkActual)">
@@ -47,6 +50,7 @@
             </div>
           </div>
 
+          <!-- CHALKS -->
           <div v-if="hierarchy.chalks.length" class="orbat-row chalk-row">
             <div class="squad-row three">
               <div
@@ -69,6 +73,7 @@
             </div>
           </div>
 
+          <!-- SUPPORT -->
           <div v-if="hierarchy.support.length" class="orbat-row">
             <div class="squad-row three">
               <div
@@ -91,6 +96,7 @@
             </div>
           </div>
 
+          <!-- OTHER -->
           <div v-if="hierarchy.other.length" class="orbat-row">
             <div class="squad-row three">
               <div
@@ -117,6 +123,7 @@
       </div>
     </div>
 
+    <!-- Modal -->
     <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
       <div class="squad-modal">
         <div class="squad-modal-header">
@@ -173,6 +180,7 @@
                 class="member-card"
                 :class="{ vacant: slot.status === 'VACANT', closed: slot.status === 'CLOSED' }"
               >
+                <!-- VACANT / CLOSED -->
                 <template v-if="slot.status === 'VACANT' || slot.status === 'CLOSED'">
                   <div class="member-header">
                     <div class="member-header-text">
@@ -202,6 +210,7 @@
                   </div>
                 </template>
 
+                <!-- FILLED -->
                 <template v-else>
                   <div class="member-header">
                     <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
@@ -213,7 +222,7 @@
                     </div>
 
                     <div class="member-header-text">
-                      <h3>{{ (slot.member?.name || '').toUpperCase() }}</h3>
+                      <h3>{{ (slot.member?.name || 'UNKNOWN').toUpperCase() }}</h3>
                       <p class="rank-line">
                         <span class="rank">{{ slot.member?.rank || 'N/A' }}</span>
                         <span class="id">ID: {{ slot.member?.id || 'N/A' }}</span>
@@ -317,15 +326,16 @@ export default {
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
 
+      // per-member loadout state
       loadouts: {},
 
       loadoutOptions: {
         grenadier: { label: "Grenadier", points: 2, explosive: true },
-        antitank: { label: "Anti-Tank", points: 3, explosive: true },
-        m247: { label: "M247 SAW", points: 3 },
-        m247_50: { label: "M247 .50", points: 5 },
-        engineer: { label: "Combat Engineer", points: 2 },
-        marksman: { label: "Marksman", points: 2 },
+        antitank:  { label: "Anti-Tank", points: 3, explosive: true },
+        m247:      { label: "M247 SAW", points: 3 },
+        m247_50:   { label: "M247 .50", points: 5 },
+        engineer:  { label: "Combat Engineer", points: 2 },
+        marksman:  { label: "Marksman", points: 2 },
       },
     };
   },
@@ -421,10 +431,11 @@ export default {
         return sorted.filter((ft) => ft.slots && ft.slots.length);
       }
 
+      // fallback when no slot grid present: group raw members by fireteam
       const map = {};
       (this.activeSquad.members || []).forEach((m) => {
         const ft = (m.fireteam || "Element").trim() || "Element";
-        if (!map[ft]) map[ft] = []; /* replaced ??= for compat */
+        if (!map[ft]) map[ft] = [];
         map[ft].push({ status: "FILLED", role: m.slot || "Unassigned", member: m });
       });
 
@@ -609,9 +620,9 @@ export default {
 </script>
 
 <style scoped>
-/* (styles exactly as before; trimmed here for brevity if you had the full block) */
+/* Layout */
 .section-container { height: 100vh; overflow-y: auto; padding: 2.5rem 3rem; color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
-.section-content-container { width: 100% !important; }
+.section-content_container { width: 100% !important; }
 .orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
 .hierarchy-container { width: 100%; margin-top: 2rem; }
 .orbat-row { margin-bottom: 3rem; }
@@ -620,12 +631,16 @@ export default {
 .squad-row.three { display: grid; grid-template-columns: repeat(3, minmax(280px, 1fr)); gap: 2.5rem; }
 @media (max-width: 1400px) { .squad-row.three { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
 @media (max-width: 900px) { .squad-row.three { grid-template-columns: 1fr; } }
+
+/* Connector lines */
 @media (min-width: 900px) {
   .actual-row { position: relative; }
   .actual-row::after { content: ""; position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); width: 3px; height: 24px; background: rgba(30, 144, 255, 0.6); border-radius: 2px; pointer-events: none; }
   .chalk-row { position: relative; margin-top: 2.5rem; padding-top: 1.5rem; }
   .chalk-row::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 3px; background: rgba(30,144,255,0.6); border-radius: 2px; pointer-events: none; }
 }
+
+/* Squad tiles */
 .squad-card { background: radial-gradient(circle at top left, rgba(30,144,255,0.25), transparent 65%), rgba(0,10,30,0.9); border: 2px solid rgba(30,144,255,0.85); border-radius: 0.8rem; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; min-height: 210px; padding-right: 1.5rem; transition: 0.15s ease-in-out; }
 .squad-card:hover { transform: translateY(-2px); border-color: #5ab3ff; }
 .squad-header { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: 1.4rem 2rem; }
@@ -633,18 +648,62 @@ export default {
 .squad-meta h2 { margin: 0; font-size: 2.3rem; color: #e0f0ff; letter-spacing: 0.05em; }
 .squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
 .squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
+
+/* Modal shell */
 .squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .squad-modal { background-color: #050811; color: #dce6f1; width: 92vw; max-width: 1700px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
 .squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
+
+/* Modal meta */
 .squad-modal-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(30,144,255,0.6); padding-bottom: 0.5rem; }
 .squad-modal-meta.invalid { border-bottom-color: rgba(255,190,80,0.9); }
 .loadout-status { margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center; font-size: 0.85rem; text-transform: uppercase; }
 .loadout-status .points { color: #9ec5e6; }
 .loadout-status .warn { color: rgba(255,190,80,0.95); }
 .loadout-status .ok { color: rgba(120,255,170,0.9); }
+
+/* Cards grid inside modal — tighter min width to prevent overflow */
+.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+
+/* Card */
+.member-card { background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
+.member-card.vacant, .member-card.closed { opacity: 0.9; border-left-color: rgba(30,144,255,0.35); }
+
+/* Header */
+.member-header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .9rem; }
+.member-header h3 { margin: 0; font-size: 1.1rem; color: #e0f0ff; word-break: break-word; }
+.rank-line { margin: 0.15rem 0 0; font-size: 0.88rem; color: #9ec5e6; display: flex; gap: .6rem; flex-wrap: wrap; }
+
+.member-rank-insignia-wrapper { width: 46px; height: 46px; display: grid; place-items: center; }
+.member-rank-insignia { max-width: 46px; max-height: 46px; object-fit: contain; } /* hard cap */
+
+/* Body */
+.member-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.6rem; font-size: 0.9rem; }
+.member-column p { margin: 0.18rem 0; }
+
+/* Ops / promo callout */
 .ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
 .ops-promo.imminent { border-color: rgba(120,255,170,0.85); background: rgba(0,50,20,0.35); color: rgba(120,255,170,0.95); box-shadow: 0 0 10px rgba(120,255,170,0.15) inset; }
-.squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 1rem; }
-/* …rest unchanged … */
+
+/* Loadout controls */
+.loadout-row { margin-top: 0.4rem; }
+.disposable { user-select: none; }
+.primary-label { display: block; margin-bottom: .15rem; font-size: .85rem; color: #9ec5e6; }
+.loadout-select { width: 100%; background: #040a14; border: 1px solid rgba(30,144,255,.45); color: #dce6f1; border-radius: .3rem; padding: .25rem .35rem; }
+
+/* Certs */
+.cert-list { display: grid; grid-template-columns: 20px 1fr; row-gap: .28rem; }
+.cert-row { display: contents; }
+.cert-checkbox { width: 16px; height: 16px; border: 1px solid rgba(30,144,255,.6); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
+.cert-checkbox.checked { border-color: rgba(120,255,170,.9); box-shadow: 0 0 6px rgba(120,255,170,.25) inset; }
+.checkbox-dot { width: 10px; height: 10px; background: rgba(120,255,170,.95); border-radius: 2px; display: block; }
+.cert-label { color: #dce6f1; }
+.cert-none { font-size: .85rem; opacity: .75; }
+
+/* Footer */
+.member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
+
+/* Absolute safety belt: never let random images explode the layout */
+:deep(.squad-modal img) { max-width: 100%; height: auto; }
 </style>
