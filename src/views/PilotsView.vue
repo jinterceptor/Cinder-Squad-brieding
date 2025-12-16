@@ -311,7 +311,7 @@ export default {
   props: {
     members: { type: Array, default: () => [] },
     orbat:   { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] },
+    attendance: { type: Array, default: () => [] }, // Attendance: Column A (name), Column C (ops)
   },
   data() {
     return {
@@ -421,43 +421,7 @@ export default {
     },
   },
   methods: {
-    /* ---------- Robust row extraction ---------- */
-    extractRowName(row) {
-      if (!row) return "";
-      // Prefer explicit keys first
-      const nameKeys = ["name","Name","NAME","A","a"];
-      for (const k of nameKeys) {
-        if (row[k] && typeof row[k] === "string") return this.baseClean(row[k]);
-      }
-      // Fallback: first string-ish value
-      for (const key of Object.keys(row)) {
-        const v = row[key];
-        if (typeof v === "string" && v.trim()) return this.baseClean(v);
-      }
-      return "";
-    },
-    extractRowOps(row) {
-      if (!row) return null;
-      const preferred = ["ops","OPS","attended","Attended","value","Value","C","c","opsAttended","attendedOps","opDays","days","Days"];
-      for (const k of preferred) {
-        if (k in row) {
-          const n = this.parseOps(row[k]);
-          if (n !== null) return n;
-        }
-      }
-      // Fallback: scan all fields and pick the biggest sensible integer
-      let best = null;
-      for (const key of Object.keys(row)) {
-        const n = this.parseOps(row[key]);
-        if (n !== null) {
-          if (best === null) best = n;
-          else if (n > best) best = n;
-        }
-      }
-      return best;
-    },
-
-    /* ---------- Normalization helpers ---------- */
+    /* -------------------- Basic ops parsing (rollback) -------------------- */
     parseOps(v) {
       if (v === null || v === undefined) return null;
       if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -472,8 +436,8 @@ export default {
       return String(name || "")
         .replace(/[“”„‟]/g, '"')
         .replace(/[’‘]/g, "'")
-        .replace(/["']/g, "")  // quotes out → "THY" -> THY
-        .replace(/\./g, "")    // dots out  → T. -> T
+        .replace(/["']/g, "")  // strip quotes
+        .replace(/\./g, "")    // strip dots (e.g., T. -> T)
         .replace(/\s+/g, " ")
         .trim()
         .toUpperCase();
@@ -485,80 +449,36 @@ export default {
       while (rankPattern.test(s)) s = s.replace(rankPattern, "");
       return s.trim();
     },
-    collapseInitialNicknameSurname(ranklessUpper) {
-      // e.g., "T THY TYRSSON" -> "T TYRSSON"
-      const toks = ranklessUpper.split(" ").filter(Boolean);
-      if (toks.length >= 3 && toks[0].length === 1) return `${toks[0]} ${toks[toks.length - 1]}`;
-      return ranklessUpper;
-    },
-    initialSurnameKey(ranklessUpper) {
-      const toks = ranklessUpper.split(" ").filter(Boolean);
-      if (!toks.length) return "";
-      const first = toks[0] || "";
-      const last = toks[toks.length - 1] || "";
-      return first && last ? `${first[0]} ${last}` : "";
-    },
-    lastName(ranklessUpper) {
-      const toks = ranklessUpper.split(" ").filter(Boolean);
-      return toks.length ? toks[toks.length - 1] : "";
+    normalizedName(s) {
+      // Basic normalization that worked before (no nickname heuristics)
+      return this.stripRank(this.baseClean(s));
     },
 
-    /* ---------- Attendance matching (single pass) ---------- */
     getOps(member) {
       if (!member?.name) return null;
+      const target = this.normalizedName(member.name);
+      if (!target) return null;
 
-      const cleaned   = this.baseClean(member.name);
-      const rankless  = this.stripRank(cleaned);
-      const collapsed = this.collapseInitialNicknameSurname(rankless);
-      const isKey     = this.initialSurnameKey(rankless);
-      const last      = this.lastName(rankless);
-      const nickSet   = new Set(rankless.split(" ").filter(Boolean).slice(1, -1));
-
-      let bestScore = -1;
-      let bestOps = null;
-
+      let best = null;
       for (const row of (this.attendance || [])) {
-        const rowOps  = this.extractRowOps(row);
-        if (rowOps === null) continue;
+        // Strictly read Attendance: Column A (name), Column C (ops); small fallbacks allowed
+        const rawName = row?.A ?? row?.a ?? row?.name ?? row?.Name ?? "";
+        const rawOps  = row?.C ?? row?.c ?? row?.ops ?? row?.attended ?? row?.value ?? null;
 
-        const rowNameClean   = this.extractRowName(row);
-        const rowRankless    = this.stripRank(rowNameClean);
-        const rowCollapsed   = this.collapseInitialNicknameSurname(rowRankless);
-        const rowIS          = this.initialSurnameKey(rowRankless);
-        const rowTokensSet   = new Set(rowRankless.split(" ").filter(Boolean));
+        const rowName = this.normalizedName(rawName);
+        const rowOps  = this.parseOps(rawOps);
 
-        // Exact (cleaned) match
-        if (rowNameClean && rowNameClean === cleaned) { bestScore = 100; bestOps = rowOps; break; }
-        // Exact rankless match
-        if (rowRankless && rowRankless === rankless && 99 > bestScore) { bestScore = 99; bestOps = rowOps; }
-        // Collapsed "T TYRSSON"
-        if (rowCollapsed === collapsed && 98 > bestScore) { bestScore = 98; bestOps = rowOps; }
-        // Initial + Last
-        if (rowIS && rowIS === isKey && 95 > bestScore) { bestScore = 95; bestOps = rowOps; }
+        if (!rowName || rowOps === null) continue;
 
-        // Heuristic score: last name + nickname(s) mid
-        let score = 0;
-        if (last && rowTokensSet.has(last)) score += 3;
-        if (isKey && rowIS === isKey) score += 2;
-        if (nickSet.size) {
-          let hits = 0;
-          nickSet.forEach(n => { if (rowTokensSet.has(n)) hits++; });
-          score += Math.min(hits * 2, 6);
+        if (rowName === target) {
+          best = rowOps;
+          break; // exact normalized match
         }
-        // small overlap bonus
-        let overlap = 0;
-        for (const t of rowTokensSet) if (rankless.includes(t)) overlap++;
-        score += Math.min(overlap, 2);
-
-        if (score > bestScore) { bestScore = score; bestOps = rowOps; }
-        else if (score === bestScore && bestOps !== null && rowOps > bestOps) { bestOps = rowOps; }
       }
-
-      if (bestScore < 3 && bestScore < 95) return null;
-      return bestOps;
+      return best;
     },
 
-    /* ---------- Promotions ---------- */
+    /* -------------------- Promotions -------------------- */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     nextPromotion(member) {
       const key = this.rankKey(member?.rank);
@@ -618,7 +538,7 @@ export default {
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* ---------- UI utils ---------- */
+    /* -------------------- UI utils -------------------- */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
