@@ -539,7 +539,6 @@ export default {
     /* Medical role detection */
     isMedicalRank(rankOrRole) {
       const r = String(rankOrRole || "").toUpperCase();
-      // works for rank OR role text that includes HM* abbreviations
       return ["HR","HA","HN","HM3","HM2","HM1","HMC"].includes(r);
     },
     isCorpsmanRole(role) {
@@ -693,8 +692,32 @@ export default {
 .squad-members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: .85rem; }
 
 /* Cards */
-.member-card { background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
-.member-card.vacant, .member-card.closed { opacity: 0.9; border-left-color: rgba(30,144,255,0.35); }
+.member-card { position: relative; background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
+.member-card.vacant, .member-card.closed { border-left-color: rgba(30,144,255,0.35); }
+
+/* VACANT: light stripes & dashed left border */
+.member-card.vacant {
+  background:
+    repeating-linear-gradient(45deg, rgba(30,144,255,0.06) 0, rgba(30,144,255,0.06) 10px, transparent 10px, transparent 20px),
+    rgba(0, 12, 25, 0.9);
+  border-left-style: dashed;
+}
+
+/* CLOSED: darker, grayscaled, subtle crosshatch, muted text */
+.member-card.closed {
+  filter: grayscale(85%);
+  opacity: 0.6;
+  background:
+    repeating-linear-gradient(45deg, rgba(200,200,200,0.06) 0, rgba(200,200,200,0.06) 8px, transparent 8px, transparent 16px),
+    repeating-linear-gradient(-45deg, rgba(200,200,200,0.04) 0, rgba(200,200,200,0.04) 8px, transparent 8px, transparent 16px),
+    rgba(1, 6, 14, 0.9);
+}
+.member-card.closed .member-header h3,
+.member-card.closed .rank-line,
+.member-card.closed .detail-line,
+.member-card.closed .cert-label,
+.member-card.closed .cert-none,
+.member-card.closed .member-footer { opacity: 0.75; }
 
 /* Header */
 .member-header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .9rem; }
@@ -709,16 +732,16 @@ export default {
 
 /* Info accents */
 .detail-line strong { color: #9ec5e6; }
-.role-accent { color: #55ff88; font-weight: 600; }     /* default: green for non-medical roles */
+.role-accent { color: #55ff88; font-weight: 600; }     /* default: green */
 .role-corpsman { color: #ff6b6b; font-weight: 700; }   /* corpsman/medical: red */
 .date-accent { color: #c3d7ff; }
 .accent { color: #a3e7ff; }
 .accent-strong { color: #7fffd4; font-weight: 700; }
-.requirements-value { color: #55ff88; }                /* only the value in Requirements is green */
+.requirements-value { color: #55ff88; }                /* only the value is green */
 
 /* Keep on one line */
 .join-date { white-space: nowrap; }
-.next-rank-line { white-space: nowrap; } /* why: prevent wrapping of rank + ops remainder */
+.next-rank-line { white-space: nowrap; }
 
 /* Ops / promo */
 .ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
