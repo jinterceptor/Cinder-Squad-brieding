@@ -50,15 +50,16 @@
       </div>
     </section>
 
-    <!-- RIGHT WINDOW: Overview -->
+    <!-- RIGHT WINDOW: Overview (independent scroll) -->
     <section class="section-container right-window">
       <div class="section-header clipped-medium-backward right-header">
         <img src="/icons/protocol.svg" alt="" />
         <h1>{{ windowTitle }}</h1>
-        <div class="right-actions"><!-- intentionally empty --></div>
+        <div class="right-actions"><!-- empty --></div>
       </div>
       <div class="rhombus-back">&nbsp;</div>
 
+      <!-- This container scrolls independently -->
       <div class="section-content-container right-content">
         <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
 
@@ -374,34 +375,11 @@ export default {
     },
     rankScore() {
       const order = [
-        "MAJ",
-        "CAPT",
-        "1STLT",
-        "2NDLT",
-        "CWO5",
-        "CWO4",
-        "CWO3",
-        "CWO2",
-        "WO",
-        "GYSGT",
-        "SSGT",
-        "SGT",
-        "CPL",
-        "LCPL",
-        "SPC4",
-        "SPC3",
-        "SPC2",
-        "SPC",
-        "PFC",
-        "PVT",
-        "RCT",
-        "HMC",
-        "HM1",
-        "HM2",
-        "HM3",
-        "HN",
-        "HA",
-        "HR",
+        "MAJ","CAPT","1STLT","2NDLT",
+        "CWO5","CWO4","CWO3","CWO2","WO",
+        "GYSGT","SSGT","SGT","CPL","LCPL",
+        "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
+        "HMC","HM1","HM2","HM3","HN","HA","HR",
       ];
       return (r) => {
         const idx = order.indexOf(this.rankKey(r));
@@ -445,18 +423,42 @@ export default {
 </script>
 
 <style scoped>
-/* Layout: LEFT 380px, RIGHT wide (dominant) */
+/* Two-window layout; right dominates width */
 .windows-grid {
   display: grid;
   grid-template-columns: 380px minmax(1080px, 1fr);
   column-gap: 2.4rem;
-  align-items: start;
+  align-items: start; /* prevent equal-height stretch */
   width: 100%;
 }
+
+/* Ensure these windows behave as independent blocks */
 .windows-grid > .section-container {
   position: relative !important;
   width: 100%;
   max-width: none;
+  align-self: start; /* do not stretch to tallest */
+}
+
+/* Left window should NOT grow with right; keep natural height */
+.left-window {
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Right window: internal scrolling (header fixed in panel) */
+.right-window {
+  display: flex;
+  flex-direction: column;
+  /* keep the entire panel within the viewport */
+  max-height: calc(100vh - 16px);
+  overflow: hidden; /* hide outer; inner content will scroll */
+}
+.right-window .section-content-container.right-content {
+  flex: 1 1 auto;
+  min-height: 0;       /* required for flex scroll containers */
+  overflow: auto;      /* independent scroll here */
+  padding: .6rem;
 }
 
 /* Decoration */
@@ -494,10 +496,7 @@ export default {
   grid-template-columns: auto 1fr auto;
   align-items: center;
 }
-.right-actions {
-  display: flex;
-  gap: 0.4rem;
-}
+.right-actions { display: flex; gap: .4rem; }
 
 /* Left: tiles + login */
 .rail {
@@ -528,7 +527,7 @@ export default {
 }
 .rail-title,
 .rail-line .label {
-  color: #d9ebff; /* ensure readable */
+  color: #d9ebff;
 }
 .rail-card-body {
   display: grid;
@@ -539,19 +538,11 @@ export default {
   border: 1px solid rgba(30, 144, 255, 0.45);
   border-radius: 999px;
   padding: 0.05rem 0.5rem;
-  color: #e6f3ff; /* readable */
+  color: #e6f3ff;
 }
-.pill.ok {
-  border-color: rgba(120, 255, 170, 0.7);
-}
-.pill.warn {
-  border-color: rgba(255, 190, 80, 0.7);
-}
-.rail-foot {
-  margin-top: 0.25rem;
-  font-size: 0.8rem;
-  color: #9ec5e6;
-}
+.pill.ok { border-color: rgba(120, 255, 170, 0.7); }
+.pill.warn { border-color: rgba(255, 190, 80, 0.7); }
+.rail-foot { margin-top: 0.25rem; font-size: 0.8rem; color: #9ec5e6; }
 
 .login-card {
   border: 1px solid rgba(30, 144, 255, 0.35);
@@ -561,10 +552,7 @@ export default {
   display: grid;
   gap: 0.5rem;
 }
-.login-error {
-  color: #ffb080;
-  margin: 0.2rem 0 0;
-}
+.login-error { color: #ffb080; margin: 0.2rem 0 0; }
 
 /* Buttons & controls */
 .btn-sm {
@@ -576,36 +564,17 @@ export default {
   color: #cfe6ff;
   cursor: pointer;
 }
-.btn-sm.ghost {
-  background: transparent;
-  border-color: rgba(30, 144, 255, 0.45);
-}
-.control {
-  display: grid;
-  gap: 0.2rem;
-}
-.control span {
-  font-size: 0.85rem;
-  color: #9ec5e6;
-}
-.control input,
-.control select {
+.btn-sm.ghost { background: transparent; border-color: rgba(30, 144, 255, 0.45); }
+.control { display: grid; gap: 0.2rem; }
+.control span { font-size: 0.85rem; color: #9ec5e6; }
+.control input, .control select {
   background: rgba(0, 10, 30, 0.3);
   border: 1px solid rgba(30, 144, 255, 0.35);
   border-radius: 0.35rem;
   padding: 0.35rem 0.45rem;
   color: #cfe6ff;
 }
-.control.chk {
-  align-items: center;
-  grid-auto-flow: column;
-  gap: 0.35rem;
-}
-
-/* Right content */
-.right-content {
-  padding: 0.6rem;
-}
+.control.chk { align-items: center; grid-auto-flow: column; gap: 0.35rem; }
 
 /* Filters / chips */
 .filters {
@@ -631,18 +600,12 @@ export default {
   border-radius: 999px;
   background: rgba(0, 10, 30, 0.25);
   border: 1px solid rgba(30, 144, 255, 0.45);
-  color: #e6f3ff; /* readable */
+  color: #e6f3ff;
   font-size: 0.85rem;
 }
-.chip.ok {
-  border-color: rgba(120, 255, 170, 0.7);
-}
-.chip.warn {
-  border-color: rgba(255, 190, 80, 0.7);
-}
-.muted {
-  color: #9ec5e6;
-}
+.chip.ok { border-color: rgba(120, 255, 170, 0.7); }
+.chip.warn { border-color: rgba(255, 190, 80, 0.7); }
+.muted { color: #9ec5e6; }
 
 /* Table (6 columns) */
 .table {
@@ -655,19 +618,13 @@ export default {
   grid-template-columns: 1.6fr 0.8fr 1fr 0.6fr 0.9fr 1.2fr; /* 6 columns */
   align-items: center;
 }
-.tr.head {
-  background: rgba(0, 10, 30, 0.35);
-  font-weight: 600;
-}
-.th,
-.td {
+.tr.head { background: rgba(0, 10, 30, 0.35); font-weight: 600; }
+.th, .td {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px dashed rgba(30, 144, 255, 0.25);
-  color: #e6f3ff; /* ensure readable text */
+  color: #e6f3ff;
 }
-.tr:last-child .td {
-  border-bottom: 0;
-}
+.tr:last-child .td { border-bottom: 0; }
 
 /* Progress bar */
 .bar {
@@ -687,26 +644,17 @@ export default {
   transition: width 0.25s ease;
   background: rgba(120, 200, 255, 0.6);
 }
-.bar.done .fill {
-  background: rgba(120, 255, 170, 0.7);
-}
+.bar.done .fill { background: rgba(120, 255, 170, 0.7); }
 
 /* Responsive */
 @media (max-width: 1200px) {
-  .windows-grid {
-    grid-template-columns: 340px 1fr;
-    column-gap: 1.4rem;
-  }
+  .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
 }
 @media (max-width: 980px) {
-  .windows-grid {
-    grid-template-columns: 1fr;
-  }
-  .right-window {
-    order: 1;
-  }
-  .left-window {
-    order: 2;
-  }
+  .windows-grid { grid-template-columns: 1fr; }
+  .right-window { order: 1; }
+  .left-window { order: 2; }
+  /* allow right panel to still scroll independently on mobile */
+  .right-window { max-height: calc(100vh - 12px); }
 }
 </style>
