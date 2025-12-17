@@ -1,33 +1,23 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
   <section id="admin" class="section-container">
-    <!-- Top banner -->
-    <div style="height: 52px; overflow: hidden">
-      <div class="section-header clipped-medium-backward">
-        <img src="/icons/protocol.svg" alt="Admin Icon" />
-        <h1>Admin</h1>
-      </div>
-      <div class="rhombus-back">&nbsp;</div>
+    <!-- Banner -->
+    <div class="section-header clipped-medium-backward">
+      <img src="/icons/protocol.svg" alt="Admin Icon" />
+      <h1>Admin</h1>
     </div>
-
     <div class="section-content-container">
-      <!-- Two-window desktop: left (list/login), right (main content) -->
-      <div class="admin-desktop">
-        <!-- LEFT WINDOW -->
-        <div class="window window--nav">
-          <div class="window-titlebar">
-            <div class="window-title">
-              <span class="dot"></span> Admin
-            </div>
+      <!-- Two windows side-by-side, same chrome as StatusView -->
+      <div class="admin-grid">
+        <!-- LEFT WINDOW: Admin list/login -->
+        <section class="section-container left-window">
+          <div class="section-header clipped-medium-backward">
+            <img src="/icons/protocol.svg" alt="" />
+            <h1>Admin</h1>
           </div>
-
-          <div class="window-content">
-            <!-- Login card (top-left) -->
+          <div class="section-content-container">
+            <!-- Inline login (no modal, no persistence) -->
             <div v-if="!isAuthed" class="login-card">
-              <div class="login-head">
-                <img src="/icons/protocol.svg" alt="" class="rail-icon" />
-                <div class="rail-title">Admin Access</div>
-              </div>
               <label class="control">
                 <span>Password</span>
                 <input
@@ -41,8 +31,8 @@
               <p v-if="loginError" class="login-error">{{ loginError }}</p>
             </div>
 
-            <!-- Tiles (only when authed) -->
-            <template v-else>
+            <!-- Tiles -->
+            <div v-else class="rail">
               <button
                 v-for="s in sections"
                 :key="s.key"
@@ -54,7 +44,6 @@
                   <img :src="s.icon" class="rail-icon" alt="" />
                   <div class="rail-title">{{ s.title }}</div>
                 </div>
-
                 <div v-if="s.preview && s.preview.length" class="rail-card-body">
                   <div v-for="line in s.preview" :key="line.label" class="rail-line">
                     <span class="label">{{ line.label }}</span>
@@ -63,40 +52,24 @@
                   <div class="rail-foot">Click to open</div>
                 </div>
               </button>
-            </template>
-          </div>
-        </div>
-
-        <!-- RIGHT WINDOW (MAIN) -->
-        <div class="window window--main">
-          <div class="window-titlebar">
-            <div class="window-title">
-              <span class="dot"></span>
-              {{ windowTitle }}
             </div>
-            <div class="window-actions">
-              <button
-                v-if="isAuthed && activeKey === 'promotions'"
-                class="btn-sm"
-                @click="refreshData"
-              >
-                Refresh
-              </button>
-              <button
-                v-if="isAuthed"
-                class="btn-sm ghost"
-                @click="logout"
-              >
-                Logout
-              </button>
+          </div>
+        </section>
+
+        <!-- RIGHT WINDOW: Main content (majority width) -->
+        <section class="section-container right-window">
+          <div class="section-header clipped-medium-backward right-header">
+            <img src="/icons/protocol.svg" alt="" />
+            <h1>{{ windowTitle }}</h1>
+            <div class="right-actions">
+              <button v-if="isAuthed && activeKey==='promotions'" class="btn-sm" @click="refreshData">Refresh</button>
+              <button v-if="isAuthed" class="btn-sm ghost" @click="logout">Logout</button>
             </div>
           </div>
 
-          <div class="window-content">
+          <div class="section-content-container right-content">
             <!-- Locked -->
-            <div v-if="!isAuthed">
-              <p class="muted">Enter the admin password in the left window to continue.</p>
-            </div>
+            <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
 
             <!-- Promotions -->
             <div v-else-if="activeKey === 'promotions'">
@@ -161,9 +134,7 @@
                     <span v-else class="muted">N/A</span>
                   </span>
                   <span class="td next">
-                    <span v-if="row.nextRank">
-                      {{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small>
-                    </span>
+                    <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
                     <span v-else class="muted">—</span>
                   </span>
                   <span class="td prog">
@@ -172,13 +143,7 @@
                     </div>
                   </span>
                   <span class="td act">
-                    <button
-                      class="btn-sm"
-                      v-if="row.opsToNext === 0 && row.nextRank"
-                      @click="markPromoted(row)"
-                    >
-                      Mark Promoted
-                    </button>
+                    <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">Mark Promoted</button>
                     <button class="btn-sm ghost" @click="openMember(row)">Open</button>
                   </span>
                 </div>
@@ -191,11 +156,9 @@
             </div>
 
             <!-- Future -->
-            <div v-else>
-              <p class="muted">Select a tool from the left.</p>
-            </div>
+            <div v-else class="muted">Select a tool from the left.</div>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   </section>
@@ -239,7 +202,7 @@ export default {
     };
   },
   created() {
-    // Always require fresh login on reload; clear any previous flags.
+    // Fresh login on reload
     try {
       localStorage.removeItem("admin-auth");
       sessionStorage.removeItem("admin-authed");
@@ -261,7 +224,6 @@ export default {
             { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
           ],
         },
-        // Reuse existing icon to avoid missing assets
         { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
       ];
     },
@@ -392,7 +354,7 @@ export default {
     },
   },
   methods: {
-    // Auth (runtime only)
+    // Auth
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
       if (!code) { this.loginError = "Please enter the password."; return; }
@@ -423,83 +385,35 @@ export default {
 </script>
 
 <style scoped>
-/* Shell */
-.section-container { display: grid; gap: .75rem; }
-.section-header { display: flex; align-items: center; gap: .6rem; }
-.section-header img { width: 28px; height: 28px; }
-.section-content-container { padding: .8rem; }
-
-.rhombus-back {
-  height: 6px;
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(30,144,255,.2) 0px,
-    rgba(30,144,255,.2) 10px,
-    transparent 10px,
-    transparent 20px
-  );
-}
-.clipped-medium-backward {
-  clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
-  background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
-  padding: .4rem .75rem;
-  border: 1px solid rgba(30,144,255,.35);
-  border-left-width: 0;
-  border-radius: 0 .35rem .35rem 0;
-}
-
-/* Desktop layout: two windows */
-.admin-desktop {
+/* Grid: left narrow window + right wide window */
+.admin-grid {
   display: grid;
-  grid-template-columns: 340px 1fr; /* left narrow, right majority */
+  grid-template-columns: 340px 1fr; /* adjust as needed */
   gap: .9rem;
-  min-height: calc(100vh - 52px - 24px);
 }
 
-/* Window shell */
-.window {
-  border: 1px solid rgba(30,144,255,0.45);
-  background: rgba(0,10,30,0.25);
-  border-radius: .6rem;
-  box-shadow: 0 6px 28px rgba(0,0,0,.35);
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* flex overflow fix */
-}
-.window--nav { max-height: 100%; }
-.window--main { max-height: 100%; }
+/* Reuse your section chrome; add layout tweaks */
+.left-window .section-content-container,
+.right-window .section-content-container { padding: .6rem; }
 
-.window-titlebar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: .5rem .65rem;
-  background: linear-gradient(180deg, rgba(5,20,40,.75), rgba(5,20,40,.6));
-  border-bottom: 1px solid rgba(30,144,255,0.35);
-  border-radius: .6rem .6rem 0 0;
+/* Right header: add actions on the right */
+.right-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
 }
-.window-title { display: flex; align-items: center; gap: .45rem; font-weight: 600; }
-.window-title .dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: rgba(120,200,255,.9);
-  box-shadow: 0 0 8px rgba(120,200,255,.9);
-}
-.window-actions { display: flex; gap: .4rem; }
+.right-header h1 { margin-right: .6rem; }
+.right-actions { display: flex; gap: .4rem; }
 
-.window-content {
-  padding: .6rem;
-  overflow: auto;           /* each window scrolls independently */
-  flex: 1 1 auto;
-}
-
-/* Rail / tiles */
+/* Login + Tiles in left window */
+.rail { display: grid; gap: .6rem; align-content: start; }
 .rail-card {
-  width: 100%;
   text-align: left;
   border: 1px solid rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.35);
   border-radius: .5rem;
   padding: .6rem;
   cursor: pointer;
-  margin-bottom: .55rem;
 }
 .rail-card.active { border-color: rgba(120,255,170,0.7); }
 .rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
@@ -507,17 +421,11 @@ export default {
 .rail-title { font-weight: 600; }
 .rail-card-body { display: grid; gap: .25rem; }
 .rail-line { display: flex; align-items: center; justify-content: space-between; }
-.pill {
-  font-size: .85rem;
-  border: 1px solid rgba(30,144,255,.45);
-  border-radius: 999px;
-  padding: .05rem .5rem;
-}
+.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,.45); border-radius: 999px; padding: .05rem .5rem; }
 .pill.ok { border-color: rgba(120,255,170,0.7); }
 .pill.warn { border-color: rgba(255,190,80,0.7); }
 .rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-/* Login card */
 .login-card {
   border: 1px solid rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.35);
@@ -525,72 +433,40 @@ export default {
   padding: .6rem;
   display: grid;
   gap: .5rem;
-  margin-bottom: .6rem;
 }
-.login-head { display: flex; align-items: center; gap: .5rem; }
 .login-error { color: #ffb080; margin: .2rem 0 0; }
 
-/* Controls */
-.btn-sm {
-  font-size: .85rem;
-  padding: .25rem .5rem;
-  border-radius: .35rem;
-  border: 1px solid rgba(30,144,255,0.45);
-  background: rgba(0,10,30,0.25);
-  color: #cfe6ff;
-  cursor: pointer;
-}
+/* Buttons & controls */
+.btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
 .btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
-
 .control { display: grid; gap: .2rem; }
 .control span { font-size: .85rem; color: #9ec5e6; }
-.control input, .control select {
-  background: rgba(0,10,30,0.3);
-  border: 1px solid rgba(30,144,255,0.35);
-  border-radius: .35rem;
-  padding: .35rem .45rem;
-  color: #cfe6ff;
-}
+.control input, .control select { background: rgba(0,10,30,0.3); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #cfe6ff; }
 .control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
 
-/* Filters */
+/* Filters / chips / table / bars (same as before) */
 .filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
 .filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
-
-/* Chips */
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
-.chip {
-  padding: .25rem .5rem;
-  border-radius: 999px;
-  background: rgba(0,10,30,0.25);
-  border: 1px solid rgba(30,144,255,.45);
-  color: #cfe6ff;
-  font-size: .85rem;
-}
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,.45); color: #cfe6ff; font-size: .85rem; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
 .chip.warn { border-color: rgba(255,190,80,0.7); }
 
-/* Table */
 .table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
 .tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr .9fr; align-items: center; }
 .tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
 .th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); }
 .tr:last-child .td { border-bottom: 0; }
-.td .muted { color: #9ec5e6; }
+.muted { color: #9ec5e6; }
 
-/* Progress */
 .bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* Misc */
-.empty { padding: .7rem .8rem; color: #9ec5e6; }
-.muted { color: #9ec5e6; }
-
-/* Responsive */
+/* Responsive: stack windows, keep right above left */
 @media (max-width: 980px) {
-  .admin-desktop { grid-template-columns: 1fr; }
-  .window--nav { order: 2; }
-  .window--main { order: 1; }
+  .admin-grid { grid-template-columns: 1fr; }
+  .right-window { order: 1; }
+  .left-window { order: 2; }
 }
 </style>
