@@ -1,7 +1,7 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
   <div class="windows-grid">
-    <!-- LEFT WINDOW -->
+    <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/protocol.svg" alt="" />
@@ -10,15 +10,22 @@
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container">
+        <!-- Inline login -->
         <div v-if="!isAuthed" class="login-card">
           <label class="control">
             <span>Password</span>
-            <input type="password" v-model="passwordInput" placeholder="Enter unit password" @keyup.enter="tryLogin" />
+            <input
+              type="password"
+              v-model="passwordInput"
+              placeholder="Enter unit password"
+              @keyup.enter="tryLogin"
+            />
           </label>
           <button class="btn-sm" @click="tryLogin">Log in</button>
           <p v-if="loginError" class="login-error">{{ loginError }}</p>
         </div>
 
+        <!-- Tiles -->
         <div v-else class="rail">
           <button
             v-for="s in sections"
@@ -55,7 +62,7 @@
       <div class="section-content-container right-content">
         <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
 
-        <!-- PROMOTIONS -->
+        <!-- Promotions -->
         <div v-else-if="activeKey === 'promotions'" class="promotions-panel">
           <div class="filters">
             <div class="row">
@@ -92,6 +99,7 @@
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
+          <!-- Table: fixed header, scroll body -->
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head grid6">
@@ -123,22 +131,10 @@
           </div>
         </div>
 
-        <!-- DISCIPLINE -->
+        <!-- Discipline (notes + warnings) -->
         <div v-else-if="activeKey === 'discipline'" class="promotions-panel">
-          <div v-if="csvDiag.error" class="csv-error">
-            <strong>Status CSV load failed:</strong> {{ csvDiag.error }}
-          </div>
-
           <div class="filters">
-            <div class="row csv-row">
-              <label class="control">
-                <span>Status CSV URL</span>
-                <input type="text" v-model="troopStatusCsvUrl" placeholder="https://...output=csv" />
-              </label>
-              <div class="control" style="align-self:end">
-                <span>&nbsp;</span>
-                <button class="btn-sm" @click="fetchTroopStatusCsv" :disabled="discLoading">Load CSV</button>
-              </div>
+            <div class="row">
               <label class="control">
                 <span>Search</span>
                 <input type="text" v-model="discSearch" placeholder="Name, squad, note" />
@@ -148,26 +144,20 @@
                 <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">{{ discLoading ? 'Refreshing…' : 'Refresh' }}</button>
               </div>
             </div>
-            <div class="csv-meta" v-if="csvDiag.ok">
-              <span class="chip">CSV rows: {{ csvDiag.rowCount }}</span>
-              <span class="chip ok">Matched: {{ csvDiag.matchedCount }}</span>
-              <span class="chip">Header: {{ csvDiag.header.join(' | ') }}</span>
-              <span class="chip">Using: {{ csvDiag.statusHeaderUsed || 'Troop Status' }}</span>
-              <span class="chip">Last: {{ csvDiag.lastAt }}</span>
-              <label class="control chk" style="margin-left:auto;">
-                <input type="checkbox" v-model="showStatusDebug" />
-                <span>Show status debug</span>
-              </label>
-            </div>
           </div>
 
+          <!-- Editor -->
           <div class="flag-form">
             <div class="row">
               <label class="control">
                 <span>Member</span>
                 <select v-model="edit.memberId" @change="populateEditFromMember">
                   <option :value="null">Select member…</option>
-                  <option v-for="m in membersSortedNonDischarged" :key="m.id || m.name" :value="m.id || null">
+                  <option
+                    v-for="m in membersSortedNonDischarged"
+                    :key="m.id || m.name"
+                    :value="m.id || null"
+                  >
                     {{ m.name }} <span v-if="m.squad">— {{ m.squad }}</span>
                   </option>
                 </select>
@@ -176,9 +166,9 @@
               <label class="control">
                 <span>Warnings (3 slots)</span>
                 <div class="warn-toggle">
-                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" :aria-pressed="!!edit.warn[0]" title="Warning 1">1</button>
-                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" :aria-pressed="!!edit.warn[1]" title="Warning 2">2</button>
-                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" :aria-pressed="!!edit.warn[2]" title="Warning 3">3</button>
+                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" :aria-pressed="!!edit.warn[0]" aria-label="Toggle warning 1" title="Warning 1">1</button>
+                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" :aria-pressed="!!edit.warn[1]" aria-label="Toggle warning 2" title="Warning 2">2</button>
+                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" :aria-pressed="!!edit.warn[2]" aria-label="Toggle warning 3" title="Warning 3">3</button>
                 </div>
               </label>
             </div>
@@ -197,26 +187,8 @@
             </div>
           </div>
 
-          <div v-if="showStatusDebug" class="table-scroll" style="margin-top:.4rem;">
-            <div class="table-shell">
-              <div class="tr head gridDebug">
-                <span class="th">Name</span>
-                <span class="th">NameKey</span>
-                <span class="th">Status</span>
-                <span class="th">CSV?</span>
-              </div>
-              <div class="rows-scroll">
-                <div v-for="m in membersSorted" :key="m.id || m.name" class="tr gridDebug">
-                  <span class="td">{{ m.name }}</span>
-                  <span class="td">{{ nameKey(cleanMemberName(m.name)) }}</span>
-                  <span class="td">{{ memberStatusOf(m) }}</span>
-                  <span class="td">{{ csvStatusIndex[nameKey(cleanMemberName(m.name))] ? 'yes' : 'no' }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="table-scroll" style="margin-top:.4rem;">
+          <!-- List -->
+          <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head gridFlags">
                 <span class="th">Member</span>
@@ -255,6 +227,7 @@
           </div>
         </div>
 
+        <!-- Future pages -->
         <div v-else-if="activeKey === 'audits'">
           <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
         </div>
@@ -289,7 +262,7 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API
+      // Discipline API (locked to your values)
       discEndpoint: "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec",
       discSecret: "PLEX",
       discLoading: false,
@@ -301,8 +274,6 @@ export default {
       // Status via CSV (RefData)
       troopStatusCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
       csvStatusIndex: Object.create(null),
-      csvDiag: { ok: false, error: "", header: [], rowCount: 0, matchedCount: 0, lastAt: null, statusHeaderUsed: "" },
-      showStatusDebug: false,
 
       // Filters + editor
       discSearch: "",
@@ -324,6 +295,7 @@ export default {
     },
   },
   computed: {
+    /* utils */
     nameKey() {
       return (name) =>
         String(name || "")
@@ -337,6 +309,7 @@ export default {
     },
     rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
 
+    /* normalization */
     normalizeStatus() {
       const pretty = {
         ACTIVE: "Active", RESERVE: "Reserve", ELOA: "ELOA", OTHER: "Other",
@@ -345,6 +318,7 @@ export default {
       return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
     },
 
+    /* status indexes (CSV + API) */
     statusIndexFromApi() {
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => {
@@ -366,8 +340,11 @@ export default {
         return this.statusIndex[nk] || "Unknown";
       };
     },
-    isDischarged() { return (status) => String(status || "").toLowerCase() === "discharged"; },
+    isDischarged() {
+      return (status) => String(status || "").toLowerCase() === "discharged";
+    },
 
+    /* attendance map */
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach((m) => {
@@ -420,19 +397,30 @@ export default {
       return this.membersSorted.filter(m => !this.isDischarged(this.memberStatusOf(m)));
     },
 
+    /* window title / tiles */
     windowTitle() {
       if (!this.isAuthed) return "Locked";
-      return { promotions: "Promotions Overview", discipline: "Discipline (Notes & Warnings)", audits: "Roster Audits" }[this.activeKey] || "Admin Tools";
+      return {
+        promotions: "Promotions Overview",
+        discipline: "Discipline (Notes & Warnings)",
+        audits: "Roster Audits",
+      }[this.activeKey] || "Admin Tools";
     },
     sections() {
       return [
-        { key: "promotions", title: "Promotions Overview", icon: "/icons/protocol.svg",
+        {
+          key: "promotions",
+          title: "Promotions Overview",
+          icon: "/icons/protocol.svg",
           preview: [
             { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
             { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
           ],
         },
-        { key: "discipline", title: "Discipline", icon: "/icons/protocol.svg",
+        {
+          key: "discipline",
+          title: "Discipline",
+          icon: "/icons/protocol.svg",
           preview: [
             { label: "Members w/ notes", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
             { label: "Any warnings", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
@@ -442,6 +430,7 @@ export default {
       ];
     },
 
+    /* promotions logic */
     nextPromotion() {
       const alias = {
         PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
@@ -479,7 +468,7 @@ export default {
       const rows = [];
       for (const m of (this.members || [])) {
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) continue;
+        if (this.isDischarged(status)) continue; // hide discharged
 
         if (term) {
           const hay = [m.name, m.rank, m.squad, status].map(x => String(x || "").toLowerCase()).join(" ");
@@ -537,6 +526,7 @@ export default {
       return (r) => { const idx = order.indexOf(this.rankKey(r)); return idx === -1 ? 999 : idx; };
     },
 
+    /* discipline computed */
     disciplineRowsIndexed() {
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => { idx[r.nameKey] = r; });
@@ -546,7 +536,8 @@ export default {
       const rows = [];
       (this.members || []).forEach(m => {
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) return;
+        if (this.isDischarged(status)) return; // hide discharged
+
         const nk = this.nameKey(m?.name);
         const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
         const api = this.disciplineRowsIndexed[nk] || { notes: '', warnings: 'N, N, N' };
@@ -563,6 +554,7 @@ export default {
           warnCount,
         });
       });
+      // API-only rows (if any leftover not in members; status unknown)
       (this.disciplineRows || []).forEach(r => {
         const nk = this.nameKey(r.name || r.nameKey || '');
         if (!rows.find(x => x.nameKey === nk)) {
@@ -592,6 +584,7 @@ export default {
     },
   },
   methods: {
+    /* auth */
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
       if (!code) { this.loginError = "Please enter the password."; return; }
@@ -599,6 +592,7 @@ export default {
       else { this.loginError = "Invalid password."; }
     },
 
+    /* helpers */
     isFiniteNum(v) { return Number.isFinite(v); },
     getOps(member) {
       if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
@@ -620,27 +614,22 @@ export default {
       return 'unknown';
     },
 
+    /* CSV: fetch + parse */
     async fetchTroopStatusCsv() {
-      this.csvDiag = { ok: false, error: "", header: [], rowCount: 0, matchedCount: 0, lastAt: null, statusHeaderUsed: "" };
       try {
-        if (!this.troopStatusCsvUrl) throw new Error("No CSV URL set.");
         const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const csvText = await res.text();
         const rows = this.parseCsv(csvText);
-        if (!rows.length) throw new Error("CSV empty.");
+        if (!rows.length) return;
 
         const header = rows[0].map(h => String(h || '').trim());
         const hdrLower = header.map(h => h.toLowerCase().replace(/\s+/g,' ').trim());
         const nameIdx = hdrLower.findIndex(h => ['troop list','name','member','trooper'].includes(h));
-        // STRICT: only "troop status"
-        const statusIdx = hdrLower.findIndex(h => h === 'troop status');
+        const statusIdx = hdrLower.findIndex(h => h === 'troop status'); // strict
 
-        if (nameIdx === -1) throw new Error(`Name column not found. Got: [${header.join(', ')}]`);
-        if (statusIdx === -1) throw new Error(`"Troop Status" column not found. Got: [${header.join(', ')}]`);
+        if (nameIdx === -1 || statusIdx === -1) return;
 
         const map = Object.create(null);
-        let matched = 0;
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           const rawName = String(r[nameIdx] || '').trim();
@@ -649,22 +638,14 @@ export default {
           const nk = this.nameKey(this.cleanMemberName(rawName));
           map[nk] = this.normalizeStatus(status);
         }
-        const allMembers = this.members || [];
-        for (const m of allMembers) {
-          const nk = this.nameKey(this.cleanMemberName(m?.name));
-          if (map[nk]) matched++;
-        }
         this.csvStatusIndex = map;
-        this.csvDiag = {
-          ok: true, error: "", header, rowCount: rows.length - 1, matchedCount: matched,
-          lastAt: new Date().toLocaleString(), statusHeaderUsed: header[statusIdx] || 'Troop Status'
-        };
       } catch (e) {
-        this.csvDiag = { ok: false, error: String(e?.message || e), header: [], rowCount: 0, matchedCount: 0, lastAt: new Date().toLocaleString(), statusHeaderUsed: "" };
+        // silent fallback to API/Unknown
+        console.warn('CSV status load failed:', e);
       }
     },
     parseCsv(text) {
-      // minimal RFC4180-ish parser
+      // RFC4180-ish minimal parser for commas and quotes
       const rows = [];
       let cur = [];
       let val = '';
@@ -683,11 +664,13 @@ export default {
           else { val += ch; }
         }
       }
-      cur.push(val); rows.push(cur);
+      cur.push(val);
+      rows.push(cur);
       if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
       return rows;
     },
 
+    /* discipline api */
     async loadDiscipline() {
       if (!this.discEndpoint || !this.discSecret) return;
       this.discLoading = true; this.discError = ""; this.discOK = false;
@@ -702,7 +685,7 @@ export default {
           nameKey: this.nameKey(this.cleanMemberName(r.name || r.nameKey || '')),
           notes: r.notes || '',
           warnings: r.warnings || 'N, N, N',
-          status: this.normalizeStatus(r.status || r.troopStatus),
+          status: this.normalizeStatus(r.status || r.troopStatus), // CSV overrides
         }));
       } catch (e) {
         this.discError = String(e?.message || e);
@@ -718,7 +701,7 @@ export default {
     focusMemberByNameKey(nk) {
       const m = (this.members || []).find(x => this.nameKey(this.cleanMemberName(x?.name)) === nk);
       if (!m) return;
-      if (this.isDischarged(this.memberStatusOf(m))) return;
+      if (this.isDischarged(this.memberStatusOf(m))) return; // ignore discharged
       this.edit.memberId = m.id || null;
       this.populateEditFromMember();
       this.$nextTick(() => {
@@ -726,6 +709,7 @@ export default {
         if (ta) ta.focus();
       });
     },
+
     populateEditFromMember() {
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
       if (!m) { this.edit.notes = ''; this.edit.warn = [false,false,false]; return; }
@@ -742,6 +726,7 @@ export default {
       while (out.length < 3) out.push('N');
       return out.join(', ');
     },
+
     toggleWarn(i) {
       const next = [...this.edit.warn];
       next[i] = !next[i];
@@ -766,7 +751,7 @@ export default {
       try {
         const res = await fetch(this.discEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // why: simple request to avoid preflight/CORS pain
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // why: simple request (no preflight)
           body: JSON.stringify(payload),
           redirect: 'follow',
         });
@@ -789,7 +774,7 @@ export default {
 </script>
 
 <style scoped>
-/* Layout */
+/* Two-window layout; right dominates width */
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
@@ -799,22 +784,21 @@ export default {
 /* Panel sizing */
 .promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
 
-/* Controls */
+/* Shared controls */
 .control { display: grid; gap: .2rem; }
 .control span { font-size: .85rem; color: #9ec5e6; }
 .control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #e6f3ff; }
 .control textarea { resize: vertical; }
+.control input::placeholder, .control textarea::placeholder { color: #aac7e6; }
+.control input:focus, .control select:focus, .control textarea:focus { outline: none; border-color: rgba(30,144,255,0.6); }
 .control select option { background: rgba(5,20,40,0.98); color: #e6f3ff; }
 .control.chk { display: flex; align-items: center; gap: .45rem; padding-top: 1.25rem; }
 .control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
 .control.chk span { color: #e6f3ff; font-size: .9rem; }
 
-/* CSV row layout */
-.csv-row { grid-template-columns: 2.2fr auto 1.2fr auto; }
-.csv-meta { display: flex; gap: .45rem; align-items: center; margin-top: .4rem; flex-wrap: wrap; }
-
-/* Banners + chips */
-.csv-error { border: 1px solid rgba(255,120,120,0.55); background: rgba(255,50,50,0.08); color: #ffd6d6; padding: .45rem .6rem; border-radius: .35rem; }
+/* Filters / chips */
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr auto; gap: .6rem; align-items: end; }
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
 .chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
@@ -835,12 +819,12 @@ export default {
 .pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
 .rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-/* Tables */
+/* Table containers */
 .table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
+/* +1 col for Status in discipline */
 .gridFlags { display: grid; grid-template-columns: 1.4fr .9fr .9fr 1fr 2.7fr; align-items: center; }
-.gridDebug { display: grid; grid-template-columns: 1.3fr 1.3fr .8fr .5fr; align-items: center; }
 .tr.head { font-weight: 600; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; }
 .rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
@@ -851,9 +835,15 @@ export default {
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* Discipline visuals */
+/* ---- Discipline visuals ---- */
 .warn-row { position: relative; }
-.warn-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: transparent; }
+.warn-row::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: transparent;
+}
 .warn-0 { background: transparent; }
 .warn-1 { background: rgba(255, 200, 80, 0.06); }
 .warn-1::before { background: rgba(255, 200, 80, 0.8); }
@@ -862,23 +852,55 @@ export default {
 .warn-3 { background: rgba(255, 90, 90, 0.10); }
 .warn-3::before { background: rgba(255, 90, 90, 0.9); }
 
+/* Dots for warnings column */
 .warncells { display: flex; align-items: center; }
 .warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
-.warn-badges .dot { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
+.warn-badges .dot {
+  width: 14px; height: 14px; border-radius: 3px;
+  border: 1px solid rgba(150,190,230,0.35);
+  background: rgba(0,10,30,0.25);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2);
+}
 .warn-badges .dot.on { border-color: rgba(150,190,230,0.6); }
 .warn-badges.w1 .dot.on { background: rgba(255, 200, 80, 0.75); }
 .warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
 .warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
 
 /* Status pill */
-.status-pill { padding: .1rem .5rem; border-radius: 999px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); font-size: .82rem; }
+.status-pill {
+  padding: .1rem .5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(150,190,230,0.35);
+  background: rgba(0,10,30,0.25);
+  font-size: .82rem;
+}
 .status-pill.st-active { border-color: rgba(120,255,170,0.7); }
 .status-pill.st-reserve { border-color: rgba(120,200,255,0.7); }
 .status-pill.st-eloa { border-color: rgba(200,180,255,0.7); }
 .status-pill.st-inactive { border-color: rgba(200,200,200,0.4); }
 .status-pill.st-other { border-color: rgba(255,190,80,0.6); }
 .status-pill.st-unknown { border-color: rgba(150,190,230,0.35); }
-.status-pill.st-discharged { border-color: rgba(255,90,90,0.9); }
+.status-pill.st-discharged { border-color: rgba(255,90,90,0.9); } /* hidden anyway */
+
+/* Editor toggle pills */
+.warn-toggle { display: inline-flex; gap: .4rem; align-items: center; }
+.warn-pill {
+  min-width: 36px; height: 28px;
+  padding: 0 .5rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: .45rem;
+  border: 1px solid rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.35);
+  color: #e6f3ff;
+  font-weight: 600; font-size: .9rem;
+  transition: transform .05s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.warn-pill:hover { transform: translateY(-1px); }
+.warn-pill:focus { outline: none; box-shadow: 0 0 0 2px rgba(120,200,255,0.35); }
+.warn-pill.on { color: #0a0f16; border-color: transparent; }
+.warn-pill.lvl1.on { background: rgba(255, 200, 80, 0.9); }
+.warn-pill.lvl2.on { background: rgba(255, 140, 60, 0.95); }
+.warn-pill.lvl3.on { background: rgba(255, 90, 90, 0.98); }
 
 /* Header deco */
 .rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
@@ -887,6 +909,7 @@ export default {
 .section-header img { width: 28px; height: 28px; }
 .right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
 .right-actions { display: flex; gap: .4rem; }
+
 .flag-form { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .6rem; display: grid; gap: .6rem; background: rgba(0,10,30,0.25); }
 .flag-form .row { display: grid; grid-template-columns: 1.6fr 1fr; gap: .6rem; }
 .flag-form .row.end { grid-template-columns: 1fr auto auto; align-items: center; }
