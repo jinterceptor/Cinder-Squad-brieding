@@ -111,7 +111,7 @@
                 <span class="th prog">Progress</span>
               </div>
               <div class="rows-scroll">
-                <div v-for="row in promotionsTable" :key="row.id" class="tr grid6">
+                <div v-for="row in promotionsTable" :key="row.id || row.name" class="tr grid6">
                   <span class="td name">{{ row.name }}</span>
                   <span class="td rank">{{ row.rank }}</span>
                   <span class="td squad">{{ row.squad || '—' }}</span>
@@ -154,7 +154,11 @@
                 <span>Member</span>
                 <select v-model="edit.memberId" @change="populateEditFromMember">
                   <option :value="null">Select member…</option>
-                  <option v-for="m in membersSorted" :key="m.id || m.name" :value="m.id || null">
+                  <option
+                    v-for="m in membersSortedNonDischarged"
+                    :key="m.id || m.name"
+                    :value="m.id || null"
+                  >
                     {{ m.name }} <span v-if="m.squad">— {{ m.squad }}</span>
                   </option>
                 </select>
@@ -214,6 +218,7 @@
               <div class="tr head gridFlags">
                 <span class="th">Member</span>
                 <span class="th">Squad</span>
+                <span class="th">Status</span>
                 <span class="th">Warnings</span>
                 <span class="th">Notes</span>
               </div>
@@ -229,6 +234,9 @@
                 >
                   <span class="td">{{ r.name }}</span>
                   <span class="td">{{ r.squad || '—' }}</span>
+                  <span class="td">
+                    <span class="status-pill" :class="'st-' + statusClass(r.status)">{{ r.status || 'Unknown' }}</span>
+                  </span>
                   <span class="td warncells">
                     <div class="warn-badges" :class="'w'+r.warnCount" aria-label="Warnings">
                       <span class="dot" :class="{ on: r.warnBits[0] }" title="Warning 1"></span>
@@ -314,6 +322,34 @@ export default {
     },
     rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
 
+    /* status detection */
+    normalizeStatus() {
+      // why: MembersMaster Col C has no header; upstream adapters may map into various fields
+      const map = {
+        "ACTIVE": "Active",
+        "RESERVE": "Reserve",
+        "ELOA": "ELOA",
+        "OTHER": "Other",
+        "INACTIVE": "Inactive",
+        "UNKNOWN": "Unknown",
+        "DISCHARGED": "Discharged",
+      };
+      return (raw) => {
+        const s = String(raw || "").trim().toUpperCase();
+        return map[s] || (s ? s.charAt(0) + s.slice(1).toLowerCase() : "Unknown");
+      };
+    },
+    memberStatusOf() {
+      return (m) => {
+        const raw =
+          m?.status ?? m?.filter ?? m?.memberStatus ?? m?.activity ?? m?.state ?? m?.colC ?? m?.Status;
+        return this.normalizeStatus(raw);
+      };
+    },
+    isDischarged() {
+      return (status) => String(status || "").toLowerCase() === "discharged";
+    },
+
     /* attendance map */
     attendanceMap() {
       const map = Object.create(null);
@@ -362,6 +398,9 @@ export default {
     },
     membersSorted() {
       return [...(this.members || [])].sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+    },
+    membersSortedNonDischarged() {
+      return this.membersSorted.filter(m => !this.isDischarged(this.memberStatusOf(m)));
     },
 
     /* window title / tiles */
@@ -439,12 +478,15 @@ export default {
 
       const rows = [];
       for (const m of (this.members || [])) {
+        const status = this.memberStatusOf(m);
+        if (this.isDischarged(status)) continue; // hide discharged
+
         if (term) {
-          const hit =
-            (m.name || "").toLowerCase().includes(term) ||
-            (m.rank || "").toLowerCase().includes(term) ||
-            (m.squad || "").toLowerCase().includes(term);
-          if (!hit) continue;
+          const hay =
+            [m.name, m.rank, m.squad, status]
+              .map(x => String(x || "").toLowerCase())
+              .join(" ");
+          if (!hay.includes(term)) continue;
         }
         const squad = String(
           m?.squad ||
@@ -471,6 +513,7 @@ export default {
           name: m.name || "Unknown",
           rank: m.rank || "N/A",
           squad,
+          status,
           ops: Number.isFinite(ops) ? ops : null,
           nextRank,
           nextAt,
@@ -506,6 +549,8 @@ export default {
     discTable() {
       const rows = [];
       (this.members || []).forEach(m => {
+        const status = this.memberStatusOf(m);
+        if (this.isDischarged(status)) return; // hide discharged
         const nk = this.nameKey(m?.name);
         const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
         const api = this.disciplineRowsIndexed[nk] || { notes: '', warnings: 'N, N, N' };
@@ -515,12 +560,14 @@ export default {
           name: m?.name || 'Unknown',
           nameKey: nk,
           squad,
+          status,
           notes: api.notes || '',
           warnings: api.warnings || 'N, N, N',
           warnBits: [!!bits[0], !!bits[1], !!bits[2]],
           warnCount,
         });
       });
+      // Include rows present only in API (rare) – skip if discharged status isn't known
       (this.disciplineRows || []).forEach(r => {
         const nk = this.nameKey(r.name || r.nameKey || '');
         if (!rows.find(x => x.nameKey === nk)) {
@@ -530,6 +577,7 @@ export default {
             name: r.name || '',
             nameKey: nk,
             squad: '',
+            status: 'Unknown',
             notes: r.notes || '',
             warnings: r.warnings || 'N, N, N',
             warnBits: [!!bits[0], !!bits[1], !!bits[2]],
@@ -543,7 +591,7 @@ export default {
       const term = (this.discSearch || '').trim().toLowerCase();
       if (!term) return this.discTable;
       return this.discTable.filter(r => {
-        const hay = [r.name, r.squad, r.notes].map(x => String(x||'').toLowerCase()).join(' ');
+        const hay = [r.name, r.squad, r.notes, r.status].map(x => String(x||'').toLowerCase()).join(' ');
         return hay.includes(term);
       });
     },
@@ -567,6 +615,16 @@ export default {
       }
       const direct = Number(member?.opsAttended);
       return Number.isFinite(direct) ? direct : null;
+    },
+    statusClass(status) {
+      const s = String(status || 'Unknown').toLowerCase();
+      if (s === 'active') return 'active';
+      if (s === 'reserve') return 'reserve';
+      if (s === 'eloa') return 'eloa';
+      if (s === 'inactive') return 'inactive';
+      if (s === 'other') return 'other';
+      if (s === 'discharged') return 'discharged';
+      return 'unknown';
     },
 
     /* discipline api */
@@ -595,6 +653,7 @@ export default {
     focusMemberByNameKey(nk) {
       const m = (this.members || []).find(x => this.nameKey(x?.name) === nk);
       if (!m) return;
+      if (this.isDischarged(this.memberStatusOf(m))) return; // ignore discharged
       this.edit.memberId = m.id || null;
       this.populateEditFromMember();
       this.$nextTick(() => {
@@ -630,6 +689,7 @@ export default {
       this.discError = ""; this.discOK = false;
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
       if (!m) { this.discError = "Select a member."; return; }
+      if (this.isDischarged(this.memberStatusOf(m))) { this.discError = "Cannot edit a discharged member."; return; } // guard
 
       const payload = {
         secret: this.discSecret,
@@ -715,7 +775,8 @@ export default {
 .table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
-.gridFlags { display: grid; grid-template-columns: 1.4fr .9fr 1fr 2.7fr; align-items: center; }
+/* +1 col for Status in discipline */
+.gridFlags { display: grid; grid-template-columns: 1.4fr .9fr .9fr 1fr 2.7fr; align-items: center; }
 .tr.head { font-weight: 600; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; }
 .rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
@@ -743,6 +804,7 @@ export default {
 .warn-3 { background: rgba(255, 90, 90, 0.10); }
 .warn-3::before { background: rgba(255, 90, 90, 0.9); }
 
+/* Dots for warnings column */
 .warncells { display: flex; align-items: center; }
 .warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
 .warn-badges .dot {
@@ -755,6 +817,22 @@ export default {
 .warn-badges.w1 .dot.on { background: rgba(255, 200, 80, 0.75); }
 .warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
 .warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
+
+/* Status pill */
+.status-pill {
+  padding: .1rem .5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(150,190,230,0.35);
+  background: rgba(0,10,30,0.25);
+  font-size: .82rem;
+}
+.status-pill.st-active { border-color: rgba(120,255,170,0.7); }
+.status-pill.st-reserve { border-color: rgba(120,200,255,0.7); }
+.status-pill.st-eloa { border-color: rgba(200,180,255,0.7); }
+.status-pill.st-inactive { border-color: rgba(200,200,200,0.4); }
+.status-pill.st-other { border-color: rgba(255,190,80,0.6); }
+.status-pill.st-unknown { border-color: rgba(150,190,230,0.35); }
+.status-pill.st-discharged { border-color: rgba(255,90,90,0.9); } /* hidden anyway */
 
 /* Editor toggle pills */
 .warn-toggle { display: inline-flex; gap: .4rem; align-items: center; }
