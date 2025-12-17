@@ -262,7 +262,7 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API (locked to your values)
+      // Discipline API
       discEndpoint: "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec",
       discSecret: "PLEX",
       discLoading: false,
@@ -271,12 +271,12 @@ export default {
       discOK: false,
       disciplineRows: [],
 
-      // Status via CSV (RefData)
+      // RefData CSV (STRICT headers)
       troopStatusCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
-      csvStatusIndex: Object.create(null), // nameKey -> normalized status
-      csvTroopIndex: Object.create(null),  // nameKey -> true (from Troop List)
+      csvStatusIndex: Object.create(null), // nameKey -> status
+      csvTroopIndex: Object.create(null),  // nameKey -> present in Troop List
 
-      // Filters + editor
+      // Discipline filters + editor
       discSearch: "",
       edit: { memberId: null, notes: "", warn: [false, false, false] },
     };
@@ -319,7 +319,7 @@ export default {
       return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
     },
 
-    /* status indexes (CSV + API) */
+    /* indices from API (fallback if CSV missing) */
     statusIndexFromApi() {
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => {
@@ -341,19 +341,16 @@ export default {
         return this.statusIndex[nk] || "Unknown";
       };
     },
-    isDischarged() {
-      return (status) => String(status || "").toLowerCase() === "discharged";
-    },
+    isDischarged() { return (status) => String(status || "").toLowerCase() === "discharged"; },
     isInTroopList() {
       return (m) => {
         const nk = this.nameKey(this.cleanMemberName(m?.name));
-        // only filter if CSV was loaded (has entries)
-        const hasCsv = Object.keys(this.csvTroopIndex).length > 0;
+        const hasCsv = Object.keys(this.csvTroopIndex).length > 0; // why: only enforce after CSV loaded
         return hasCsv ? !!this.csvTroopIndex[nk] : true;
       };
     },
 
-    /* attendance map */
+    /* attendance */
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach((m) => {
@@ -371,6 +368,7 @@ export default {
       });
       return map;
     },
+
     membershipIndex() {
       const idx = Object.create(null);
       const nk = this.nameKey;
@@ -387,6 +385,7 @@ export default {
       });
       return idx;
     },
+
     squads() {
       const set = new Set();
       (this.orbat || []).forEach((sq) => {
@@ -399,15 +398,14 @@ export default {
       });
       return Array.from(set).sort((a, b) => a.localeCompare(b));
     },
+
+    /* filtered, sorted member lists */
     membersSorted() {
-      // filtered against Troop List if we have it, discharged hidden
       return [...(this.members || [])]
         .filter(m => this.isInTroopList(m) && !this.isDischarged(this.memberStatusOf(m)))
         .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
     },
-    membersSortedNonDischarged() {
-      return this.membersSorted; // already filtered
-    },
+    membersSortedNonDischarged() { return this.membersSorted; },
 
     /* window title / tiles */
     windowTitle() {
@@ -479,10 +477,9 @@ export default {
 
       const rows = [];
       for (const m of (this.members || [])) {
-        // filter by Troop List (if CSV available) and discharge
-        if (!this.isInTroopList(m)) continue;
+        if (!this.isInTroopList(m)) continue;   // NEW: require in RefData Troop List
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) continue;
+        if (this.isDischarged(status)) continue; // hide discharged
 
         if (term) {
           const hay = [m.name, m.rank, m.squad, status].map(x => String(x || "").toLowerCase()).join(" ");
@@ -549,9 +546,9 @@ export default {
     discTable() {
       const rows = [];
       (this.members || []).forEach(m => {
-        if (!this.isInTroopList(m)) return;
+        if (!this.isInTroopList(m)) return;     // require in RefData Troop List
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) return;
+        if (this.isDischarged(status)) return;  // hide discharged
 
         const nk = this.nameKey(m?.name);
         const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
@@ -569,8 +566,6 @@ export default {
           warnCount,
         });
       });
-      // API-only rows are skipped from listing if they're not in Troop List or not in members.
-
       return rows.sort((a,b) => a.name.localeCompare(b.name));
     },
     discFiltered() {
@@ -613,7 +608,7 @@ export default {
       return 'unknown';
     },
 
-    /* CSV: fetch + parse (strict headers) */
+    /* CSV: fetch + parse (STRICT: Troop List + Troop Status) */
     async fetchTroopStatusCsv() {
       try {
         const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
@@ -623,8 +618,8 @@ export default {
 
         const header = rows[0].map(h => String(h || '').trim());
         const hdrLower = header.map(h => h.toLowerCase().replace(/\s+/g,' ').trim());
-        const nameIdx = hdrLower.findIndex(h => h === 'troop list'); // strict Troop List
-        const statusIdx = hdrLower.findIndex(h => h === 'troop status'); // strict Troop Status
+        const nameIdx = hdrLower.findIndex(h => h === 'troop list');   // strict
+        const statusIdx = hdrLower.findIndex(h => h === 'troop status'); // strict
         if (nameIdx === -1 || statusIdx === -1) return;
 
         const statusMap = Object.create(null);
@@ -634,10 +629,8 @@ export default {
           const rawName = String(r[nameIdx] || '').trim();
           if (!rawName) continue;
           const nk = this.nameKey(this.cleanMemberName(rawName));
-          troopMap[nk] = true; // mark present in Troop List
-
-          const status = String(r[statusIdx] || '').trim();
-          statusMap[nk] = this.normalizeStatus(status);
+          troopMap[nk] = true;
+          statusMap[nk] = this.normalizeStatus(String(r[statusIdx] || '').trim());
         }
         this.csvStatusIndex = statusMap;
         this.csvTroopIndex = troopMap;
@@ -646,7 +639,6 @@ export default {
       }
     },
     parseCsv(text) {
-      // Minimal CSV parser
       const rows = [];
       let cur = [];
       let val = '';
@@ -685,7 +677,7 @@ export default {
           nameKey: this.nameKey(this.cleanMemberName(r.name || r.nameKey || '')),
           notes: r.notes || '',
           warnings: r.warnings || 'N, N, N',
-          status: this.normalizeStatus(r.status || r.troopStatus), // CSV overrides
+          status: this.normalizeStatus(r.status || r.troopStatus),
         }));
       } catch (e) {
         this.discError = String(e?.message || e);
@@ -710,7 +702,6 @@ export default {
         if (ta) ta.focus();
       });
     },
-
     populateEditFromMember() {
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
       if (!m) { this.edit.notes = ''; this.edit.warn = [false,false,false]; return; }
@@ -727,7 +718,6 @@ export default {
       while (out.length < 3) out.push('N');
       return out.join(', ');
     },
-
     toggleWarn(i) {
       const next = [...this.edit.warn];
       next[i] = !next[i];
