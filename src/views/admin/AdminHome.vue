@@ -158,14 +158,13 @@
 
 <script>
 import AdminLoginModal from "@/components/modals/AdminLoginModal.vue";
-import { isAdmin } from "@/utils/adminAuth"; // modal sets session; we read it
 
 export default {
   name: "AdminHome",
   components: { AdminLoginModal },
   data() {
     return {
-      isAuthed: false,
+      isAuthed: false,           // runtime only; reset on refresh
       activeKey: "promotions",
 
       // filters
@@ -199,15 +198,13 @@ export default {
     };
   },
   created() {
-    this.isAuthed = isAdmin();
-    // Why: keep state in sync if localStorage changes (other tabs)
-    if (typeof window !== "undefined") {
-      this._onStorage = () => { this.isAuthed = isAdmin(); };
-      window.addEventListener("storage", this._onStorage);
-    }
-  },
-  beforeUnmount() {
-    if (this._onStorage) window.removeEventListener("storage", this._onStorage);
+    // Always require fresh login after reload.
+    this.isAuthed = false;
+    // Defensive: clear any prior persisted flags our modal/util might set.
+    try {
+      localStorage.removeItem("admin-auth");
+      sessionStorage.removeItem("admin-authed");
+    } catch {}
   },
   computed: {
     sections() {
@@ -230,6 +227,7 @@ export default {
       ];
     },
 
+    /* squads for filter */
     squads() {
       const set = new Set();
       (this.members || []).forEach(m => { const s = (m.squad || "").trim(); if (s) set.add(s); });
@@ -237,6 +235,7 @@ export default {
       return Array.from(set).sort((a,b)=>a.localeCompare(b));
     },
 
+    /* attendance map by id/name */
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach(m => {
@@ -250,6 +249,7 @@ export default {
       return map;
     },
 
+    /* filtered + sorted promotions table rows */
     promotionsTable() {
       const term = (this.search || "").trim().toLowerCase();
       const squad = this.selectedSquad;
@@ -269,7 +269,7 @@ export default {
 
         const ladder = this.promotionLadderFor(m.rank);
         const nextRank = ladder?.nextRank ?? null;
-        const nextAt = ladder?.nextAt ?? null;
+        the const nextAt = ladder?.nextAt ?? null;
 
         const ops = this.attendanceMap[m.id];
         const opsToNext = Number.isFinite(ops) && Number.isFinite(nextAt) ? Math.max(0, nextAt - ops) : null;
@@ -305,6 +305,7 @@ export default {
       return filtered.sort(sorter);
     },
 
+    /* counters for preview + chips */
     eligibleNowCount() {
       return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
     },
@@ -312,6 +313,7 @@ export default {
       return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
     },
 
+    /* rank helpers */
     rankKey() {
       const alias = {
         PRIVATE: "PVT", PVT: "PVT",
@@ -348,11 +350,12 @@ export default {
         const aliasWO = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
         const rk = aliasWO[k] || k;
         const idx = this.rankOrderHighToLow.indexOf(rk);
-        return idx === -1 ? 999 : idx;
+        return idx === -1 ? 999 : idx; // lower = higher rank
       };
     },
     promotionLadderFor() {
       const ladders = {
+        // Enlisted
         PVT:  { nextAt: 2, nextRank: "PFC" },
         PFC:  { nextAt: 4, nextRank: "SPC" },
         SPC:  { nextAt: 6, nextRank: "LCPL" },
@@ -362,12 +365,14 @@ export default {
         SSGT: { nextAt: 14, nextRank: "GYSGT" },
         GYSGT:{ nextAt: null, nextRank: null },
 
+        // Warrant
         WO:   { nextAt: 8, nextRank: "CWO2" },
         CWO2: { nextAt: 12, nextRank: "CWO3" },
         CWO3: { nextAt: 16, nextRank: "CWO4" },
         CWO4: { nextAt: 20, nextRank: "CWO5" },
         CWO5: { nextAt: null, nextRank: null },
 
+        // Commissioned
         "2NDLT": { nextAt: null, nextRank: "1STLT" },
         "1STLT": { nextAt: null, nextRank: "CAPT" },
         CAPT:    { nextAt: null, nextRank: "MAJ" },
@@ -377,10 +382,9 @@ export default {
     },
   },
   methods: {
-    // Auth
+    // Auth (runtime only)
     onLoginSuccess() {
-      // Why: modal already verified & stored session marker
-      this.isAuthed = true;
+      this.isAuthed = true; // modal verified; no persistence
     },
     onLoginClose() {
       // keep modal open if not authed
@@ -405,15 +409,8 @@ export default {
 
 <style scoped>
 /* Shell */
-.section-container {
-  display: grid;
-  gap: .75rem;
-}
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-}
+.section-container { display: grid; gap: .75rem; }
+.section-header { display: flex; align-items: center; gap: .6rem; }
 .section-header img { width: 28px; height: 28px; }
 .section-content-container { padding: .8rem; }
 
@@ -444,11 +441,7 @@ export default {
 }
 
 /* Rail */
-.rail {
-  display: grid;
-  gap: .6rem;
-  align-content: start;
-}
+.rail { display: grid; gap: .6rem; align-content: start; }
 .rail-card {
   text-align: left;
   border: 1px solid rgba(30,144,255,0.35);
