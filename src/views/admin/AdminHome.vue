@@ -1,8 +1,8 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
-  <!-- Two independent windows as siblings (no outer Admin section) -->
+  <!-- Two independent windows as siblings -->
   <div class="windows-grid">
-    <!-- LEFT WINDOW: Admin list/login -->
+    <!-- LEFT WINDOW -->
     <section class="section-container left-window">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/protocol.svg" alt="" />
@@ -11,7 +11,7 @@
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container">
-        <!-- Inline login (no modal, no persistence) -->
+        <!-- Inline login -->
         <div v-if="!isAuthed" class="login-card">
           <label class="control">
             <span>Password</span>
@@ -51,7 +51,7 @@
       </div>
     </section>
 
-    <!-- RIGHT WINDOW: Main content (majority width) -->
+    <!-- RIGHT WINDOW (dominant) -->
     <section class="section-container right-window">
       <div class="section-header clipped-medium-backward right-header">
         <img src="/icons/protocol.svg" alt="" />
@@ -139,7 +139,7 @@
                 </div>
               </span>
               <span class="td act">
-                <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">Mark Promoted</button>
+                <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">Mark</button>
                 <button class="btn-sm ghost" @click="openMember(row)">Open</button>
               </span>
             </div>
@@ -163,19 +163,16 @@ export default {
   name: "AdminHome",
   data() {
     return {
-      // auth
       isAuthed: false,
       passwordInput: "",
       loginError: "",
       activeKey: "promotions",
 
-      // filters
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
 
-      // rank order
       rankOrderHighToLow: [
         "MAJ","CAPT","1STLT","2NDLT",
         "CWO5","CWO4","CWO3","CWO2","WO",
@@ -184,7 +181,6 @@ export default {
         "HA"
       ],
 
-      // demo data
       members: [
         { id: 1, name: "J. Frost", rank: "CPL", squad: "Alpha", opsAttended: 8 },
         { id: 2, name: "R. Hart", rank: "LCPL", squad: "Alpha", opsAttended: 3 },
@@ -196,7 +192,6 @@ export default {
     };
   },
   created() {
-    // Fresh login on reload
     try {
       localStorage.removeItem("admin-auth");
       sessionStorage.removeItem("admin-authed");
@@ -292,21 +287,14 @@ export default {
 
       return filtered.sort(sorter);
     },
-    eligibleNowCount() {
-      return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
-    },
-    imminentCount() {
-      return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
-    },
+    eligibleNowCount() { return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length; },
+    imminentCount() { return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length; },
 
-    // rank helpers
     rankKey() {
-      const alias = {
-        PRIVATE: "PVT", PFC: "PFC", SPC: "SPC", SPC2: "SPC2", SPC3: "SPC3", SPC4: "SPC4",
-        LCPL: "LCPL", CPL: "CPL", SGT: "SGT", SSGT: "SSGT", GYSGT: "GYSGT",
-        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
-        "2NDLT": "2NDLT", "1STLT": "1STLT", CAPT: "CAPT", MAJ: "MAJ", HA: "HA",
-      };
+      const alias = { PRIVATE:"PVT", PFC:"PFC", SPC:"SPC", SPC2:"SPC2", SPC3:"SPC3", SPC4:"SPC4",
+        LCPL:"LCPL", CPL:"CPL", SGT:"SGT", SSGT:"SSGT", GYSGT:"GYSGT",
+        WO:"WO", CWO2:"CWO2", CWO3:"CWO3", CWO4:"CWO4", CWO5:"CWO5",
+        "2NDLT":"2NDLT", "1STLT":"1STLT", CAPT:"CAPT", MAJ:"MAJ", HA:"HA" };
       return (rank) => {
         if (!rank) return "";
         const k = (rank || "").toUpperCase().replace(/\s+/g, "");
@@ -316,7 +304,7 @@ export default {
     rankScore() {
       return (rank) => {
         const k = this.rankKey(rank);
-        const aliasWO = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
+        const aliasWO = { WO:"WO", CWO2:"CWO2", CWO3:"CWO3", CWO4:"CWO4", CWO5:"CWO5" };
         const rk = aliasWO[k] || k;
         const idx = this.rankOrderHighToLow.indexOf(rk);
         return idx === -1 ? 999 : idx;
@@ -324,70 +312,53 @@ export default {
     },
     promotionLadderFor() {
       const ladders = {
-        PVT:  { nextAt: 2, nextRank: "PFC" },
-        PFC:  { nextAt: 4, nextRank: "SPC" },
-        SPC:  { nextAt: 6, nextRank: "LCPL" },
-        LCPL: { nextAt: 8, nextRank: "CPL" },
-        CPL:  { nextAt: 10, nextRank: "SGT" },
-        SGT:  { nextAt: 12, nextRank: "SSGT" },
-        SSGT: { nextAt: 14, nextRank: "GYSGT" },
-        GYSGT: { nextAt: null, nextRank: null },
-
-        WO:   { nextAt: 8, nextRank: "CWO2" },
-        CWO2: { nextAt: 12, nextRank: "CWO3" },
-        CWO3: { nextAt: 16, nextRank: "CWO4" },
-        CWO4: { nextAt: 20, nextRank: "CWO5" },
-        CWO5: { nextAt: null, nextRank: null },
-
-        "2NDLT": { nextAt: null, nextRank: "1STLT" },
-        "1STLT": { nextAt: null, nextRank: "CAPT" },
-        CAPT:    { nextAt: null, nextRank: "MAJ" },
-        MAJ:     { nextAt: null, nextRank: null },
+        PVT:{ nextAt:2, nextRank:"PFC" }, PFC:{ nextAt:4, nextRank:"SPC" },
+        SPC:{ nextAt:6, nextRank:"LCPL" }, LCPL:{ nextAt:8, nextRank:"CPL" },
+        CPL:{ nextAt:10, nextRank:"SGT" }, SGT:{ nextAt:12, nextRank:"SSGT" },
+        SSGT:{ nextAt:14, nextRank:"GYSGT" }, GYSGT:{ nextAt:null, nextRank:null },
+        WO:{ nextAt:8, nextRank:"CWO2" }, CWO2:{ nextAt:12, nextRank:"CWO3" },
+        CWO3:{ nextAt:16, nextRank:"CWO4" }, CWO4:{ nextAt:20, nextRank:"CWO5" },
+        CWO5:{ nextAt:null, nextRank:null },
+        "2NDLT":{ nextAt:null, nextRank:"1STLT" }, "1STLT":{ nextAt:null, nextRank:"CAPT" },
+        CAPT:{ nextAt:null, nextRank:"MAJ" }, MAJ:{ nextAt:null, nextRank:null },
       };
       return (rank) => ladders[this.rankKey(rank)] || null;
     },
   },
   methods: {
-    // Auth
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
       if (!code) { this.loginError = "Please enter the password."; return; }
-      if (code === "150th") {
-        this.isAuthed = true;
-        this.passwordInput = "";
-        this.loginError = "";
-      } else {
-        this.loginError = "Invalid password.";
-      }
+      if (code === "150th") { this.isAuthed = true; this.passwordInput = ""; this.loginError = ""; }
+      else { this.loginError = "Invalid password."; }
     },
-    logout() {
-      this.isAuthed = false;
-      this.activeKey = "promotions";
-      this.passwordInput = "";
-      this.loginError = "";
-    },
-
-    // Actions
+    logout() { this.isAuthed = false; this.activeKey = "promotions"; this.passwordInput = ""; this.loginError = ""; },
     refreshData() { console.log("Refresh requested"); },
     markPromoted(row) { alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`); },
     openMember(row) { console.log("Open member (stub):", row); },
-
-    // Utils
     isFiniteNum(v) { return Number.isFinite(v); },
   },
 };
 </script>
 
 <style scoped>
-/* Two sibling windows laid out side-by-side */
+/* Layout: LEFT 380px, RIGHT huge; big gutter; prevent overlap */
 .windows-grid {
   display: grid;
-  grid-template-columns: 340px 1fr; /* left narrow, right majority */
-  gap: .9rem;
+  grid-template-columns: 380px minmax(720px, 1fr);
+  column-gap: 2.4rem; /* increase spacing */
   align-items: start;
+  width: 100%;
 }
 
-/* Common header ribbons */
+/* Kill any absolute/fixed positioning from global theme on these windows */
+.windows-grid > .section-container {
+  position: relative !important;
+  width: 100%;
+  max-width: none;
+}
+
+/* Common ribbons */
 .rhombus-back {
   height: 6px;
   background: repeating-linear-gradient(
@@ -418,7 +389,7 @@ export default {
 .right-header h1 { margin-right: .6rem; }
 .right-actions { display: flex; gap: .4rem; }
 
-/* Left window content */
+/* Left: tiles + login */
 .rail { display: grid; gap: .6rem; align-content: start; }
 .rail-card {
   text-align: left;
@@ -439,7 +410,6 @@ export default {
 .pill.warn { border-color: rgba(255,190,80,0.7); }
 .rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-/* Login card */
 .login-card {
   border: 1px solid rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.35);
@@ -458,7 +428,7 @@ export default {
 .control input, .control select { background: rgba(0,10,30,0.3); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #cfe6ff; }
 .control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
 
-/* Right window content */
+/* Right content */
 .right-content { padding: .6rem; }
 .filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
 .filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
@@ -480,7 +450,10 @@ export default {
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* Responsive: stack windows, keep right above left */
+/* Responsive: stack windows; right stays first */
+@media (max-width: 1200px) {
+  .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
+}
 @media (max-width: 980px) {
   .windows-grid { grid-template-columns: 1fr; }
   .right-window { order: 1; }
