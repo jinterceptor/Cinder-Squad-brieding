@@ -258,6 +258,7 @@ export default {
       const rows = [];
 
       for (const m of (this.members || [])) {
+        // filters
         if (term) {
           const hit =
             (m.name || "").toLowerCase().includes(term) ||
@@ -269,7 +270,7 @@ export default {
 
         const ladder = this.promotionLadderFor(m.rank);
         const nextRank = ladder?.nextRank ?? null;
-        the const nextAt = ladder?.nextAt ?? null;
+        const nextAt = ladder?.nextAt ?? null;
 
         const ops = this.attendanceMap[m.id];
         const opsToNext = Number.isFinite(ops) && Number.isFinite(nextAt) ? Math.max(0, nextAt - ops) : null;
@@ -293,8 +294,10 @@ export default {
         });
       }
 
+      // only promotable
       const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
 
+      // sorting
       const sorter = {
         rank: (a,b) => a.rankScore - b.rankScore,
         ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
