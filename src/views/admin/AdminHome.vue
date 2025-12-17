@@ -159,12 +159,37 @@
                   </option>
                 </select>
               </label>
+
               <label class="control">
                 <span>Warnings (3 slots)</span>
-                <div class="warn-grid">
-                  <label class="warnBox"><input type="checkbox" v-model="edit.warn[0]" /> <span>1</span></label>
-                  <label class="warnBox"><input type="checkbox" v-model="edit.warn[1]" /> <span>2</span></label>
-                  <label class="warnBox"><input type="checkbox" v-model="edit.warn[2]" /> <span>3</span></label>
+                <div class="warn-toggle">
+                  <button
+                    type="button"
+                    class="warn-pill lvl1"
+                    :class="{ on: edit.warn[0] }"
+                    @click="toggleWarn(0)"
+                    :aria-pressed="!!edit.warn[0]"
+                    aria-label="Toggle warning 1"
+                    title="Warning 1"
+                  >1</button>
+                  <button
+                    type="button"
+                    class="warn-pill lvl2"
+                    :class="{ on: edit.warn[1] }"
+                    @click="toggleWarn(1)"
+                    :aria-pressed="!!edit.warn[1]"
+                    aria-label="Toggle warning 2"
+                    title="Warning 2"
+                  >2</button>
+                  <button
+                    type="button"
+                    class="warn-pill lvl3"
+                    :class="{ on: edit.warn[2] }"
+                    @click="toggleWarn(2)"
+                    :aria-pressed="!!edit.warn[2]"
+                    aria-label="Toggle warning 3"
+                    title="Warning 3"
+                  >3</button>
                 </div>
               </label>
             </div>
@@ -254,9 +279,9 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API
-      discEndpoint: "https://YOUR_WEB_APP_URL/exec", // <-- Apps Script Web App URL
-      discSecret: "CHANGE_ME",                       // <-- must match SECRET
+      // Discipline API (locked to your values)
+      discEndpoint: "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec",
+      discSecret: "PLEX",
       discLoading: false,
       discSaving: false,
       discError: "",
@@ -372,7 +397,7 @@ export default {
       ];
     },
 
-    /* promotions logic (unchanged) */
+    /* promotions logic */
     nextPromotion() {
       const alias = {
         PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
@@ -496,7 +521,6 @@ export default {
           warnCount,
         });
       });
-      // Include rows present only in API (rare)
       (this.disciplineRows || []).forEach(r => {
         const nk = this.nameKey(r.name || r.nameKey || '');
         if (!rows.find(x => x.nameKey === nk)) {
@@ -596,6 +620,12 @@ export default {
       return out.join(', ');
     },
 
+    toggleWarn(i) {
+      const next = [...this.edit.warn];
+      next[i] = !next[i];
+      this.edit.warn = next;
+    },
+
     async saveDiscipline() {
       this.discError = ""; this.discOK = false;
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
@@ -611,10 +641,9 @@ export default {
 
       this.discSaving = true;
       try {
-        // Send a "simple request" to avoid preflight (Apps Script CORS quirk)
         const res = await fetch(this.discEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // keep simple
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // simple request (no preflight)
           body: JSON.stringify(payload),
           redirect: 'follow',
         });
@@ -698,7 +727,6 @@ export default {
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
 /* ---- Discipline visuals ---- */
-/* Row tint and left bar by warning count */
 .warn-row { position: relative; }
 .warn-row::before {
   content: "";
@@ -715,7 +743,6 @@ export default {
 .warn-3 { background: rgba(255, 90, 90, 0.10); }
 .warn-3::before { background: rgba(255, 90, 90, 0.9); }
 
-/* Dots for warnings column */
 .warncells { display: flex; align-items: center; }
 .warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
 .warn-badges .dot {
@@ -725,10 +752,29 @@ export default {
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2);
 }
 .warn-badges .dot.on { border-color: rgba(150,190,230,0.6); }
-/* Color when on, intensified per count */
 .warn-badges.w1 .dot.on { background: rgba(255, 200, 80, 0.75); }
 .warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
 .warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
+
+/* Editor toggle pills */
+.warn-toggle { display: inline-flex; gap: .4rem; align-items: center; }
+.warn-pill {
+  min-width: 36px; height: 28px;
+  padding: 0 .5rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: .45rem;
+  border: 1px solid rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.35);
+  color: #e6f3ff;
+  font-weight: 600; font-size: .9rem;
+  transition: transform .05s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.warn-pill:hover { transform: translateY(-1px); }
+.warn-pill:focus { outline: none; box-shadow: 0 0 0 2px rgba(120,200,255,0.35); }
+.warn-pill.on { color: #0a0f16; border-color: transparent; }
+.warn-pill.lvl1.on { background: rgba(255, 200, 80, 0.9); }
+.warn-pill.lvl2.on { background: rgba(255, 140, 60, 0.95); }
+.warn-pill.lvl3.on { background: rgba(255, 90, 90, 0.98); }
 
 /* Header deco */
 .rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
@@ -738,12 +784,9 @@ export default {
 .right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
 .right-actions { display: flex; gap: .4rem; }
 
-/* Discipline editor tweaks */
 .flag-form { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .6rem; display: grid; gap: .6rem; background: rgba(0,10,30,0.25); }
 .flag-form .row { display: grid; grid-template-columns: 1.6fr 1fr; gap: .6rem; }
 .flag-form .row.end { grid-template-columns: 1fr auto auto; align-items: center; }
-.warn-grid { display: grid; grid-template-columns: repeat(3, auto); gap: .5rem; align-items: center; }
-.warnBox { display: inline-flex; align-items: center; gap: .35rem; }
 
 @media (max-width: 1200px) {
   .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
