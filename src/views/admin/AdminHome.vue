@@ -104,10 +104,11 @@
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table (6 columns) — fills panel and scrolls inside -->
+          <!-- Table shell: header fixed, body scrolls -->
           <div class="table-scroll">
-            <div class="table">
-              <div class="tr head">
+            <div class="table-shell">
+              <!-- Fixed header -->
+              <div class="tr head grid6">
                 <span class="th name">Name</span>
                 <span class="th rank">Rank</span>
                 <span class="th squad">Squad</span>
@@ -116,26 +117,30 @@
                 <span class="th prog">Progress</span>
               </div>
 
-              <div v-for="row in promotionsTable" :key="row.id" class="tr">
-                <span class="td name">{{ row.name }}</span>
-                <span class="td rank">{{ row.rank }}</span>
-                <span class="td squad">{{ row.squad || '—' }}</span>
-                <span class="td ops">
-                  <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
-                  <span v-else class="muted">N/A</span>
-                </span>
-                <span class="td next">
-                  <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
-                  <span v-else class="muted">—</span>
-                </span>
-                <span class="td prog">
-                  <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
-                    <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
-                  </div>
-                </span>
+              <!-- Scrollable body -->
+              <div class="rows-scroll">
+                <div v-for="row in promotionsTable" :key="row.id" class="tr grid6">
+                  <span class="td name">{{ row.name }}</span>
+                  <span class="td rank">{{ row.rank }}</span>
+                  <span class="td squad">{{ row.squad || '—' }}</span>
+                  <span class="td ops">
+                    <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                    <span v-else class="muted">N/A</span>
+                  </span>
+                  <span class="td next">
+                    <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
+                    <span v-else class="muted">—</span>
+                  </span>
+                  <span class="td prog">
+                    <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
+                      <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
+                    </div>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
+          <!-- /table shell -->
         </div>
 
         <!-- Future pages -->
@@ -163,7 +168,6 @@ export default {
       passwordInput: "",
       loginError: "",
       activeKey: "promotions",
-
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
@@ -437,75 +441,51 @@ export default {
 }
 
 /* Independent windows */
-.windows-grid > .section-container {
-  position: relative !important;
-  width: 100%;
-  max-width: none;
-  align-self: start;
-}
+.windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 
 /* Left window stays short */
 .left-window { height: auto !important; max-height: none !important; }
 
 /* Right window container */
-.right-window {
-  display: flex;
-  flex-direction: column;
-  max-height: 100vh;
-  overflow: hidden;
-}
+.right-window { display: flex; flex-direction: column; max-height: 100vh; overflow: hidden; }
 
 /* No outer scroll; keep padding minimal */
-.right-window .section-content-container.right-content {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-  padding: .6rem .6rem .2rem;
-}
+.right-window .section-content-container.right-content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: .6rem .6rem .2rem; }
 
 /* Promotions panel: fixed height so list reaches the bottom */
-.promotions-panel {
+.promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
+
+/* Table container */
+.table-scroll { flex: 1 1 auto; min-height: 0; overflow: hidden; } /* body inside handles scroll */
+.table-shell {
+  border: 1px dashed rgba(30,144,255,0.35);
+  border-radius: .35rem;
+  background: rgba(0,10,30,0.18);
   display: flex;
   flex-direction: column;
-  gap: .6rem;
-  height: 72vh;
-  max-height: 72vh;
-  min-height: 50vh;
-  overflow: hidden;
+  overflow: hidden; /* keep header edges crisp */
 }
 
-/* Table area fills remaining space and scrolls */
-.table-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
-.table { min-height: 100%; position: relative; }
+/* Shared grid for header + rows to keep columns aligned */
+.grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
 
-/* Sticky header (category titles) */
 .tr.head {
-  position: sticky;   /* keep visible while scrolling */
-  top: 0;
-  z-index: 2;         /* sit above rows */
-  background: rgba(0, 10, 30, 0.9); /* solid backdrop for readability */
-  backdrop-filter: blur(2px);       /* subtle: why → separate from rows */
-  border-bottom: 1px solid rgba(30,144,255,0.35);
-  box-shadow: 0 2px 0 rgba(30,144,255,0.15);
+  font-weight: 600;
+  background: rgba(0,10,30,0.35);
+  border-bottom: 1px dashed rgba(30,144,255,0.25);
 }
+.rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
+.rows-scroll .tr:last-child .td { border-bottom: 0; }
+
+/* Progress bar */
+.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
+.bar.done .fill { background: rgba(120,255,170,0.7); }
 
 /* Decoration */
-.rhombus-back {
-  height: 6px;
-  background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px );
-}
-.clipped-medium-backward {
-  clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
-  background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
-  padding: .4rem .75rem;
-  border: 1px solid rgba(30,144,255,.35);
-  border-left-width: 0;
-  border-radius: 0 .35rem .35rem 0;
-}
+.rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
+.clipped-medium-backward { clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%); background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5)); padding: .4rem .75rem; border: 1px solid rgba(30,144,255,.35); border-left-width: 0; border-radius: 0 .35rem .35rem 0; }
 .section-header { display: flex; align-items: center; gap: .6rem; }
 .section-header img { width: 28px; height: 28px; }
 
@@ -515,14 +495,7 @@ export default {
 
 /* Left: tiles + login */
 .rail { display: grid; gap: .6rem; align-content: start; }
-.rail-card {
-  text-align: left;
-  border: 1px solid rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.35);
-  border-radius: .5rem;
-  padding: .6rem;
-  cursor: pointer;
-}
+.rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; cursor: pointer; }
 .rail-card.active { border-color: rgba(120,255,170,0.7); }
 .rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
 .rail-icon { width: 20px; height: 20px; }
@@ -553,28 +526,13 @@ export default {
 .control input::placeholder { color: #aac7e6; }
 .control input:focus,
 .control select:focus { outline: none; border-color: rgba(30,144,255,0.6); }
-
 /* Keep dropdown menu dark too */
-.control select option {
-  background: rgba(5,20,40,0.98);
-  color: #e6f3ff;
-}
+.control select option { background: rgba(5,20,40,0.98); color: #e6f3ff; }
 
 /* Checkbox row: inline + readable label */
-.control.chk {
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-  padding-top: 1.25rem; /* aligns baseline with other fields */
-}
-.control.chk input[type="checkbox"] {
-  width: 16px; height: 16px;
-  accent-color: #78ffd0; /* why: visibility on dark UI */
-}
-.control.chk span {
-  color: #e6f3ff;
-  font-size: .9rem;
-}
+.control.chk { display: flex; align-items: center; gap: .45rem; padding-top: 1.25rem; }
+.control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
+.control.chk span { color: #e6f3ff; font-size: .9rem; }
 
 /* Filters / chips */
 .filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
@@ -583,19 +541,6 @@ export default {
 .chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; font-size: .85rem; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
 .chip.warn { border-color: rgba(255,190,80,0.7); }
-.muted { color: #9ec5e6; }
-
-/* Table (6 columns) */
-.table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
-.tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
-.tr.head { font-weight: 600; }
-.th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); color: #e6f3ff; }
-.tr:last-child .td { border-bottom: 0; }
-
-/* Progress bar */
-.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
-.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
-.bar.done .fill { background: rgba(120,255,170,0.7); }
 
 /* Responsive tuning */
 @media (max-width: 1200px) {
