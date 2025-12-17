@@ -452,23 +452,23 @@ export default {
 .right-window {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 16px); /* keep panel within viewport */
-  overflow: hidden;               /* inner content scrolls */
+  max-height: 100vh;   /* hard cap at viewport */
+  overflow: hidden;    /* inner content scrolls */
 }
 .right-window .section-content-container.right-content {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: .6rem;
+  padding: .6rem .6rem .2rem; /* trim bottom to avoid spill */
 }
 
-/* Limit promotions screen height and scroll table within */
+/* Limit promotions screen height further and scroll table within */
 .promotions-panel {
   display: flex;
   flex-direction: column;
   gap: .6rem;
-  max-height: 85vh;   /* covers majority, prevents overflow below window */
-  min-height: 50vh;   /* still feels substantial */
+  max-height: 72vh;   /* still majority, no overflow */
+  min-height: 48vh;
   overflow: hidden;   /* keep inner scrolling in table area */
 }
 .table-scroll {
@@ -562,15 +562,15 @@ export default {
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width 0.25s ease; background: rgba(120, 200, 255, 0.6); }
 .bar.done .fill { background: rgba(120, 255, 170, 0.7); }
 
-/* Responsive */
+/* Responsive tuning: slightly smaller cap on narrower screens */
 @media (max-width: 1200px) {
   .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
-  .promotions-panel { max-height: 80vh; }
+  .promotions-panel { max-height: 68vh; }
 }
 @media (max-width: 980px) {
   .windows-grid { grid-template-columns: 1fr; }
-  .right-window { order: 1; max-height: calc(100vh - 12px); }
+  .right-window { order: 1; max-height: 100vh; }
   .left-window { order: 2; }
-  .promotions-panel { max-height: 78vh; }
+  .promotions-panel { max-height: 64vh; }
 }
 </style>
