@@ -1,557 +1,564 @@
-<!-- src/views/AdminView.vue -->
+<!-- src/views/admin/AdminHome.vue -->
 <template>
-  <section id="admin" class="section-container">
-    <div style="height: 52px; overflow: hidden">
+  <div class="windows-grid">
+    <!-- LEFT WINDOW -->
+    <section class="section-container left-window">
       <div class="section-header clipped-medium-backward">
-        <img src="/icons/protocol.svg" alt="Admin Icon" />
+        <img src="/icons/protocol.svg" alt="" />
         <h1>Admin</h1>
       </div>
       <div class="rhombus-back">&nbsp;</div>
-    </div>
 
-    <div class="section-content-container">
-      <!-- Session login gate -->
-      <AdminLoginModal
-        v-if="!isAuthed"
-        :show="true"
-        @success="onLoginSuccess"
-        @close="onLoginClose"
-      />
+      <div class="section-content-container">
+        <!-- Inline login -->
+        <div v-if="!isAuthed" class="login-card">
+          <label class="control">
+            <span>Password</span>
+            <input
+              type="password"
+              v-model="passwordInput"
+              placeholder="Enter unit password"
+              @keyup.enter="tryLogin"
+            />
+          </label>
+          <button class="btn-sm" @click="tryLogin">Log in</button>
+          <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        </div>
 
-      <!-- Admin workspace -->
-      <div v-else class="admin-layout">
-        <!-- LEFT: Admin menu -->
-        <aside class="admin-menu">
-          <div
-            v-for="item in menuItems"
-            :key="item.key"
-            class="admin-menu-item"
-            :class="{ active: activeKey === item.key }"
-            @click="activeKey = item.key"
+        <!-- Tiles -->
+        <div v-else class="rail">
+          <button
+            v-for="s in sections"
+            :key="s.key"
+            class="rail-card"
+            :class="{ active: activeKey === s.key }"
+            @click="activeKey = s.key"
           >
-            <img :src="item.icon" class="menu-icon" :alt="item.title + ' icon'" />
-            <div class="menu-meta">
-              <div class="menu-title">{{ item.title }}</div>
-              <div class="menu-desc">{{ item.desc }}</div>
+            <div class="rail-card-head">
+              <img :src="s.icon" class="rail-icon" alt="" />
+              <div class="rail-title">{{ s.title }}</div>
             </div>
-          </div>
-        </aside>
+            <div v-if="s.preview && s.preview.length" class="rail-card-body">
+              <div v-for="line in s.preview" :key="line.label" class="rail-line">
+                <span class="label">{{ line.label }}</span>
+                <span class="pill" :class="line.kind">{{ line.value }}</span>
+              </div>
+              <div class="rail-foot">Click to open</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </section>
 
-        <!-- RIGHT: Content pane -->
-        <main class="admin-main">
-          <!-- PROMOTIONS OVERVIEW -->
-          <div v-if="activeKey === 'promotions'" class="panel">
-            <div class="panel-header">
-              <h2>Promotions Overview</h2>
-              <div class="panel-actions">
-                <input
-                  v-model="search"
-                  class="search-input"
-                  type="text"
-                  placeholder="Search member..."
-                  aria-label="Search member"
-                />
-                <select v-model="selectedSquad" class="control">
-                  <option value="__ALL__">All Squads</option>
+    <!-- RIGHT WINDOW -->
+    <section class="section-container right-window">
+      <div class="section-header clipped-medium-backward right-header">
+        <img src="/icons/protocol.svg" alt="" />
+        <h1>{{ windowTitle }}</h1>
+        <div class="right-actions"><!-- intentionally empty --></div>
+      </div>
+      <div class="rhombus-back">&nbsp;</div>
+
+      <div class="section-content-container right-content">
+        <div v-if="!isAuthed" class="muted">
+          Enter the admin password in the left window to continue.
+        </div>
+
+        <div v-else-if="activeKey === 'promotions'">
+          <!-- Filters -->
+          <div class="filters">
+            <div class="row">
+              <label class="control">
+                <span>Search</span>
+                <input type="text" v-model="search" placeholder="Name, rank, squad" />
+              </label>
+              <label class="control">
+                <span>Squad</span>
+                <select v-model="selectedSquad">
+                  <option value="__ALL__">All squads</option>
                   <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
                 </select>
-                <select v-model="sortKey" class="control">
-                  <option value="rank">Sort: Rank (high→low)</option>
-                  <option value="closest">Sort: Closest to Promotion</option>
-                  <option value="ops">Sort: Total Ops (high→low)</option>
-                  <option value="name">Sort: Name (A→Z)</option>
-                  <option value="squad">Sort: Squad (A→Z)</option>
+              </label>
+              <label class="control">
+                <span>Sort by</span>
+                <select v-model="sortKey">
+                  <option value="rank">Rank (high→low)</option>
+                  <option value="ops">Ops attended</option>
+                  <option value="progress">Progress to next rank</option>
+                  <option value="name">Name (A→Z)</option>
                 </select>
-                <label class="chk">
-                  <input type="checkbox" v-model="onlyPromotable" />
-                  Promotable only
-                </label>
-              </div>
-            </div>
-
-            <!-- Summary chips -->
-            <div class="chips">
-              <span class="chip">Total: {{ promotionsTable.length }}</span>
-              <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
-              <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
-            </div>
-
-            <!-- Table -->
-            <div class="table">
-              <div class="thead">
-                <span class="th name">Member</span>
-                <span class="th rank">Rank</span>
-                <span class="th squad">Squad</span>
-                <span class="th ops">Ops</span>
-                <span class="th next">Next Rank</span>
-                <span class="th to">To Next</span>
-                <span class="th prog">Progress</span>
-                <span class="th act">Actions</span>
-              </div>
-
-              <div v-if="!promotionsTable.length" class="empty">
-                No members match your filters.
-              </div>
-
-              <div
-                v-for="row in promotionsTable"
-                :key="row.id || row.name"
-                class="tr"
-                :class="{
-                  eligible: row.opsToNext === 0 && row.nextRank,
-                  imminent: row.opsToNext > 0 && row.opsToNext <= 3
-                }"
-              >
-                <span class="td name" :title="row.name">{{ row.name }}</span>
-                <span class="td rank">{{ row.rank || 'N/A' }}</span>
-                <span class="td squad">{{ row.squad || '—' }}</span>
-                <span class="td ops">{{ isFiniteNum(row.ops) ? row.ops : '—' }}</span>
-                <span class="td next">{{ row.nextRank || '—' }}</span>
-                <span class="td to">
-                  <template v-if="row.nextAt !== null">
-                    <span v-if="isFiniteNum(row.opsToNext)">{{ row.opsToNext }}</span>
-                    <span v-else>—</span>
-                  </template>
-                  <template v-else>—</template>
-                </span>
-                <span class="td prog">
-                  <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
-                    <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
-                  </div>
-                </span>
-                <span class="td act">
-                  <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">
-                    Mark Promoted
-                  </button>
-                  <button class="btn-sm ghost" @click="openMember(row)">Open</button>
-                </span>
-              </div>
+              </label>
+              <label class="control chk">
+                <input type="checkbox" v-model="onlyPromotable" />
+                Promotable only
+              </label>
             </div>
           </div>
 
-          <!-- Mission Content (placeholder) -->
-          <div v-else-if="activeKey === 'missioncms'" class="panel">
-            <div class="panel-header">
-              <h2>Mission Content</h2>
-            </div>
-            <p class="muted">Coming soon: edit Current Assignment & Mission Log entries.</p>
+          <!-- Summary chips -->
+          <div class="chips">
+            <span class="chip">Total: {{ promotionsTable.length }}</span>
+            <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
+            <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Roster Tools (placeholder) -->
-          <div v-else-if="activeKey === 'roster'" class="panel">
-            <div class="panel-header">
-              <h2>Roster Tools</h2>
+          <!-- Table -->
+          <div class="table">
+            <div class="tr head">
+              <span class="th name">Name</span>
+              <span class="th rank">Rank</span>
+              <span class="th squad">Squad</span>
+              <span class="th ops">Ops</span>
+              <span class="th next">Next Rank</span>
+              <span class="th prog">Progress</span>
+              <span class="th act">Actions</span>
             </div>
-            <p class="muted">Coming soon: import/export roster, attendance checks.</p>
+
+            <div v-for="row in promotionsTable" :key="row.id" class="tr">
+              <span class="td name">{{ row.name }}</span>
+              <span class="td rank">{{ row.rank }}</span>
+              <span class="td squad">{{ row.squad || '—' }}</span>
+              <span class="td ops">
+                <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                <span v-else class="muted">N/A</span>
+              </span>
+              <span class="td next">
+                <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
+                <span v-else class="muted">—</span>
+              </span>
+              <span class="td prog">
+                <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
+                  <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
+                </div>
+              </span>
+              <span class="td act">
+                <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">Mark</button>
+                <button class="btn-sm ghost" @click="openMember(row)">Open</button>
+              </span>
+            </div>
           </div>
-        </main>
+        </div>
+
+        <div v-else-if="activeKey === 'audits'">
+          <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
+        </div>
+
+        <div v-else class="muted">Select a tool from the left.</div>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 </template>
 
 <script>
-import AdminLoginModal from "@/components/modals/AdminLoginModal.vue";
-
-const SESSION_KEY = "adminAuthed";
-
 export default {
-  name: "AdminView",
-  components: { AdminLoginModal },
+  name: "AdminHome",
   props: {
+    /* Match PilotsView feed */
     members: { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] },
     orbat: { type: Array, default: () => [] },
+    attendance: { type: Array, default: () => [] },
   },
   data() {
     return {
+      // auth
       isAuthed: false,
+      passwordInput: "",
+      loginError: "",
       activeKey: "promotions",
+
+      // filters
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
-      menuItems: [
-        {
-          key: "promotions",
-          title: "Promotions Overview",
-          desc: "Full unit list, progress to next rank",
-          icon: "/icons/protocol.svg",
-        },
-        {
-          key: "missioncms",
-          title: "Mission Content",
-          desc: "Edit Current Assignment & Mission Log",
-          icon: "/icons/campaign.svg",
-        },
-        {
-          key: "roster",
-          title: "Roster Tools",
-          desc: "Import/Export roster and attendance",
-          icon: "/icons/license.svg",
-        },
+
+      // fallback demo (used only if props empty)
+      fallbackMembers: [
+        { id: 1, name: "J. Frost", rank: "CPL", squad: "Alpha", opsAttended: 8 },
+        { id: 2, name: "R. Hart", rank: "LCPL", squad: "Alpha", opsAttended: 3 },
+        { id: 3, name: "M. Ruiz", rank: "SPC3", squad: "Bravo", opsAttended: 5 },
+        { id: 4, name: "T. Wells", rank: "PFC", squad: "Bravo", opsAttended: 2 },
+        { id: 5, name: "S. King", rank: "SGT", squad: "HQ", opsAttended: 12 },
       ],
-      rankOrderHighToLow: [
-        "MAJ","CAPT","1STLT","2NDLT",
-        "CWO5","CWO4","CWO3","CWO2","WO",
-        "GYSGT","SSGT","SGT","CPL","LCPL",
-        "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
-        "HMC","HM1","HM2","HM3","HN","HA","HR",
-      ],
+      fallbackOrbat: [{ squad: "HQ" }, { squad: "Alpha" }, { squad: "Bravo" }],
     };
   },
   created() {
     try {
-      this.isAuthed = window.sessionStorage.getItem(SESSION_KEY) === "true";
-    } catch {
-      this.isAuthed = false;
-    }
+      localStorage.removeItem("admin-auth");
+      sessionStorage.removeItem("admin-authed");
+    } catch {}
   },
   computed: {
-    squads() {
-      const set = new Set();
-      (this.members || []).forEach(m => {
-        const s = (m.squad || "").trim();
-        if (s) set.add(s);
+    /* ---------- NORMALIZATION LAYER ---------- */
+    useMembers() {
+      const rows = (this.members?.length ? this.members : this.fallbackMembers) || [];
+      return rows.map((r, idx) => {
+        const get = (obj, keys) => {
+          for (const k of keys) {
+            if (obj && obj[k] != null && String(obj[k]).trim() !== "") return obj[k];
+            // case-insensitive lookup
+            const hit = Object.keys(obj || {}).find(x => x.toLowerCase() === k.toLowerCase());
+            if (hit && obj[hit] != null && String(obj[hit]).trim() !== "") return obj[hit];
+          }
+          return undefined;
+        };
+        const id = Number(get(r, ["id", "member_id", "mid", "uid"])) || undefined;
+        const name = String(get(r, ["name", "callsign", "member", "pilot", "displayName"]) || "").trim();
+        const rank = String(get(r, ["rank", "grade", "paygrade"]) || "").trim();
+        // squad can be stored under many aliases
+        const squad =
+          String(
+            get(r, ["squad", "section", "team", "flight", "unit", "squadron", "element"]) || ""
+          ).trim();
+        // ops from row, else from embedded attendance column names
+        const ops = Number(
+          get(r, ["ops", "opsAttended", "operations", "attendance", "ops_attended"])
+        );
+        return {
+          id: Number.isFinite(id) ? id : idx + 1,
+          name,
+          rank,
+          squad,
+          opsAttended: Number.isFinite(ops) ? ops : undefined,
+          __raw: r,
+        };
       });
-      // also pick up from orbat
-      (this.orbat || []).forEach(sq => {
-        const s = (sq.squad || "").trim();
-        if (s) set.add(s);
-      });
-      return Array.from(set).sort((a,b)=>a.localeCompare(b));
+    },
+    useOrbat() {
+      const src = (this.orbat?.length ? this.orbat : this.fallbackOrbat) || [];
+      // Flatten/collect any likely squad labels from arbitrary ORBAT shapes
+      const out = [];
+      const scan = (node) => {
+        if (!node || typeof node !== "object") return;
+        const keys = Object.keys(node);
+        const read = (k) => {
+          const hit = keys.find(x => x.toLowerCase() === k.toLowerCase());
+          return hit ? node[hit] : undefined;
+        };
+        const maybe = read("squad") || read("section") || read("team") || read("flight") || read("unit") || read("name");
+        if (typeof maybe === "string" && maybe.trim()) out.push({ squad: maybe.trim() });
+        // dive children arrays
+        for (const v of Object.values(node)) {
+          if (Array.isArray(v)) v.forEach(scan);
+          else if (v && typeof v === "object") scan(v);
+        }
+      };
+      if (Array.isArray(src)) src.forEach(scan);
+      return out.length ? out : src;
+    },
+    nameKeyFn() {
+      return (nm) =>
+        String(nm || "")
+          .replace(/["'.]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toUpperCase();
     },
     attendanceMap() {
       const map = Object.create(null);
-      (this.members || []).forEach(m => {
-        const ops = Number(m.opsAttended);
-        if (Number.isFinite(ops)) {
-          if (m.id) map[`ID:${m.id}`] = ops;
-          if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
-        }
-      });
-      (this.attendance || []).forEach(row => {
-        const ops = Number(row?.ops ?? row?.attended ?? row?.value);
+      const nk = this.nameKeyFn;
+      // From attendance prop
+      (this.attendance || []).forEach((row) => {
+        const ops = Number(row?.ops ?? row?.attended ?? row?.value ?? row?.Ops);
         if (!Number.isFinite(ops)) return;
-        if (row?.id) map[`ID:${row.id}`] = ops;
-        if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
+        if (row?.id != null) map[`ID:${row.id}`] = ops;
+        if (row?.name) map[`NM:${nk(row.name)}`] = ops;
+      });
+      // From members embedded ops
+      (this.useMembers || []).forEach((m) => {
+        const ops = Number(m?.opsAttended);
+        if (!Number.isFinite(ops)) return;
+        if (m?.id != null) map[`ID:${m.id}`] = ops;
+        if (m?.name) map[`NM:${nk(m.name)}`] = ops;
       });
       return map;
     },
-    promotionsRows() {
+    squads() {
+      const set = new Set();
+      (this.useMembers || []).forEach((m) => {
+        const s = String(m.squad || "").trim();
+        if (s) set.add(s);
+      });
+      (this.useOrbat || []).forEach((sq) => {
+        const s = String(sq?.squad || sq?.section || sq?.team || sq?.flight || sq?.unit || sq?.name || "").trim();
+        if (s) set.add(s);
+      });
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    },
+
+    /* ---------- UI / COMPUTATIONS ---------- */
+    windowTitle() {
+      if (!this.isAuthed) return "Locked";
+      return { promotions: "Promotions Overview", audits: "Roster Audits" }[this.activeKey] || "Admin Tools";
+    },
+    sections() {
+      return [
+        {
+          key: "promotions",
+          title: "Promotions Overview",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
+            { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
+          ],
+        },
+        { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
+      ];
+    },
+    promotionsTable() {
+      const term = (this.search || "").trim().toLowerCase();
+      const squad = this.selectedSquad;
+      const onlyProm = !!this.onlyPromotable;
+
       const rows = [];
-      (this.members || []).forEach((m) => {
-        const ops = this.getOps(m);
-        const ladder = this.promotionLadderFor(m?.rank);
+      for (const m of (this.useMembers || [])) {
+        if (term) {
+          const hit =
+            (m.name || "").toLowerCase().includes(term) ||
+            (m.rank || "").toLowerCase().includes(term) ||
+            (m.squad || "").toLowerCase().includes(term);
+          if (!hit) continue;
+        }
+        if (squad && squad !== "__ALL__" && (m.squad || "") !== squad) continue;
+
+        const ladder = this.promotionLadderFor(m.rank);
         const nextRank = ladder?.nextRank ?? null;
-        const nextAt = Number.isFinite(ladder?.nextAt) ? ladder.nextAt : null;
-        const opsToNext = (nextAt !== null && Number.isFinite(ops)) ? Math.max(0, nextAt - ops) : null;
+        const nextAt = ladder?.nextAt ?? null;
+
+        const ops = this.getOps(m);
+        const opsToNext = Number.isFinite(ops) && Number.isFinite(nextAt) ? Math.max(0, nextAt - ops) : null;
+
         let progress = 0;
         if (nextAt !== null && Number.isFinite(ops)) {
           progress = Math.min(100, Math.max(0, Math.round((ops / nextAt) * 100)));
         }
+
         rows.push({
           id: m.id,
           name: m.name || "Unknown",
-          rank: m.rank || "N/A",
+          rank: this.rankKey(m?.rank) || "N/A",
           rankScore: this.rankScore(m?.rank),
           squad: m.squad || "",
           ops: Number.isFinite(ops) ? ops : null,
           nextRank,
           nextAt,
+          progress,
           opsToNext,
-          progress: Number.isFinite(progress) ? progress : 0,
         });
-      });
-      return rows;
-    },
-    promotionsTable() {
-      // filter
-      const q = this.search.trim().toLowerCase();
-      const rows = this.promotionsRows.filter(r => {
-        if (this.onlyPromotable && (r.nextAt === null)) return false;
-        if (this.selectedSquad !== "__ALL__" && String(r.squad || "") !== this.selectedSquad) return false;
-        if (!q) return true;
-        return (
-          String(r.name).toLowerCase().includes(q) ||
-          String(r.rank).toLowerCase().includes(q) ||
-          String(r.squad).toLowerCase().includes(q) ||
-          String(r.nextRank || "").toLowerCase().includes(q)
-        );
-      });
+      }
 
-      // sort
-      const byRank = (a, b) => a.rankScore - b.rankScore || a.name.localeCompare(b.name);
-      const byClosest = (a, b) => {
-        const ax = (a.opsToNext === null ? 1e9 : a.opsToNext);
-        const bx = (b.opsToNext === null ? 1e9 : b.opsToNext);
-        if (ax !== bx) return ax - bx;
-        // tie-break: higher rank first
-        if (a.rankScore !== b.rankScore) return a.rankScore - b.rankScore;
-        // then higher ops
-        if ((b.ops ?? -1) !== (a.ops ?? -1)) return (b.ops ?? -1) - (a.ops ?? -1);
-        return a.name.localeCompare(b.name);
-      };
-      const byOps = (a, b) => (b.ops ?? -1) - (a.ops ?? -1) || byRank(a, b);
-      const byName = (a, b) => a.name.localeCompare(b.name);
-      const bySquad = (a, b) => String(a.squad).localeCompare(String(b.squad)) || byRank(a, b);
+      const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
 
       const sorter = {
-        rank: byRank,
-        closest: byClosest,
-        ops: byOps,
-        name: byName,
-        squad: bySquad,
-      }[this.sortKey] || byRank;
+        rank: (a,b) => a.rankScore - b.rankScore,
+        ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
+        progress: (a,b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
+        name: (a,b) => a.name.localeCompare(b.name),
+      }[this.sortKey] || ((a,b)=>0);
 
-      return rows.slice().sort(sorter);
+      return filtered.sort(sorter);
     },
     eligibleNowCount() {
-      return this.promotionsTable.filter(r => r.opsToNext === 0 && r.nextRank).length;
+      return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
     },
     imminentCount() {
-      return this.promotionsTable.filter(r => r.opsToNext > 0 && r.opsToNext <= 3).length;
+      return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
+    },
+
+    // rank helpers
+    rankKey() {
+      const alias = {
+        PRIVATE: "PVT", PVT: "PVT", RCT: "RCT",
+        PFC:"PFC", SPC:"SPC", SPC2:"SPC2", SPC3:"SPC3", SPC4:"SPC4",
+        LCPL:"LCPL", LANCECORPORAL:"LCPL",
+        CPL:"CPL", CORPORAL:"CPL",
+        SGT:"SGT", SERGEANT:"SGT",
+        SSGT:"SSGT", STAFFSERGEANT:"SSGT",
+        GYSGT:"GYSGT", GUNNYSERGEANT:"GYSGT",
+        WO:"WO", CWO2:"CWO2", CWO3:"CWO3", CWO4:"CWO4", CWO5:"CWO5",
+        "2NDLT":"2NDLT", SECONDLIEUTENANT:"2NDLT",
+        "1STLT":"1STLT", FIRSTLIEUTENANT:"1STLT",
+        CAPT:"CAPT", CAPTAIN:"CAPT",
+        MAJ:"MAJ",
+        HA:"HA", HN:"HN", HM3:"HM3", HM2:"HM2", HM1:"HM1", HMC:"HMC",
+      };
+      return (rank) => {
+        if (!rank) return "";
+        const k = String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
+        return alias[k] || k;
+      };
+    },
+    rankScore() {
+      return (rank) => {
+        const rk = this.rankKey(rank);
+        const order = [
+          "MAJ","CAPT","1STLT","2NDLT",
+          "CWO5","CWO4","CWO3","CWO2","WO",
+          "GYSGT","SSGT","SGT","CPL","LCPL",
+          "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
+          "HMC","HM1","HM2","HM3","HN","HA"
+        ];
+        const idx = order.indexOf(rk);
+        return idx === -1 ? 999 : idx;
+      };
+    },
+    promotionLadderFor() {
+      const ladders = {
+        PVT:{ nextAt: 2, nextRank:"PFC" },
+        PFC:{ nextAt: 4, nextRank:"SPC" },
+        SPC:{ nextAt: 6, nextRank:"SPC2" },
+        SPC2:{ nextAt: 8, nextRank:"SPC3" },
+        SPC3:{ nextAt: 10, nextRank:"SPC4" },
+        SPC4:{ nextAt: 12, nextRank:"LCPL" },
+        LCPL:{ nextAt: 14, nextRank:"CPL" },
+        CPL:{ nextAt: 16, nextRank:"SGT" },
+        SGT:{ nextAt: 18, nextRank:"SSGT" },
+        SSGT:{ nextAt: 20, nextRank:"GYSGT" },
+        GYSGT:{ nextAt: null, nextRank: null },
+
+        WO:{ nextAt: 8, nextRank:"CWO2" },
+        CWO2:{ nextAt: 12, nextRank:"CWO3" },
+        CWO3:{ nextAt: 16, nextRank:"CWO4" },
+        CWO4:{ nextAt: 20, nextRank:"CWO5" },
+        CWO5:{ nextAt: null, nextRank: null },
+
+        "2NDLT":{ nextAt: null, nextRank: "1STLT" },
+        "1STLT":{ nextAt: null, nextRank: "CAPT" },
+        CAPT:{ nextAt: null, nextRank: "MAJ" },
+        MAJ:{ nextAt: null, nextRank: null },
+
+        HA:{ nextAt: 8, nextRank:"HN" },
+        HN:{ nextAt: 12, nextRank:"HM3" },
+        HM3:{ nextAt: 16, nextRank:"HM2" },
+        HM2:{ nextAt: 20, nextRank:"HM1" },
+        HM1:{ nextAt: null, nextRank:"HMC" },
+        HMC:{ nextAt: null, nextRank: null },
+      };
+      return (rank) => ladders[this.rankKey(rank)] || null;
     },
   },
   methods: {
-    onLoginSuccess() {
-      try { window.sessionStorage.setItem(SESSION_KEY, "true"); } catch {}
-      this.isAuthed = true;
-    },
-    onLoginClose() {
-      if (!this.isAuthed) this.$router.replace("/status");
+    /* Auth */
+    tryLogin() {
+      const code = String(this.passwordInput || "").trim().toLowerCase();
+      if (!code) { this.loginError = "Please enter the password."; return; }
+      if (code === "150th") { this.isAuthed = true; this.passwordInput = ""; this.loginError = ""; }
+      else { this.loginError = "Invalid password."; }
     },
 
-    /* normalize + lookups */
-    nameKey(name) {
-      return String(name || "")
-        .replace(/["'.]/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toUpperCase();
-    },
+    /* Attendance read: prefer ID, then Name */
     getOps(member) {
-      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
+      const nk = this.nameKeyFn;
+      if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined)
         return this.attendanceMap[`ID:${member.id}`];
-      }
-      if (member?.name) {
-        const nk = this.nameKey(member.name);
-        if (this.attendanceMap[`NM:${nk}`] !== undefined) {
-          return this.attendanceMap[`NM:${nk}`];
-        }
-      }
+      if (member?.name && this.attendanceMap[`NM:${nk(member.name)}`] !== undefined)
+        return this.attendanceMap[`NM:${nk(member.name)}`];
       const direct = Number(member?.opsAttended);
-      return Number.isFinite(direct) ? direct : NaN;
-    },
-    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
-    rankScore(rank) {
-      const k = this.rankKey(rank);
-      const alias = {
-        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
-        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
-        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
-        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
-        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT", MAJOR: "MAJ",
-        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3",
-        HOSPITALCORPSMANSECONDCLASS: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1",
-        CHIEFHOSPITALCORPSMAN: "HMC",
-        WARRANTOFFICER: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
-      };
-      const rk = alias[k] || k;
-      const idx = this.rankOrderHighToLow.indexOf(rk);
-      return idx === -1 ? 999 : idx; // lower is higher rank
-    },
-    promotionLadderFor(rank) {
-      const r = this.rankKey(rank);
-      const alias = {
-        PRIVATE: "PVT", PVT: "PVT",
-        PRIVATEFIRSTCLASS: "PFC", PFC: "PFC",
-        SPECIALIST: "SPC", SPC: "SPC",
-        SPECIALIST2: "SPC2", SPC2: "SPC2",
-        SPECIALIST3: "SPC3", SPC3: "SPC3",
-        SPECIALIST4: "SPC4", SPC4: "SPC4",
-        HOSPITALMANAPPRENTICE: "HA", HA: "HA",
-        HOSPITALMAN: "HN", HN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3", HM3: "HM3",
-        HOSPITALCORPSMANSECONDCLASS: "HM2", HM2: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1", HM1: "HM1",
-        CHIEFHOSPITALCORPSMAN: "HMC", HMC: "HMC",
-        WARRANTOFFICER: "WO", WO: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CWO2: "CWO2",
-        CHIEFWARRANTOFFICER3: "CWO3", CWO3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CWO4: "CWO4",
-        CHIEFWARRANTOFFICER5: "CWO5", CWO5: "CWO5",
-        CAPTAIN: "CAPT", MAJOR: "MAJ"
-      };
-      const key = alias[r] || r;
-      const ladders = {
-        // Enlisted
-        PVT:  { nextAt: 2,  nextRank: "PFC" },
-        PFC:  { nextAt: 10, nextRank: "SPC" },
-        SPC:  { nextAt: 20, nextRank: "SPC2" },
-        SPC2: { nextAt: 30, nextRank: "SPC3" },
-        SPC3: { nextAt: 40, nextRank: "SPC4" },
-        SPC4: { nextAt: null, nextRank: null },
-
-        // Medical
-        HA:  { nextAt: 2,  nextRank: "HN" },
-        HN:  { nextAt: 10, nextRank: "HM3" },
-        HM3: { nextAt: 20, nextRank: "HM2" },
-        HM2: { nextAt: 30, nextRank: "HM1" },
-        HM1: { nextAt: null, nextRank: "HMC" }, // misc/role-based
-        HMC: { nextAt: null, nextRank: null },
-
-        // Warrant
-        WO:   { nextAt: null, nextRank: "CWO2" }, // typically role/flight-time based
-        CWO2: { nextAt: 10,  nextRank: "CWO3" },
-        CWO3: { nextAt: 20,  nextRank: "CWO4" },
-        CWO4: { nextAt: 30,  nextRank: "CWO5" },
-        CWO5: { nextAt: null, nextRank: null },
-
-        // Commissioned (static here; usually role-based)
-        "2NDLT": { nextAt: null, nextRank: "1STLT" },
-        "1STLT": { nextAt: null, nextRank: "CAPT" },
-        CAPT:    { nextAt: null, nextRank: "MAJ" },
-        MAJ:     { nextAt: null, nextRank: null },
-      };
-      return ladders[key] || null;
+      return Number.isFinite(direct) ? direct : null;
     },
 
-    /* actions */
-    markPromoted(row) {
-      alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub — wire to your data store)`);
-    },
-    openMember(row) {
-      // Deep-link idea (optional): /pilots?squad=<squad>#member-<id>
-      console.log("Open member (stub):", row);
-    },
+    /* Actions (stubs) */
+    markPromoted(row) { alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`); },
+    openMember(row) { console.log("Open member (stub):", row); },
 
-    /* utils */
+    /* Utils */
     isFiniteNum(v) { return Number.isFinite(v); },
   },
 };
 </script>
 
 <style scoped>
-.section-container {
-  padding: 2.5rem 3rem;
-  color: #dce6f1;
-  font-family: "Consolas","Courier New",monospace;
-}
-
-/* Layout */
-.admin-layout {
+/* Layout: LEFT 380px, RIGHT wide; prevent overlap */
+.windows-grid {
   display: grid;
-  grid-template-columns: 290px 1fr;
-  gap: 1rem;
-  margin-top: .75rem;
+  grid-template-columns: 380px minmax(1080px, 1fr);
+  column-gap: 2.4rem;
+  align-items: start;
+  width: 100%;
 }
+.windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; }
 
-/* Left menu */
-.admin-menu { display: grid; gap: .55rem; }
-.admin-menu-item {
-  display: grid;
-  grid-template-columns: 40px 1fr;
-  gap: .6rem;
-  align-items: center;
-  padding: .6rem .7rem;
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,0,0,0.15);
-  border-radius: .35rem;
+/* Ribbons */
+.rhombus-back {
+  height: 6px;
+  background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px );
+}
+.clipped-medium-backward {
+  clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
+  background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
+  padding: .4rem .75rem;
+  border: 1px solid rgba(30,144,255,.35);
+  border-left-width: 0;
+  border-radius: 0 .35rem .35rem 0;
+}
+.section-header { display: flex; align-items: center; gap: .6rem; }
+.section-header img { width: 28px; height: 28px; }
+
+.right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
+.right-actions { display: flex; gap: .4rem; }
+
+/* Left window */
+.rail { display: grid; gap: .6rem; align-content: start; }
+.rail-card {
+  text-align: left;
+  border: 1px solid rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.35);
+  border-radius: .5rem;
+  padding: .6rem;
   cursor: pointer;
-  transition: border-color .15s ease, transform .15s ease;
 }
-.admin-menu-item:hover { border-color: rgba(126,201,255,0.85); transform: translateY(-1px); }
-.admin-menu-item.active { border-color: rgba(126,201,255,0.95); box-shadow: 0 0 8px rgba(126,201,255,0.15) inset; }
-.menu-icon { width: 36px; height: 36px; opacity: .9; }
-.menu-meta { display: grid; gap: .15rem; }
-.menu-title { color: #e0f0ff; font-weight: 700; letter-spacing: .04em; }
-.menu-desc { color: #9ec5e6; font-size: .9rem; }
+.rail-card.active { border-color: rgba(120,255,170,0.7); }
+.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.rail-icon { width: 20px; height: 20px; }
+.rail-title { font-weight: 600; }
+.rail-card-body { display: grid; gap: .25rem; }
+.rail-line { display: flex; align-items: center; justify-content: space-between; }
+.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,.45); border-radius: 999px; padding: .05rem .5rem; }
+.pill.ok { border-color: rgba(120,255,170,0.7); }
+.pill.warn { border-color: rgba(255,190,80,0.7); }
+.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-/* Right panel shell */
-.admin-main {
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,0,0,0.12);
-  border-radius: .4rem;
-  padding: .8rem .9rem;
-}
-.panel-header {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  justify-content: space-between;
-  margin-bottom: .6rem;
-}
-.panel-header h2 { margin: 0; color: #e0f0ff; letter-spacing: .04em; }
-.panel-actions { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
-.search-input,
-.control {
-  background: #040a14;
-  border: 1px solid rgba(30,144,255,.45);
-  color: #dce6f1;
-  border-radius: .3rem;
-  padding: .35rem .45rem;
-  min-width: 180px;
-}
-.chk { display: inline-flex; align-items: center; gap: .35rem; color: #cfe6ff; }
+.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
+.login-error { color: #ffb080; margin: .2rem 0 0; }
 
-/* Summary chips */
-.chips { display: flex; gap: .45rem; margin-bottom: .5rem; flex-wrap: wrap; }
-.chip {
-  padding: .25rem .5rem;
-  border-radius: 999px;
-  background: rgba(0,10,30,0.25);
-  border: 1px solid rgba(30,144,255,.45);
-  color: #cfe6ff;
-  font-size: .85rem;
-}
+/* Buttons & controls */
+.btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
+.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
+.control { display: grid; gap: .2rem; }
+.control span { font-size: .85rem; color: #9ec5e6; }
+.control input, .control select { background: rgba(0,10,30,0.3); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #cfe6ff; }
+.control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
+
+/* Right content */
+.right-content { padding: .6rem; }
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
+.chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,.45); color: #cfe6ff; font-size: .85rem; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
 .chip.warn { border-color: rgba(255,190,80,0.7); }
 
 /* Table */
 .table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
-.thead, .tr {
-  display: grid;
-  grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr .6fr 1.4fr .9fr;
-  gap: .35rem;
-  align-items: center;
-}
-.thead { background: rgba(0,10,30,0.45); padding: .5rem .6rem; border-bottom: 1px dashed rgba(30,144,255,0.25); }
-.th { font-weight: 700; color: #e0f0ff; letter-spacing: .03em; }
-.tr { padding: .45rem .6rem; background: rgba(0,10,30,0.25); border-bottom: 1px dashed rgba(30,144,255,0.15); }
-.tr:last-child { border-bottom: none; }
-
-.tr.eligible { box-shadow: inset 0 0 0 1px rgba(120,255,170,0.25); }
-.tr.imminent { box-shadow: inset 0 0 0 1px rgba(255,190,80,0.2); }
-
-.td { color: #dce6f1; }
-.td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.td.rank, .td.squad { color: #9ec5e6; }
-.td.ops { color: #a3e7ff; }
-.td.next { color: #7fffd4; font-weight: 700; }
-.td.to { color: #cfdcea; }
-
-/* progress bar */
-.bar { height: 10px; background: rgba(30,144,255,0.18); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; overflow: hidden; }
-.bar .fill { height: 100%; background: linear-gradient(90deg, rgba(126,201,255,0.95), rgba(126,201,255,0.55)); }
-.bar.done .fill { background: linear-gradient(90deg, rgba(120,255,170,0.95), rgba(120,255,170,0.65)); }
-
-.btn-sm {
-  background: rgba(126,201,255,0.2);
-  border: 1px solid rgba(126,201,255,0.6);
-  color: #dce6f1;
-  border-radius: .3rem;
-  padding: .2rem .45rem;
-  cursor: pointer;
-}
-.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
-
-.empty { padding: .7rem .8rem; color: #9ec5e6; }
-
-/* Misc */
+.tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr .9fr; align-items: center; }
+.tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
+.th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); }
+.tr:last-child .td { border-bottom: 0; }
 .muted { color: #9ec5e6; }
+
+/* Progress bar */
+.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
+.bar.done .fill { background: rgba(120,255,170,0.7); }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
+}
+@media (max-width: 980px) {
+  .windows-grid { grid-template-columns: 1fr; }
+  .right-window { order: 1; }
+  .left-window { order: 2; }
+}
 </style>
