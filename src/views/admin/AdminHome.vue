@@ -1,7 +1,7 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
   <section id="admin" class="section-container">
-    <!-- Header -->
+    <!-- Top banner -->
     <div style="height: 52px; overflow: hidden">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/protocol.svg" alt="Admin Icon" />
@@ -11,184 +11,191 @@
     </div>
 
     <div class="section-content-container">
-      <div class="admin-frame">
-        <!-- LEFT: rail with login top-left -->
-        <aside class="rail">
-          <!-- Login card -->
-          <div v-if="!isAuthed" class="login-card">
-            <div class="login-head">
-              <img src="/icons/protocol.svg" alt="" class="rail-icon" />
-              <div class="rail-title">Admin Access</div>
-            </div>
-            <label class="control">
-              <span>Password</span>
-              <input
-                type="password"
-                v-model="passwordInput"
-                placeholder="Enter unit password"
-                @keyup.enter="tryLogin"
-              />
-            </label>
-            <button class="btn-sm" @click="tryLogin">Log in</button>
-            <p v-if="loginError" class="login-error">{{ loginError }}</p>
-          </div>
-
-          <!-- Tiles -->
-          <template v-else>
-            <button
-              v-for="s in sections"
-              :key="s.key"
-              class="rail-card"
-              :class="{ active: activeKey === s.key }"
-              @click="activeKey = s.key"
-            >
-              <div class="rail-card-head">
-                <img :src="s.icon" class="rail-icon" alt="" />
-                <div class="rail-title">{{ s.title }}</div>
-              </div>
-
-              <div v-if="s.preview && s.preview.length" class="rail-card-body">
-                <div v-for="line in s.preview" :key="line.label" class="rail-line">
-                  <span class="label">{{ line.label }}</span>
-                  <span class="pill" :class="line.kind">{{ line.value }}</span>
-                </div>
-                <div class="rail-foot">Click to open</div>
-              </div>
-            </button>
-          </template>
-        </aside>
-
-        <!-- RIGHT: single “window” -->
-        <main class="desktop">
-          <div class="window">
-            <div class="window-titlebar">
-              <div class="window-title">
-                <span class="dot"></span>
-                {{ windowTitle }}
-              </div>
-              <div class="window-actions">
-                <button
-                  v-if="isAuthed && activeKey === 'promotions'"
-                  class="btn-sm"
-                  @click="refreshData"
-                >
-                  Refresh
-                </button>
-                <button
-                  v-if="isAuthed"
-                  class="btn-sm ghost"
-                  @click="logout"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-
-            <div class="window-content">
-              <!-- Locked -->
-              <div v-if="!isAuthed">
-                <p class="muted">Enter the admin password on the left to continue.</p>
-              </div>
-
-              <!-- Promotions -->
-              <div v-else-if="activeKey === 'promotions'">
-                <!-- Filters -->
-                <div class="filters">
-                  <div class="row">
-                    <label class="control">
-                      <span>Search</span>
-                      <input type="text" v-model="search" placeholder="Name, rank, squad" />
-                    </label>
-
-                    <label class="control">
-                      <span>Squad</span>
-                      <select v-model="selectedSquad">
-                        <option value="__ALL__">All squads</option>
-                        <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
-                      </select>
-                    </label>
-
-                    <label class="control">
-                      <span>Sort by</span>
-                      <select v-model="sortKey">
-                        <option value="rank">Rank (high→low)</option>
-                        <option value="ops">Ops attended</option>
-                        <option value="progress">Progress to next rank</option>
-                        <option value="name">Name (A→Z)</option>
-                      </select>
-                    </label>
-
-                    <label class="control chk">
-                      <input type="checkbox" v-model="onlyPromotable" />
-                      Promotable only
-                    </label>
-                  </div>
-                </div>
-
-                <!-- Summary chips -->
-                <div class="chips">
-                  <span class="chip">Total: {{ promotionsTable.length }}</span>
-                  <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
-                  <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
-                </div>
-
-                <!-- Table -->
-                <div class="table">
-                  <div class="tr head">
-                    <span class="th name">Name</span>
-                    <span class="th rank">Rank</span>
-                    <span class="th squad">Squad</span>
-                    <span class="th ops">Ops</span>
-                    <span class="th next">Next Rank</span>
-                    <span class="th prog">Progress</span>
-                    <span class="th act">Actions</span>
-                  </div>
-
-                  <div v-for="row in promotionsTable" :key="row.id" class="tr">
-                    <span class="td name">{{ row.name }}</span>
-                    <span class="td rank">{{ row.rank }}</span>
-                    <span class="td squad">{{ row.squad }}</span>
-                    <span class="td ops">
-                      <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
-                      <span v-else class="muted">N/A</span>
-                    </span>
-                    <span class="td next">
-                      <span v-if="row.nextRank">
-                        {{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small>
-                      </span>
-                      <span v-else class="muted">—</span>
-                    </span>
-                    <span class="td prog">
-                      <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
-                        <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
-                      </div>
-                    </span>
-                    <span class="td act">
-                      <button
-                        class="btn-sm"
-                        v-if="row.opsToNext === 0 && row.nextRank"
-                        @click="markPromoted(row)"
-                      >
-                        Mark Promoted
-                      </button>
-                      <button class="btn-sm ghost" @click="openMember(row)">Open</button>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Audits (stub) -->
-              <div v-else-if="activeKey === 'audits'">
-                <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
-              </div>
-
-              <!-- Future -->
-              <div v-else>
-                <p class="muted">Select a tool from the left.</p>
-              </div>
+      <!-- Two-window desktop: left (list/login), right (main content) -->
+      <div class="admin-desktop">
+        <!-- LEFT WINDOW -->
+        <div class="window window--nav">
+          <div class="window-titlebar">
+            <div class="window-title">
+              <span class="dot"></span> Admin
             </div>
           </div>
-        </main>
+
+          <div class="window-content">
+            <!-- Login card (top-left) -->
+            <div v-if="!isAuthed" class="login-card">
+              <div class="login-head">
+                <img src="/icons/protocol.svg" alt="" class="rail-icon" />
+                <div class="rail-title">Admin Access</div>
+              </div>
+              <label class="control">
+                <span>Password</span>
+                <input
+                  type="password"
+                  v-model="passwordInput"
+                  placeholder="Enter unit password"
+                  @keyup.enter="tryLogin"
+                />
+              </label>
+              <button class="btn-sm" @click="tryLogin">Log in</button>
+              <p v-if="loginError" class="login-error">{{ loginError }}</p>
+            </div>
+
+            <!-- Tiles (only when authed) -->
+            <template v-else>
+              <button
+                v-for="s in sections"
+                :key="s.key"
+                class="rail-card"
+                :class="{ active: activeKey === s.key }"
+                @click="activeKey = s.key"
+              >
+                <div class="rail-card-head">
+                  <img :src="s.icon" class="rail-icon" alt="" />
+                  <div class="rail-title">{{ s.title }}</div>
+                </div>
+
+                <div v-if="s.preview && s.preview.length" class="rail-card-body">
+                  <div v-for="line in s.preview" :key="line.label" class="rail-line">
+                    <span class="label">{{ line.label }}</span>
+                    <span class="pill" :class="line.kind">{{ line.value }}</span>
+                  </div>
+                  <div class="rail-foot">Click to open</div>
+                </div>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- RIGHT WINDOW (MAIN) -->
+        <div class="window window--main">
+          <div class="window-titlebar">
+            <div class="window-title">
+              <span class="dot"></span>
+              {{ windowTitle }}
+            </div>
+            <div class="window-actions">
+              <button
+                v-if="isAuthed && activeKey === 'promotions'"
+                class="btn-sm"
+                @click="refreshData"
+              >
+                Refresh
+              </button>
+              <button
+                v-if="isAuthed"
+                class="btn-sm ghost"
+                @click="logout"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+
+          <div class="window-content">
+            <!-- Locked -->
+            <div v-if="!isAuthed">
+              <p class="muted">Enter the admin password in the left window to continue.</p>
+            </div>
+
+            <!-- Promotions -->
+            <div v-else-if="activeKey === 'promotions'">
+              <!-- Filters -->
+              <div class="filters">
+                <div class="row">
+                  <label class="control">
+                    <span>Search</span>
+                    <input type="text" v-model="search" placeholder="Name, rank, squad" />
+                  </label>
+
+                  <label class="control">
+                    <span>Squad</span>
+                    <select v-model="selectedSquad">
+                      <option value="__ALL__">All squads</option>
+                      <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
+                    </select>
+                  </label>
+
+                  <label class="control">
+                    <span>Sort by</span>
+                    <select v-model="sortKey">
+                      <option value="rank">Rank (high→low)</option>
+                      <option value="ops">Ops attended</option>
+                      <option value="progress">Progress to next rank</option>
+                      <option value="name">Name (A→Z)</option>
+                    </select>
+                  </label>
+
+                  <label class="control chk">
+                    <input type="checkbox" v-model="onlyPromotable" />
+                    Promotable only
+                  </label>
+                </div>
+              </div>
+
+              <!-- Summary chips -->
+              <div class="chips">
+                <span class="chip">Total: {{ promotionsTable.length }}</span>
+                <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
+                <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
+              </div>
+
+              <!-- Table -->
+              <div class="table">
+                <div class="tr head">
+                  <span class="th name">Name</span>
+                  <span class="th rank">Rank</span>
+                  <span class="th squad">Squad</span>
+                  <span class="th ops">Ops</span>
+                  <span class="th next">Next Rank</span>
+                  <span class="th prog">Progress</span>
+                  <span class="th act">Actions</span>
+                </div>
+
+                <div v-for="row in promotionsTable" :key="row.id" class="tr">
+                  <span class="td name">{{ row.name }}</span>
+                  <span class="td rank">{{ row.rank }}</span>
+                  <span class="td squad">{{ row.squad }}</span>
+                  <span class="td ops">
+                    <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                    <span v-else class="muted">N/A</span>
+                  </span>
+                  <span class="td next">
+                    <span v-if="row.nextRank">
+                      {{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small>
+                    </span>
+                    <span v-else class="muted">—</span>
+                  </span>
+                  <span class="td prog">
+                    <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
+                      <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
+                    </div>
+                  </span>
+                  <span class="td act">
+                    <button
+                      class="btn-sm"
+                      v-if="row.opsToNext === 0 && row.nextRank"
+                      @click="markPromoted(row)"
+                    >
+                      Mark Promoted
+                    </button>
+                    <button class="btn-sm ghost" @click="openMember(row)">Open</button>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Audits (stub) -->
+            <div v-else-if="activeKey === 'audits'">
+              <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
+            </div>
+
+            <!-- Future -->
+            <div v-else>
+              <p class="muted">Select a tool from the left.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -241,10 +248,7 @@ export default {
   computed: {
     windowTitle() {
       if (!this.isAuthed) return "Locked";
-      return {
-        promotions: "Promotions Overview",
-        audits: "Roster Audits",
-      }[this.activeKey] || "Admin Tools";
+      return { promotions: "Promotions Overview", audits: "Roster Audits" }[this.activeKey] || "Admin Tools";
     },
     sections() {
       return [
@@ -257,7 +261,8 @@ export default {
             { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
           ],
         },
-        { key: "audits", title: "Roster Audits", icon: "/icons/list.svg", preview: [] },
+        // Reuse existing icon to avoid missing assets
+        { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
       ];
     },
     squads() {
@@ -443,27 +448,58 @@ export default {
   border-radius: 0 .35rem .35rem 0;
 }
 
-/* Layout */
-.admin-frame {
+/* Desktop layout: two windows */
+.admin-desktop {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: .8rem;
-}
-.desktop {
-  /* reserve a predictable window height; adjust if your header height changes */
+  grid-template-columns: 340px 1fr; /* left narrow, right majority */
+  gap: .9rem;
   min-height: calc(100vh - 52px - 24px);
-  display: grid;
 }
 
-/* Rail */
-.rail { display: grid; gap: .6rem; align-content: start; }
+/* Window shell */
+.window {
+  border: 1px solid rgba(30,144,255,0.45);
+  background: rgba(0,10,30,0.25);
+  border-radius: .6rem;
+  box-shadow: 0 6px 28px rgba(0,0,0,.35);
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* flex overflow fix */
+}
+.window--nav { max-height: 100%; }
+.window--main { max-height: 100%; }
+
+.window-titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .5rem .65rem;
+  background: linear-gradient(180deg, rgba(5,20,40,.75), rgba(5,20,40,.6));
+  border-bottom: 1px solid rgba(30,144,255,0.35);
+  border-radius: .6rem .6rem 0 0;
+}
+.window-title { display: flex; align-items: center; gap: .45rem; font-weight: 600; }
+.window-title .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgba(120,200,255,.9);
+  box-shadow: 0 0 8px rgba(120,200,255,.9);
+}
+.window-actions { display: flex; gap: .4rem; }
+
+.window-content {
+  padding: .6rem;
+  overflow: auto;           /* each window scrolls independently */
+  flex: 1 1 auto;
+}
+
+/* Rail / tiles */
 .rail-card {
+  width: 100%;
   text-align: left;
   border: 1px solid rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.35);
   border-radius: .5rem;
   padding: .6rem;
   cursor: pointer;
+  margin-bottom: .55rem;
 }
 .rail-card.active { border-color: rgba(120,255,170,0.7); }
 .rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
@@ -489,43 +525,23 @@ export default {
   padding: .6rem;
   display: grid;
   gap: .5rem;
+  margin-bottom: .6rem;
 }
 .login-head { display: flex; align-items: center; gap: .5rem; }
 .login-error { color: #ffb080; margin: .2rem 0 0; }
 
-/* Window */
-.window {
+/* Controls */
+.btn-sm {
+  font-size: .85rem;
+  padding: .25rem .5rem;
+  border-radius: .35rem;
   border: 1px solid rgba(30,144,255,0.45);
   background: rgba(0,10,30,0.25);
-  border-radius: .6rem;
-  box-shadow: 0 6px 28px rgba(0,0,0,.35);
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* flex overflow fix */
+  color: #cfe6ff;
+  cursor: pointer;
 }
-.window-titlebar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: .5rem .65rem;
-  background: linear-gradient(180deg, rgba(5,20,40,.75), rgba(5,20,40,.6));
-  border-bottom: 1px solid rgba(30,144,255,0.35);
-  border-radius: .6rem .6rem 0 0;
-}
-.window-title { display: flex; align-items: center; gap: .45rem; font-weight: 600; }
-.window-title .dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: rgba(120,200,255,.9);
-  box-shadow: 0 0 8px rgba(120,200,255,.9);
-}
-.window-actions { display: flex; gap: .4rem; }
-.window-content {
-  padding: .6rem;
-  overflow: auto; /* independent scroll */
-  max-height: calc(100vh - 52px - 24px - 44px); /* page minus header, padding, titlebar */
-}
+.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
 
-/* Filters */
-.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
-.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
 .control { display: grid; gap: .2rem; }
 .control span { font-size: .85rem; color: #9ec5e6; }
 .control input, .control select {
@@ -537,7 +553,11 @@ export default {
 }
 .control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
 
-/* Summary chips */
+/* Filters */
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
+
+/* Chips */
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
 .chip {
   padding: .25rem .5rem;
@@ -558,15 +578,8 @@ export default {
 .tr:last-child .td { border-bottom: 0; }
 .td .muted { color: #9ec5e6; }
 
-/* progress bar */
-.bar {
-  height: 8px;
-  background: rgba(0,10,30,0.35);
-  border: 1px solid rgba(30,144,255,0.35);
-  border-radius: 999px;
-  position: relative;
-  overflow: hidden;
-}
+/* Progress */
+.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
@@ -576,8 +589,8 @@ export default {
 
 /* Responsive */
 @media (max-width: 980px) {
-  .admin-frame { grid-template-columns: 1fr; }
-  .rail { grid-auto-flow: column; grid-auto-columns: minmax(260px, 1fr); overflow-x: auto; }
-  .window-content { max-height: none; }
+  .admin-desktop { grid-template-columns: 1fr; }
+  .window--nav { order: 2; }
+  .window--main { order: 1; }
 }
 </style>
