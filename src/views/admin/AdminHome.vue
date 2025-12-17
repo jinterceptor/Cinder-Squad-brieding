@@ -342,16 +342,16 @@ export default {
 </script>
 
 <style scoped>
-/* Layout: LEFT 380px, RIGHT huge; big gutter; prevent overlap */
+/* Layout: LEFT 380px, RIGHT wider (min 1080px); big gutter; prevent overlap */
 .windows-grid {
   display: grid;
-  grid-template-columns: 380px minmax(720px, 1fr);
-  column-gap: 2.4rem; /* increase spacing */
+  grid-template-columns: 380px minmax(1080px, 1fr); /* +50% from 720px */
+  column-gap: 2.4rem;
   align-items: start;
   width: 100%;
 }
 
-/* Kill any absolute/fixed positioning from global theme on these windows */
+/* Kill absolute/fixed positioning on these windows */
 .windows-grid > .section-container {
   position: relative !important;
   width: 100%;
@@ -381,11 +381,7 @@ export default {
 .section-header img { width: 28px; height: 28px; }
 
 /* Right header actions */
-.right-header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-}
+.right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
 .right-header h1 { margin-right: .6rem; }
 .right-actions { display: flex; gap: .4rem; }
 
@@ -450,7 +446,7 @@ export default {
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* Responsive: stack windows; right stays first */
+/* Responsive */
 @media (max-width: 1200px) {
   .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
 }
