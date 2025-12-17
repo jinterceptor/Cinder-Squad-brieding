@@ -469,7 +469,6 @@ export default {
 
     /* discipline computed */
     disciplineRowsIndexed() {
-      // Combine API rows with squad lookup
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => { idx[r.nameKey] = r; });
       return idx;
@@ -490,12 +489,10 @@ export default {
           warnCount,
         });
       });
-      // Add any extra from API that aren't in members (rare)
       (this.disciplineRows || []).forEach(r => {
         if (!rows.find(x => x.nameKey === r.nameKey)) {
-          const squad = '';
           const warnCount = (r.warnings || '').split(',').map(s => s.trim().toUpperCase()).filter(x => x === 'Y').length;
-          rows.push({ name: r.name, nameKey: r.nameKey, squad, notes: r.notes || '', warnings: r.warnings || 'N, N, N', warnCount });
+          rows.push({ name: r.name, nameKey: r.nameKey, squad: '', notes: r.notes || '', warnings: r.warnings || 'N, N, N', warnCount });
         }
       });
       return rows.sort((a,b) => a.name.localeCompare(b.name));
@@ -535,14 +532,11 @@ export default {
       if (!this.discEndpoint || !this.discSecret) return;
       this.discLoading = true; this.discError = ""; this.discOK = false;
       try {
-        const url = new URL(this.discEndpoint);
-        url.searchParams.set('secret', this.discSecret);
-        url.searchParams.set('path', 'discipline'); // optional; not required by script
-        const res = await fetch(url.toString() + '?secret=' + encodeURIComponent(this.discSecret) + '&discipline=1'); // ensure cache-bust param
+        const url = `${this.discEndpoint}?secret=${encodeURIComponent(this.discSecret)}&t=${Date.now()}`;
+        const res = await fetch(url, { method: 'GET' });
         const data = await res.json();
         if (data?.error) throw new Error(data.error);
         const arr = Array.isArray(data) ? data : [];
-        // normalize
         this.disciplineRows = arr.map(r => ({
           name: r.name || '',
           nameKey: this.nameKey(r.name || r.nameKey || ''),
@@ -561,7 +555,6 @@ export default {
       if (!m) return;
       this.edit.memberId = m.id || null;
       this.populateEditFromMember();
-      // focus editor textarea for speed
       this.$nextTick(() => {
         const ta = this.$el.querySelector('textarea');
         if (ta) ta.focus();
@@ -600,12 +593,17 @@ export default {
 
       this.discSaving = true;
       try {
+        // IMPORTANT: make this a "simple request" (no preflight) to avoid Apps Script CORS issues
         const res = await fetch(this.discEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          // no custom headers; text/plain is a "simple" content-type
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload),
+          redirect: 'follow',
         });
-        const data = await res.json();
+        const text = await res.text(); // parse manually to avoid edge cases
+        let data;
+        try { data = JSON.parse(text); } catch { data = { ok: false, error: 'Bad JSON from server' }; }
         if (!data?.ok) throw new Error(data?.error || 'Save failed');
 
         this.discOK = true;
