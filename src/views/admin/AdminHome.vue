@@ -18,7 +18,7 @@
           <!-- Login card (top-left) -->
           <div v-if="!isAuthed" class="login-card">
             <div class="login-head">
-              <img src="/icons/lock.svg" alt="" class="rail-icon" />
+              <img src="/icons/protocol.svg" alt="" class="rail-icon" />
               <div class="rail-title">Admin Access</div>
             </div>
             <label class="control">
@@ -131,11 +131,7 @@
                 <span class="th act">Actions</span>
               </div>
 
-              <div
-                v-for="row in promotionsTable"
-                :key="row.id"
-                class="tr"
-              >
+              <div v-for="row in promotionsTable" :key="row.id" class="tr">
                 <span class="td name">{{ row.name }}</span>
                 <span class="td rank">{{ row.rank }}</span>
                 <span class="td squad">{{ row.squad }}</span>
