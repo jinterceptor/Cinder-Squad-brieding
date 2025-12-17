@@ -133,7 +133,7 @@
                   <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">
                     Mark Promoted
                   </button>
-                  <button class="btn-sm. ghost" @click="openMember(row)">Open</button>
+                  <button class="btn-sm ghost" @click="openMember(row)">Open</button>
                 </span>
               </div>
             </div>
@@ -158,8 +158,7 @@
 
 <script>
 import AdminLoginModal from "@/components/modals/AdminLoginModal.vue";
-
-const SESSION_KEY = "admin-authed";
+import { isAdmin } from "@/utils/adminAuth"; // modal sets session; we read it
 
 export default {
   name: "AdminHome",
@@ -200,8 +199,15 @@ export default {
     };
   },
   created() {
-    try { this.isAuthed = window.sessionStorage.getItem(SESSION_KEY) === "true"; }
-    catch { this.isAuthed = false; }
+    this.isAuthed = isAdmin();
+    // Why: keep state in sync if localStorage changes (other tabs)
+    if (typeof window !== "undefined") {
+      this._onStorage = () => { this.isAuthed = isAdmin(); };
+      window.addEventListener("storage", this._onStorage);
+    }
+  },
+  beforeUnmount() {
+    if (this._onStorage) window.removeEventListener("storage", this._onStorage);
   },
   computed: {
     sections() {
@@ -307,7 +313,6 @@ export default {
     },
 
     rankKey() {
-      // returns a function for template/calc usage
       const alias = {
         PRIVATE: "PVT", PVT: "PVT",
         PRIVATEFIRSTCLASS: "PFC", PFC: "PFC",
@@ -372,28 +377,20 @@ export default {
     },
   },
   methods: {
-    // Auth wiring
-    setAuthed(v) {
-      this.isAuthed = !!v;
-      try { window.sessionStorage.setItem(SESSION_KEY, this.isAuthed ? "true" : "false"); } catch {}
-    },
-    onLoginSuccess(code) {
-      // Accept "150th" (case-insensitive, trimmed)
-      const ok = String(code || "").trim().toLowerCase() === "150th";
-      if (ok) this.setAuthed(true);
-      else alert("Invalid unit code."); // keep modal open
+    // Auth
+    onLoginSuccess() {
+      // Why: modal already verified & stored session marker
+      this.isAuthed = true;
     },
     onLoginClose() {
-      // Keep modal if not authed; do nothing here.
+      // keep modal open if not authed
     },
 
     // Actions
     refreshData() {
-      // Stub: replace with real fetch
       console.log("Refresh requested");
     },
     markPromoted(row) {
-      // Why: feedback until wired to backend
       alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`);
     },
     openMember(row) {
@@ -408,8 +405,15 @@ export default {
 
 <style scoped>
 /* Shell */
-.section-container { display: grid; gap: .75rem; }
-.section-header { display: flex; align-items: center; gap: .6rem; }
+.section-container {
+  display: grid;
+  gap: .75rem;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
 .section-header img { width: 28px; height: 28px; }
 .section-content-container { padding: .8rem; }
 
@@ -440,7 +444,11 @@ export default {
 }
 
 /* Rail */
-.rail { display: grid; gap: .6rem; align-content: start; }
+.rail {
+  display: grid;
+  gap: .6rem;
+  align-content: start;
+}
 .rail-card {
   text-align: left;
   border: 1px solid rgba(30,144,255,0.35);
@@ -553,7 +561,7 @@ export default {
 .empty { padding: .7rem .8rem; color: #9ec5e6; }
 .muted { color: #9ec5e6; }
 
-/* Responsive */
+/* Responsive: stack rails under 980px */
 @media (max-width: 980px) {
   .admin-frame { grid-template-columns: 1fr; }
   .rail { grid-auto-flow: column; grid-auto-columns: minmax(260px, 1fr); overflow-x: auto; }
