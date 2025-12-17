@@ -64,7 +64,7 @@
         <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
 
         <!-- Promotions -->
-        <div v-else-if="activeKey === 'promotions'">
+        <div v-else-if="activeKey === 'promotions'" class="promotions-panel">
           <!-- Filters -->
           <div class="filters">
             <div class="row">
@@ -102,34 +102,36 @@
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table (6 columns, no Actions) -->
-          <div class="table">
-            <div class="tr head">
-              <span class="th name">Name</span>
-              <span class="th rank">Rank</span>
-              <span class="th squad">Squad</span>
-              <span class="th ops">Ops</span>
-              <span class="th next">Next Rank</span>
-              <span class="th prog">Progress</span>
-            </div>
+          <!-- Table (6 columns) — scrolls inside panel -->
+          <div class="table-scroll">
+            <div class="table">
+              <div class="tr head">
+                <span class="th name">Name</span>
+                <span class="th rank">Rank</span>
+                <span class="th squad">Squad</span>
+                <span class="th ops">Ops</span>
+                <span class="th next">Next Rank</span>
+                <span class="th prog">Progress</span>
+              </div>
 
-            <div v-for="row in promotionsTable" :key="row.id" class="tr">
-              <span class="td name">{{ row.name }}</span>
-              <span class="td rank">{{ row.rank }}</span>
-              <span class="td squad">{{ row.squad || '—' }}</span>
-              <span class="td ops">
-                <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
-                <span v-else class="muted">N/A</span>
-              </span>
-              <span class="td next">
-                <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
-                <span v-else class="muted">—</span>
-              </span>
-              <span class="td prog">
-                <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
-                  <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
-                </div>
-              </span>
+              <div v-for="row in promotionsTable" :key="row.id" class="tr">
+                <span class="td name">{{ row.name }}</span>
+                <span class="td rank">{{ row.rank }}</span>
+                <span class="td squad">{{ row.squad || '—' }}</span>
+                <span class="td ops">
+                  <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                  <span v-else class="muted">N/A</span>
+                </span>
+                <span class="td next">
+                  <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
+                  <span v-else class="muted">—</span>
+                </span>
+                <span class="td prog">
+                  <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
+                    <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
+                  </div>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -450,15 +452,29 @@ export default {
 .right-window {
   display: flex;
   flex-direction: column;
-  /* keep the entire panel within the viewport */
-  max-height: calc(100vh - 16px);
-  overflow: hidden; /* hide outer; inner content will scroll */
+  max-height: calc(100vh - 16px); /* keep panel within viewport */
+  overflow: hidden;               /* inner content scrolls */
 }
 .right-window .section-content-container.right-content {
   flex: 1 1 auto;
-  min-height: 0;       /* required for flex scroll containers */
-  overflow: auto;      /* independent scroll here */
+  min-height: 0;
+  overflow: auto;
   padding: .6rem;
+}
+
+/* Limit promotions screen height and scroll table within */
+.promotions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  max-height: 85vh;   /* covers majority, prevents overflow below window */
+  min-height: 50vh;   /* still feels substantial */
+  overflow: hidden;   /* keep inner scrolling in table area */
+}
+.table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;     /* table scrolls here */
 }
 
 /* Decoration */
@@ -480,30 +496,15 @@ export default {
   border-left-width: 0;
   border-radius: 0 0.35rem 0.35rem 0;
 }
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.section-header img {
-  width: 28px;
-  height: 28px;
-}
+.section-header { display: flex; align-items: center; gap: 0.6rem; }
+.section-header img { width: 28px; height: 28px; }
 
 /* Right header grid */
-.right-header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-}
+.right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
 .right-actions { display: flex; gap: .4rem; }
 
 /* Left: tiles + login */
-.rail {
-  display: grid;
-  gap: 0.6rem;
-  align-content: start;
-}
+.rail { display: grid; gap: 0.6rem; align-content: start; }
 .rail-card {
   text-align: left;
   border: 1px solid rgba(30, 144, 255, 0.35);
@@ -512,34 +513,12 @@ export default {
   padding: 0.6rem;
   cursor: pointer;
 }
-.rail-card.active {
-  border-color: rgba(120, 255, 170, 0.7);
-}
-.rail-card-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
-}
-.rail-icon {
-  width: 20px;
-  height: 20px;
-}
-.rail-title,
-.rail-line .label {
-  color: #d9ebff;
-}
-.rail-card-body {
-  display: grid;
-  gap: 0.25rem;
-}
-.pill {
-  font-size: 0.85rem;
-  border: 1px solid rgba(30, 144, 255, 0.45);
-  border-radius: 999px;
-  padding: 0.05rem 0.5rem;
-  color: #e6f3ff;
-}
+.rail-card.active { border-color: rgba(120, 255, 170, 0.7); }
+.rail-card-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+.rail-icon { width: 20px; height: 20px; }
+.rail-title, .rail-line .label { color: #d9ebff; }
+.rail-card-body { display: grid; gap: 0.25rem; }
+.pill { font-size: 0.85rem; border: 1px solid rgba(30, 144, 255, 0.45); border-radius: 999px; padding: 0.05rem 0.5rem; color: #e6f3ff; }
 .pill.ok { border-color: rgba(120, 255, 170, 0.7); }
 .pill.warn { border-color: rgba(255, 190, 80, 0.7); }
 .rail-foot { margin-top: 0.25rem; font-size: 0.8rem; color: #9ec5e6; }
@@ -555,106 +534,43 @@ export default {
 .login-error { color: #ffb080; margin: 0.2rem 0 0; }
 
 /* Buttons & controls */
-.btn-sm {
-  font-size: 0.85rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.35rem;
-  border: 1px solid rgba(30, 144, 255, 0.45);
-  background: rgba(0, 10, 30, 0.25);
-  color: #cfe6ff;
-  cursor: pointer;
-}
+.btn-sm { font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 0.35rem; border: 1px solid rgba(30, 144, 255, 0.45); background: rgba(0, 10, 30, 0.25); color: #cfe6ff; cursor: pointer; }
 .btn-sm.ghost { background: transparent; border-color: rgba(30, 144, 255, 0.45); }
 .control { display: grid; gap: 0.2rem; }
 .control span { font-size: 0.85rem; color: #9ec5e6; }
-.control input, .control select {
-  background: rgba(0, 10, 30, 0.3);
-  border: 1px solid rgba(30, 144, 255, 0.35);
-  border-radius: 0.35rem;
-  padding: 0.35rem 0.45rem;
-  color: #cfe6ff;
-}
+.control input, .control select { background: rgba(0, 10, 30, 0.3); border: 1px solid rgba(30, 144, 255, 0.35); border-radius: 0.35rem; padding: 0.35rem 0.45rem; color: #cfe6ff; }
 .control.chk { align-items: center; grid-auto-flow: column; gap: 0.35rem; }
 
 /* Filters / chips */
-.filters {
-  border: 1px dashed rgba(30, 144, 255, 0.35);
-  border-radius: 0.35rem;
-  padding: 0.5rem;
-  margin-bottom: 0.6rem;
-}
-.filters .row {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr auto;
-  gap: 0.6rem;
-  align-items: end;
-}
-.chips {
-  display: flex;
-  gap: 0.45rem;
-  margin-bottom: 0.55rem;
-  flex-wrap: wrap;
-}
-.chip {
-  padding: 0.25rem 0.5rem;
-  border-radius: 999px;
-  background: rgba(0, 10, 30, 0.25);
-  border: 1px solid rgba(30, 144, 255, 0.45);
-  color: #e6f3ff;
-  font-size: 0.85rem;
-}
+.filters { border: 1px dashed rgba(30, 144, 255, 0.35); border-radius: 0.35rem; padding: 0.5rem; margin-bottom: 0.6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 0.6rem; align-items: end; }
+.chips { display: flex; gap: 0.45rem; margin-bottom: 0.55rem; flex-wrap: wrap; }
+.chip { padding: 0.25rem 0.5rem; border-radius: 999px; background: rgba(0, 10, 30, 0.25); border: 1px solid rgba(30, 144, 255, 0.45); color: #e6f3ff; font-size: 0.85rem; }
 .chip.ok { border-color: rgba(120, 255, 170, 0.7); }
 .chip.warn { border-color: rgba(255, 190, 80, 0.7); }
 .muted { color: #9ec5e6; }
 
-/* Table (6 columns) */
-.table {
-  border: 1px dashed rgba(30, 144, 255, 0.35);
-  border-radius: 0.35rem;
-  overflow: hidden;
-}
-.tr {
-  display: grid;
-  grid-template-columns: 1.6fr 0.8fr 1fr 0.6fr 0.9fr 1.2fr; /* 6 columns */
-  align-items: center;
-}
+/* Table */
+.table { border: 1px dashed rgba(30, 144, 255, 0.35); border-radius: 0.35rem; overflow: hidden; }
+.tr { display: grid; grid-template-columns: 1.6fr 0.8fr 1fr 0.6fr 0.9fr 1.2fr; align-items: center; }
 .tr.head { background: rgba(0, 10, 30, 0.35); font-weight: 600; }
-.th, .td {
-  padding: 0.4rem 0.5rem;
-  border-bottom: 1px dashed rgba(30, 144, 255, 0.25);
-  color: #e6f3ff;
-}
+.th, .td { padding: 0.4rem 0.5rem; border-bottom: 1px dashed rgba(30, 144, 255, 0.25); color: #e6f3ff; }
 .tr:last-child .td { border-bottom: 0; }
 
 /* Progress bar */
-.bar {
-  height: 8px;
-  background: rgba(0, 10, 30, 0.35);
-  border: 1px solid rgba(30, 144, 255, 0.35);
-  border-radius: 999px;
-  position: relative;
-  overflow: hidden;
-}
-.bar .fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 0%;
-  transition: width 0.25s ease;
-  background: rgba(120, 200, 255, 0.6);
-}
+.bar { height: 8px; background: rgba(0, 10, 30, 0.35); border: 1px solid rgba(30, 144, 255, 0.35); border-radius: 999px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width 0.25s ease; background: rgba(120, 200, 255, 0.6); }
 .bar.done .fill { background: rgba(120, 255, 170, 0.7); }
 
 /* Responsive */
 @media (max-width: 1200px) {
   .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
+  .promotions-panel { max-height: 80vh; }
 }
 @media (max-width: 980px) {
   .windows-grid { grid-template-columns: 1fr; }
-  .right-window { order: 1; }
+  .right-window { order: 1; max-height: calc(100vh - 12px); }
   .left-window { order: 2; }
-  /* allow right panel to still scroll independently on mobile */
-  .right-window { max-height: calc(100vh - 12px); }
+  .promotions-panel { max-height: 78vh; }
 }
 </style>
