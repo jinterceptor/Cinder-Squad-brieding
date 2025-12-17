@@ -133,7 +133,6 @@
 
         <!-- Discipline (notes + warnings) -->
         <div v-else-if="activeKey === 'discipline'" class="promotions-panel">
-          <!-- Filters / refresh -->
           <div class="filters">
             <div class="row">
               <label class="control">
@@ -142,7 +141,7 @@
               </label>
               <div class="control" style="align-self:end">
                 <span>&nbsp;</span>
-                <button class="btn-sm" @click="loadDiscipline" :disabled="discLoading">{{ discLoading ? 'Refreshing…' : 'Refresh' }}</button>
+                <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">{{ discLoading ? 'Refreshing…' : 'Refresh' }}</button>
               </div>
             </div>
           </div>
@@ -167,33 +166,9 @@
               <label class="control">
                 <span>Warnings (3 slots)</span>
                 <div class="warn-toggle">
-                  <button
-                    type="button"
-                    class="warn-pill lvl1"
-                    :class="{ on: edit.warn[0] }"
-                    @click="toggleWarn(0)"
-                    :aria-pressed="!!edit.warn[0]"
-                    aria-label="Toggle warning 1"
-                    title="Warning 1"
-                  >1</button>
-                  <button
-                    type="button"
-                    class="warn-pill lvl2"
-                    :class="{ on: edit.warn[1] }"
-                    @click="toggleWarn(1)"
-                    :aria-pressed="!!edit.warn[1]"
-                    aria-label="Toggle warning 2"
-                    title="Warning 2"
-                  >2</button>
-                  <button
-                    type="button"
-                    class="warn-pill lvl3"
-                    :class="{ on: edit.warn[2] }"
-                    @click="toggleWarn(2)"
-                    :aria-pressed="!!edit.warn[2]"
-                    aria-label="Toggle warning 3"
-                    title="Warning 3"
-                  >3</button>
+                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" :aria-pressed="!!edit.warn[0]" aria-label="Toggle warning 1" title="Warning 1">1</button>
+                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" :aria-pressed="!!edit.warn[1]" aria-label="Toggle warning 2" title="Warning 2">2</button>
+                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" :aria-pressed="!!edit.warn[2]" aria-label="Toggle warning 3" title="Warning 3">3</button>
                 </div>
               </label>
             </div>
@@ -212,7 +187,7 @@
             </div>
           </div>
 
-          <!-- List (read from RefData via API) -->
+          <!-- List -->
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head gridFlags">
@@ -296,6 +271,10 @@ export default {
       discOK: false,
       disciplineRows: [],
 
+      // Status via CSV (RefData)
+      troopStatusCsvUrl: "", // <<< PASTE your published CSV URL here (RefData sheet)
+      csvStatusIndex: Object.create(null),
+
       // Filters + editor
       discSearch: "",
       edit: { memberId: null, notes: "", warn: [false, false, false] },
@@ -308,7 +287,12 @@ export default {
     } catch {}
   },
   watch: {
-    isAuthed(v) { if (v) this.loadDiscipline(); },
+    isAuthed(v) {
+      if (v) {
+        this.loadDiscipline();
+        if (this.troopStatusCsvUrl) this.fetchTroopStatusCsv();
+      }
+    },
   },
   computed: {
     /* utils */
@@ -322,7 +306,7 @@ export default {
     },
     rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
 
-    /* status helpers */
+    /* normalization */
     normalizeStatus() {
       const pretty = {
         ACTIVE: "Active", RESERVE: "Reserve", ELOA: "ELOA", OTHER: "Other",
@@ -330,8 +314,9 @@ export default {
       };
       return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
     },
-    statusIndex() {
-      // why: use RefData “Troop Status” delivered via API (disciplineRows) keyed by nameKey
+
+    /* status indexes (CSV + API) */
+    statusIndexFromApi() {
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => {
         const nk = r.nameKey || this.nameKey(r.name || "");
@@ -339,6 +324,13 @@ export default {
         if (nk) idx[nk] = s;
       });
       return idx;
+    },
+    statusIndex() {
+      // why: CSV overrides API if present; otherwise API provides fallback
+      return new Proxy({}, {
+        get: (_, k) => this.csvStatusIndex[k] ?? this.statusIndexFromApi[k],
+        has: (_, k) => (k in this.csvStatusIndex) || (k in this.statusIndexFromApi)
+      });
     },
     memberStatusOf() {
       return (m) => {
@@ -624,6 +616,63 @@ export default {
       return 'unknown';
     },
 
+    /* CSV: fetch + parse */
+    async fetchTroopStatusCsv() {
+      try {
+        const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
+        const csvText = await res.text();
+        const rows = this.parseCsv(csvText);
+        if (!rows.length) return;
+
+        const header = rows[0].map(h => String(h || '').trim().toLowerCase());
+        const nameIdx = header.findIndex(h => h === 'troop list' || h === 'name' || h === 'member' || h === 'trooper');
+        const statusIdx = header.findIndex(h => h === 'troop status' || h === 'status');
+
+        if (nameIdx === -1 || statusIdx === -1) return; // cannot map; keep Unknown
+
+        const map = Object.create(null);
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          const name = String(r[nameIdx] || '').trim();
+          const status = String(r[statusIdx] || '').trim();
+          if (!name) continue;
+          const nk = this.nameKey(name);
+          map[nk] = this.normalizeStatus(status);
+        }
+        this.csvStatusIndex = map;
+      } catch (e) {
+        // why: if CSV fails, fall back to API/Unknown silently
+        console.warn('CSV status load failed:', e);
+      }
+    },
+    parseCsv(text) {
+      // RFC4180-ish minimal parser for commas and quotes
+      const rows = [];
+      let cur = [];
+      let val = '';
+      let inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQ) {
+          if (ch === '"') {
+            if (text[i + 1] === '"') { val += '"'; i++; } // escaped quote
+            else { inQ = false; }
+          } else { val += ch; }
+        } else {
+          if (ch === '"') inQ = true;
+          else if (ch === ',') { cur.push(val); val = ''; }
+          else if (ch === '\n') { cur.push(val); rows.push(cur); cur = []; val = ''; }
+          else if (ch === '\r') { /* ignore */ }
+          else { val += ch; }
+        }
+      }
+      cur.push(val);
+      rows.push(cur);
+      // trim trailing empty last row (when file ends with newline)
+      if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
+      return rows;
+    },
+
     /* discipline api */
     async loadDiscipline() {
       if (!this.discEndpoint || !this.discSecret) return;
@@ -639,13 +688,17 @@ export default {
           nameKey: this.nameKey(r.name || r.nameKey || ''),
           notes: r.notes || '',
           warnings: r.warnings || 'N, N, N',
-          status: this.normalizeStatus(r.status || r.troopStatus), // <-- NEW
+          status: this.normalizeStatus(r.status || r.troopStatus), // may be empty; CSV overrides
         }));
       } catch (e) {
         this.discError = String(e?.message || e);
       } finally {
         this.discLoading = false;
       }
+    },
+    async refreshDiscipline() {
+      await this.loadDiscipline();
+      if (this.troopStatusCsvUrl) await this.fetchTroopStatusCsv();
     },
 
     focusMemberByNameKey(nk) {
@@ -711,7 +764,7 @@ export default {
         if (!data?.ok) throw new Error(data?.error || 'Save failed');
 
         this.discOK = true;
-        await this.loadDiscipline();
+        await this.refreshDiscipline();
       } catch (e) {
         this.discError = String(e?.message || e);
       } finally {
@@ -773,6 +826,7 @@ export default {
 .table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
+/* +1 col for Status in discipline */
 .gridFlags { display: grid; grid-template-columns: 1.4fr .9fr .9fr 1fr 2.7fr; align-items: center; }
 .tr.head { font-weight: 600; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; }
 .rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
