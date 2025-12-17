@@ -56,10 +56,7 @@
       <div class="section-header clipped-medium-backward right-header">
         <img src="/icons/protocol.svg" alt="" />
         <h1>{{ windowTitle }}</h1>
-        <div class="right-actions">
-          <button v-if="isAuthed && activeKey==='promotions'" class="btn-sm" @click="refreshData">Refresh</button>
-          <button v-if="isAuthed" class="btn-sm ghost" @click="logout">Logout</button>
-        </div>
+        <div class="right-actions"><!-- buttons removed by request --></div>
       </div>
       <div class="rhombus-back">&nbsp;</div>
 
@@ -168,11 +165,13 @@ export default {
       loginError: "",
       activeKey: "promotions",
 
+      // filters
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
 
+      // rank order
       rankOrderHighToLow: [
         "MAJ","CAPT","1STLT","2NDLT",
         "CWO5","CWO4","CWO3","CWO2","WO",
@@ -181,6 +180,7 @@ export default {
         "HA"
       ],
 
+      // data (filled from Google Sheets; falls back to demo)
       members: [
         { id: 1, name: "J. Frost", rank: "CPL", squad: "Alpha", opsAttended: 8 },
         { id: 2, name: "R. Hart", rank: "LCPL", squad: "Alpha", opsAttended: 3 },
@@ -189,6 +189,10 @@ export default {
         { id: 5, name: "S. King", rank: "SGT", squad: "HQ", opsAttended: 12 },
       ],
       orbat: [{ squad: "HQ" }, { squad: "Alpha" }, { squad: "Bravo" }],
+
+      // sheet config
+      sheetId: import.meta.env.VITE_SHEET_ID || "",
+      tabMembers: import.meta.env.VITE_TAB_MEMBERS || "Members",
     };
   },
   created() {
@@ -196,6 +200,10 @@ export default {
       localStorage.removeItem("admin-auth");
       sessionStorage.removeItem("admin-authed");
     } catch {}
+  },
+  mounted() {
+    // Load Google Sheet if configured.
+    this.loadFromSheet();
   },
   computed: {
     windowTitle() {
@@ -287,55 +295,129 @@ export default {
 
       return filtered.sort(sorter);
     },
-    eligibleNowCount() { return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length; },
-    imminentCount() { return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length; },
+    eligibleNowCount() {
+      return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
+    },
+    imminentCount() {
+      return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
+    },
 
+    // rank helpers
     rankKey() {
-      const alias = { PRIVATE:"PVT", PFC:"PFC", SPC:"SPC", SPC2:"SPC2", SPC3:"SPC3", SPC4:"SPC4",
-        LCPL:"LCPL", CPL:"CPL", SGT:"SGT", SSGT:"SSGT", GYSGT:"GYSGT",
-        WO:"WO", CWO2:"CWO2", CWO3:"CWO3", CWO4:"CWO4", CWO5:"CWO5",
-        "2NDLT":"2NDLT", "1STLT":"1STLT", CAPT:"CAPT", MAJ:"MAJ", HA:"HA" };
+      const alias = {
+        PRIVATE: "PVT", PFC: "PFC", SPC: "SPC", SPC2: "SPC2", SPC3: "SPC3", SPC4: "SPC4",
+        LCPL: "LCPL", CPL: "CPL", SGT: "SGT", SSGT: "SSGT", GYSGT: "GYSGT",
+        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
+        "2NDLT": "2NDLT", "1STLT": "1STLT", CAPT: "CAPT", MAJ: "MAJ", HA: "HA",
+      };
       return (rank) => {
         if (!rank) return "";
         const k = (rank || "").toUpperCase().replace(/\s+/g, "");
-        return alias[k] || k;
+        return alias[k] | k;
       };
     },
     rankScore() {
       return (rank) => {
         const k = this.rankKey(rank);
-        const aliasWO = { WO:"WO", CWO2:"CWO2", CWO3:"CWO3", CWO4:"CWO4", CWO5:"CWO5" };
+        const aliasWO = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
         const rk = aliasWO[k] || k;
         const idx = this.rankOrderHighToLow.indexOf(rk);
-        return idx === -1 ? 999 : idx;
+        return idx === -1 ? 999 : idx; // lower index = higher rank
       };
     },
     promotionLadderFor() {
       const ladders = {
-        PVT:{ nextAt:2, nextRank:"PFC" }, PFC:{ nextAt:4, nextRank:"SPC" },
-        SPC:{ nextAt:6, nextRank:"LCPL" }, LCPL:{ nextAt:8, nextRank:"CPL" },
-        CPL:{ nextAt:10, nextRank:"SGT" }, SGT:{ nextAt:12, nextRank:"SSGT" },
-        SSGT:{ nextAt:14, nextRank:"GYSGT" }, GYSGT:{ nextAt:null, nextRank:null },
-        WO:{ nextAt:8, nextRank:"CWO2" }, CWO2:{ nextAt:12, nextRank:"CWO3" },
-        CWO3:{ nextAt:16, nextRank:"CWO4" }, CWO4:{ nextAt:20, nextRank:"CWO5" },
-        CWO5:{ nextAt:null, nextRank:null },
-        "2NDLT":{ nextAt:null, nextRank:"1STLT" }, "1STLT":{ nextAt:null, nextRank:"CAPT" },
-        CAPT:{ nextAt:null, nextRank:"MAJ" }, MAJ:{ nextAt:null, nextRank:null },
+        // Enlisted
+        PVT:  { nextAt: 2, nextRank: "PFC" },
+        PFC:  { nextAt: 4, nextRank: "SPC" },
+        SPC:  { nextAt: 6, nextRank: "LCPL" },
+        LCPL: { nextAt: 8, nextRank: "CPL" },
+        CPL:  { nextAt: 10, nextRank: "SGT" },
+        SGT:  { nextAt: 12, nextRank: "SSGT" },
+        SSGT: { nextAt: 14, nextRank: "GYSGT" },
+        GYSGT:{ nextAt: null, nextRank: null },
+
+        // Warrant
+        WO:   { nextAt: 8, nextRank: "CWO2" },
+        CWO2: { nextAt: 12, nextRank: "CWO3" },
+        CWO3: { nextAt: 16, nextRank: "CWO4" },
+        CWO4: { nextAt: 20, nextRank: "CWO5" },
+        CWO5: { nextAt: null, nextRank: null },
+
+        // Commissioned
+        "2NDLT": { nextAt: null, nextRank: "1STLT" },
+        "1STLT": { nextAt: null, nextRank: "CAPT" },
+        CAPT:    { nextAt: null, nextRank: "MAJ" },
+        MAJ:     { nextAt: null, nextRank: null },
       };
       return (rank) => ladders[this.rankKey(rank)] || null;
     },
   },
   methods: {
+    // Auth (runtime only)
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
       if (!code) { this.loginError = "Please enter the password."; return; }
       if (code === "150th") { this.isAuthed = true; this.passwordInput = ""; this.loginError = ""; }
       else { this.loginError = "Invalid password."; }
     },
-    logout() { this.isAuthed = false; this.activeKey = "promotions"; this.passwordInput = ""; this.loginError = ""; },
-    refreshData() { console.log("Refresh requested"); },
+
+    // Sheets loader (public “Publish to web” → anyone with link)
+    async loadFromSheet() {
+      if (!this.sheetId || !this.tabMembers) return; // no config → keep demo
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${this.sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(this.tabMembers)}`;
+        const res = await fetch(url, { cache: "no-store" });
+        const text = await res.text();
+
+        // gviz wraps JSON in a function call; extract JSON
+        const json = JSON.parse(text.replace(/^[^\n]*\(/, "").replace(/\);?\s*$/, ""));
+        const cols = (json.table.cols || []).map(c => (c.label || "").toLowerCase().trim());
+        const rows = (json.table.rows || []).map(r => (r.c || []).map(c => (c ? c.v : null)));
+
+        // Helper to find column by likely names
+        const findIdx = (...names) => {
+          const lowered = names.map(n => n.toLowerCase());
+          let i = cols.findIndex(c => lowered.includes(c));
+          if (i !== -1) return i;
+          // fallback by substring (why: headers like 'Ops (attended)')
+          i = cols.findIndex(c => lowered.some(n => c.includes(n)));
+          return i;
+        };
+
+        const idxId   = findIdx("id","member_id","mid");
+        const idxName = findIdx("name","callsign","member","pilot");
+        const idxRank = findIdx("rank","grade");
+        const idxSquad= findIdx("squad","unit","section");
+        const idxOps  = findIdx("ops","opsattended","operations","attendance");
+
+        // Map into members
+        const mapped = rows
+          .map(r => ({
+            id: Number(r[idxId]) || undefined,
+            name: String(r[idxName] ?? "").trim(),
+            rank: String(r[idxRank] ?? "").trim(),
+            squad: String(r[idxSquad] ?? "").trim(),
+            opsAttended: Number(r[idxOps]),
+          }))
+          .filter(x => x.name); // minimal validity
+
+        if (mapped.length) {
+          // If no stable ids, synthesize
+          mapped.forEach((m, i) => { if (!Number.isFinite(m.id)) m.id = i + 1; });
+          this.members = mapped;
+        }
+      } catch (e) {
+        // Silent fallback to demo data (why: avoid breaking admin UI if sheet unplugged)
+        console.warn("Admin: failed to load Google Sheet, using demo data.", e);
+      }
+    },
+
+    // Actions (stubs)
     markPromoted(row) { alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`); },
     openMember(row) { console.log("Open member (stub):", row); },
+
+    // Utils
     isFiniteNum(v) { return Number.isFinite(v); },
   },
 };
@@ -345,30 +427,17 @@ export default {
 /* Layout: LEFT 380px, RIGHT wider (min 1080px); big gutter; prevent overlap */
 .windows-grid {
   display: grid;
-  grid-template-columns: 380px minmax(1080px, 1fr); /* +50% from 720px */
+  grid-template-columns: 380px minmax(1080px, 1fr);
   column-gap: 2.4rem;
   align-items: start;
   width: 100%;
 }
 
 /* Kill absolute/fixed positioning on these windows */
-.windows-grid > .section-container {
-  position: relative !important;
-  width: 100%;
-  max-width: none;
-}
+.windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; }
 
 /* Common ribbons */
-.rhombus-back {
-  height: 6px;
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(30,144,255,.2) 0px,
-    rgba(30,144,255,.2) 10px,
-    transparent 10px,
-    transparent 20px
-  );
-}
+.rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
 .clipped-medium-backward {
   clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
   background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
@@ -380,9 +449,8 @@ export default {
 .section-header { display: flex; align-items: center; gap: .6rem; }
 .section-header img { width: 28px; height: 28px; }
 
-/* Right header actions */
+/* Right header actions (now empty placeholder to keep layout) */
 .right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
-.right-header h1 { margin-right: .6rem; }
 .right-actions { display: flex; gap: .4rem; }
 
 /* Left: tiles + login */
@@ -406,14 +474,7 @@ export default {
 .pill.warn { border-color: rgba(255,190,80,0.7); }
 .rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-.login-card {
-  border: 1px solid rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.35);
-  border-radius: .5rem;
-  padding: .6rem;
-  display: grid;
-  gap: .5rem;
-}
+.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
 .login-error { color: #ffb080; margin: .2rem 0 0; }
 
 /* Buttons & controls */
