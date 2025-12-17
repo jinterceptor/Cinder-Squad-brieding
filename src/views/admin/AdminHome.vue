@@ -50,7 +50,7 @@
       </div>
     </section>
 
-    <!-- RIGHT WINDOW: Overview (independent scroll) -->
+    <!-- RIGHT WINDOW: Overview (independent) -->
     <section class="section-container right-window">
       <div class="section-header clipped-medium-backward right-header">
         <img src="/icons/protocol.svg" alt="" />
@@ -59,7 +59,7 @@
       </div>
       <div class="rhombus-back">&nbsp;</div>
 
-      <!-- This container scrolls independently -->
+      <!-- Right content: no outer scroll; inner panel/table manage scroll -->
       <div class="section-content-container right-content">
         <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
 
@@ -102,7 +102,7 @@
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table (6 columns) — scrolls inside panel -->
+          <!-- Table (6 columns) — fills panel and scrolls inside -->
           <div class="table-scroll">
             <div class="table">
               <div class="tr head">
@@ -434,7 +434,7 @@ export default {
   width: 100%;
 }
 
-/* Ensure these windows behave as independent blocks */
+/* Independent windows */
 .windows-grid > .section-container {
   position: relative !important;
   width: 100%;
@@ -442,61 +442,60 @@ export default {
   align-self: start; /* do not stretch to tallest */
 }
 
-/* Left window should NOT grow with right; keep natural height */
-.left-window {
-  height: auto !important;
-  max-height: none !important;
-}
+/* Left window stays short */
+.left-window { height: auto !important; max-height: none !important; }
 
-/* Right window: internal scrolling (header fixed in panel) */
+/* Right window container */
 .right-window {
   display: flex;
   flex-direction: column;
-  max-height: 100vh;   /* hard cap at viewport */
-  overflow: hidden;    /* inner content scrolls */
+  max-height: 100vh;  /* cap to viewport */
+  overflow: hidden;   /* inner manages scroll */
 }
+
+/* No outer scroll; keep padding minimal */
 .right-window .section-content-container.right-content {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
-  padding: .6rem .6rem .2rem; /* trim bottom to avoid spill */
+  overflow: hidden;      /* IMPORTANT: prevent double-scroll; inner handles it */
+  padding: .6rem .6rem .2rem;
 }
 
-/* Limit promotions screen height further and scroll table within */
+/* Promotions panel: fixed height so list reaches the bottom */
 .promotions-panel {
   display: flex;
   flex-direction: column;
   gap: .6rem;
-  max-height: 72vh;   /* still majority, no overflow */
-  min-height: 48vh;
-  overflow: hidden;   /* keep inner scrolling in table area */
+  height: 72vh;      /* fixed majority height */
+  max-height: 72vh;
+  min-height: 50vh;
+  overflow: hidden;  /* table-scroll will scroll */
 }
+
+/* Table area fills remaining space and scrolls */
 .table-scroll {
   flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;     /* table scrolls here */
+  min-height: 0;     /* required for flex children to shrink */
+  overflow: auto;
 }
+
+/* ensure the visual list fills to bottom edge */
+.table { min-height: 100%; }
 
 /* Decoration */
 .rhombus-back {
   height: 6px;
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(30, 144, 255, 0.2) 0px,
-    rgba(30, 144, 255, 0.2) 10px,
-    transparent 10px,
-    transparent 20px
-  );
+  background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px );
 }
 .clipped-medium-backward {
   clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
-  background: linear-gradient(90deg, rgba(5, 20, 40, 0.85), rgba(5, 20, 40, 0.5));
-  padding: 0.4rem 0.75rem;
-  border: 1px solid rgba(30, 144, 255, 0.35);
+  background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
+  padding: .4rem .75rem;
+  border: 1px solid rgba(30,144,255,.35);
   border-left-width: 0;
-  border-radius: 0 0.35rem 0.35rem 0;
+  border-radius: 0 .35rem .35rem 0;
 }
-.section-header { display: flex; align-items: center; gap: 0.6rem; }
+.section-header { display: flex; align-items: center; gap: .6rem; }
 .section-header img { width: 28px; height: 28px; }
 
 /* Right header grid */
@@ -504,73 +503,65 @@ export default {
 .right-actions { display: flex; gap: .4rem; }
 
 /* Left: tiles + login */
-.rail { display: grid; gap: 0.6rem; align-content: start; }
+.rail { display: grid; gap: .6rem; align-content: start; }
 .rail-card {
   text-align: left;
-  border: 1px solid rgba(30, 144, 255, 0.35);
-  background: rgba(0, 10, 30, 0.35);
-  border-radius: 0.5rem;
-  padding: 0.6rem;
+  border: 1px solid rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.35);
+  border-radius: .5rem;
+  padding: .6rem;
   cursor: pointer;
 }
-.rail-card.active { border-color: rgba(120, 255, 170, 0.7); }
-.rail-card-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+.rail-card.active { border-color: rgba(120,255,170,0.7); }
+.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
 .rail-icon { width: 20px; height: 20px; }
 .rail-title, .rail-line .label { color: #d9ebff; }
-.rail-card-body { display: grid; gap: 0.25rem; }
-.pill { font-size: 0.85rem; border: 1px solid rgba(30, 144, 255, 0.45); border-radius: 999px; padding: 0.05rem 0.5rem; color: #e6f3ff; }
-.pill.ok { border-color: rgba(120, 255, 170, 0.7); }
-.pill.warn { border-color: rgba(255, 190, 80, 0.7); }
-.rail-foot { margin-top: 0.25rem; font-size: 0.8rem; color: #9ec5e6; }
+.rail-card-body { display: grid; gap: .25rem; }
+.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
+.pill.ok { border-color: rgba(120,255,170,0.7); }
+.pill.warn { border-color: rgba(255,190,80,0.7); }
+.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-.login-card {
-  border: 1px solid rgba(30, 144, 255, 0.35);
-  background: rgba(0, 10, 30, 0.35);
-  border-radius: 0.5rem;
-  padding: 0.6rem;
-  display: grid;
-  gap: 0.5rem;
-}
-.login-error { color: #ffb080; margin: 0.2rem 0 0; }
+.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
+.login-error { color: #ffb080; margin: .2rem 0 0; }
 
-/* Buttons & controls */
-.btn-sm { font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 0.35rem; border: 1px solid rgba(30, 144, 255, 0.45); background: rgba(0, 10, 30, 0.25); color: #cfe6ff; cursor: pointer; }
-.btn-sm.ghost { background: transparent; border-color: rgba(30, 144, 255, 0.45); }
-.control { display: grid; gap: 0.2rem; }
-.control span { font-size: 0.85rem; color: #9ec5e6; }
-.control input, .control select { background: rgba(0, 10, 30, 0.3); border: 1px solid rgba(30, 144, 255, 0.35); border-radius: 0.35rem; padding: 0.35rem 0.45rem; color: #cfe6ff; }
-.control.chk { align-items: center; grid-auto-flow: column; gap: 0.35rem; }
-
-/* Filters / chips */
-.filters { border: 1px dashed rgba(30, 144, 255, 0.35); border-radius: 0.35rem; padding: 0.5rem; margin-bottom: 0.6rem; }
-.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 0.6rem; align-items: end; }
-.chips { display: flex; gap: 0.45rem; margin-bottom: 0.55rem; flex-wrap: wrap; }
-.chip { padding: 0.25rem 0.5rem; border-radius: 999px; background: rgba(0, 10, 30, 0.25); border: 1px solid rgba(30, 144, 255, 0.45); color: #e6f3ff; font-size: 0.85rem; }
-.chip.ok { border-color: rgba(120, 255, 170, 0.7); }
-.chip.warn { border-color: rgba(255, 190, 80, 0.7); }
+/* Controls & chips */
+.btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
+.control { display: grid; gap: .2rem; }
+.control span { font-size: .85rem; color: #9ec5e6; }
+.control input, .control select { background: rgba(0,10,30,0.3); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #cfe6ff; }
+.control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
+.chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,.45); color: #e6f3ff; font-size: .85rem; }
+.chip.ok { border-color: rgba(120,255,170,0.7); }
+.chip.warn { border-color: rgba(255,190,80,0.7); }
 .muted { color: #9ec5e6; }
 
-/* Table */
-.table { border: 1px dashed rgba(30, 144, 255, 0.35); border-radius: 0.35rem; overflow: hidden; }
-.tr { display: grid; grid-template-columns: 1.6fr 0.8fr 1fr 0.6fr 0.9fr 1.2fr; align-items: center; }
-.tr.head { background: rgba(0, 10, 30, 0.35); font-weight: 600; }
-.th, .td { padding: 0.4rem 0.5rem; border-bottom: 1px dashed rgba(30, 144, 255, 0.25); color: #e6f3ff; }
+/* Table (6 columns) */
+.table {
+  border: 1px dashed rgba(30,144,255,0.35);
+  border-radius: .35rem;
+  overflow: hidden;
+}
+.tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
+.tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
+.th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); color: #e6f3ff; }
 .tr:last-child .td { border-bottom: 0; }
 
 /* Progress bar */
-.bar { height: 8px; background: rgba(0, 10, 30, 0.35); border: 1px solid rgba(30, 144, 255, 0.35); border-radius: 999px; position: relative; overflow: hidden; }
-.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width 0.25s ease; background: rgba(120, 200, 255, 0.6); }
-.bar.done .fill { background: rgba(120, 255, 170, 0.7); }
+.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
+.bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* Responsive tuning: slightly smaller cap on narrower screens */
+/* Responsive tuning */
 @media (max-width: 1200px) {
   .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
-  .promotions-panel { max-height: 68vh; }
+  .promotions-panel { height: 68vh; max-height: 68vh; }
 }
 @media (max-width: 980px) {
   .windows-grid { grid-template-columns: 1fr; }
-  .right-window { order: 1; max-height: 100vh; }
+  .right-window { order: 1; }
   .left-window { order: 2; }
-  .promotions-panel { max-height: 64vh; }
+  .promotions-panel { height: 64vh; max-height: 64vh; }
 }
 </style>
