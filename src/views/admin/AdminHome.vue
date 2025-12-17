@@ -262,7 +262,7 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API (locked to your values)
+      // Discipline API
       discEndpoint: "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec",
       discSecret: "PLEX",
       discLoading: false,
@@ -271,8 +271,8 @@ export default {
       discOK: false,
       disciplineRows: [],
 
-      // Status via CSV (RefData)
-      troopStatusCsvUrl: "", // <<< PASTE your published CSV URL here (RefData sheet)
+      // Status via CSV (RefData) — using your sheet
+      troopStatusCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
       csvStatusIndex: Object.create(null),
 
       // Filters + editor
@@ -326,7 +326,6 @@ export default {
       return idx;
     },
     statusIndex() {
-      // why: CSV overrides API if present; otherwise API provides fallback
       return new Proxy({}, {
         get: (_, k) => this.csvStatusIndex[k] ?? this.statusIndexFromApi[k],
         has: (_, k) => (k in this.csvStatusIndex) || (k in this.statusIndexFromApi)
@@ -628,7 +627,7 @@ export default {
         const nameIdx = header.findIndex(h => h === 'troop list' || h === 'name' || h === 'member' || h === 'trooper');
         const statusIdx = header.findIndex(h => h === 'troop status' || h === 'status');
 
-        if (nameIdx === -1 || statusIdx === -1) return; // cannot map; keep Unknown
+        if (nameIdx === -1 || statusIdx === -1) return;
 
         const map = Object.create(null);
         for (let i = 1; i < rows.length; i++) {
@@ -641,12 +640,12 @@ export default {
         }
         this.csvStatusIndex = map;
       } catch (e) {
-        // why: if CSV fails, fall back to API/Unknown silently
+        // why: fall back silently to API/Unknown; UI still works
         console.warn('CSV status load failed:', e);
       }
     },
     parseCsv(text) {
-      // RFC4180-ish minimal parser for commas and quotes
+      // minimal RFC4180-ish parser (handles quotes and commas)
       const rows = [];
       let cur = [];
       let val = '';
@@ -655,8 +654,7 @@ export default {
         const ch = text[i];
         if (inQ) {
           if (ch === '"') {
-            if (text[i + 1] === '"') { val += '"'; i++; } // escaped quote
-            else { inQ = false; }
+            if (text[i + 1] === '"') { val += '"'; i++; } else { inQ = false; }
           } else { val += ch; }
         } else {
           if (ch === '"') inQ = true;
@@ -666,9 +664,7 @@ export default {
           else { val += ch; }
         }
       }
-      cur.push(val);
-      rows.push(cur);
-      // trim trailing empty last row (when file ends with newline)
+      cur.push(val); rows.push(cur);
       if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
       return rows;
     },
@@ -688,7 +684,7 @@ export default {
           nameKey: this.nameKey(r.name || r.nameKey || ''),
           notes: r.notes || '',
           warnings: r.warnings || 'N, N, N',
-          status: this.normalizeStatus(r.status || r.troopStatus), // may be empty; CSV overrides
+          status: this.normalizeStatus(r.status || r.troopStatus),
         }));
       } catch (e) {
         this.discError = String(e?.message || e);
@@ -704,7 +700,7 @@ export default {
     focusMemberByNameKey(nk) {
       const m = (this.members || []).find(x => this.nameKey(x?.name) === nk);
       if (!m) return;
-      if (this.isDischarged(this.memberStatusOf(m))) return; // ignore discharged
+      if (this.isDischarged(this.memberStatusOf(m))) return;
       this.edit.memberId = m.id || null;
       this.populateEditFromMember();
       this.$nextTick(() => {
@@ -754,7 +750,7 @@ export default {
       try {
         const res = await fetch(this.discEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // simple request (no preflight)
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // why: simple request, no preflight/CORS issues
           body: JSON.stringify(payload),
           redirect: 'follow',
         });
