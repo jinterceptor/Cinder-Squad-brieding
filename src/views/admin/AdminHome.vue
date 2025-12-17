@@ -456,25 +456,42 @@ export default {
 .promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
 
 /* Table container */
-.table-scroll { flex: 1 1 auto; min-height: 0; overflow: hidden; } /* body inside handles scroll */
+.table-scroll {
+  display: flex;             /* why: let inner shell size/scroll properly */
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;             /* critical for nested flex scrolling */
+  overflow: hidden;          /* body inside handles scroll */
+}
 .table-shell {
+  flex: 1 1 auto;
+  min-height: 0;             /* allow rows area to shrink */
   border: 1px dashed rgba(30,144,255,0.35);
   border-radius: .35rem;
   background: rgba(0,10,30,0.18);
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* keep header edges crisp */
+  overflow: hidden;
 }
 
 /* Shared grid for header + rows to keep columns aligned */
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
 
+/* Fixed header */
 .tr.head {
   font-weight: 600;
   background: rgba(0,10,30,0.35);
   border-bottom: 1px dashed rgba(30,144,255,0.25);
+  flex: 0 0 auto;
 }
-.rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* Scrollable rows */
+.rows-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;            /* actual scrolling happens here */
+}
+
 .tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .rows-scroll .tr:last-child .td { border-bottom: 0; }
 
