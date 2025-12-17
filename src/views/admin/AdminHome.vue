@@ -11,11 +11,10 @@
     </div>
 
     <div class="section-content-container">
-      <!-- Workspace: always render; lock features until authed -->
       <div class="admin-frame">
-        <!-- LEFT: Menu rail with login on top-left when not authed -->
+        <!-- LEFT: rail with login top-left -->
         <aside class="rail">
-          <!-- Login card (top-left) -->
+          <!-- Login card -->
           <div v-if="!isAuthed" class="login-card">
             <div class="login-head">
               <img src="/icons/protocol.svg" alt="" class="rail-icon" />
@@ -34,7 +33,7 @@
             <p v-if="loginError" class="login-error">{{ loginError }}</p>
           </div>
 
-          <!-- Rail tiles (visible after auth) -->
+          <!-- Tiles -->
           <template v-else>
             <button
               v-for="s in sections"
@@ -59,125 +58,135 @@
           </template>
         </aside>
 
-        <!-- RIGHT: Panels -->
-        <main class="panels">
-          <!-- Prompt while locked -->
-          <div v-if="!isAuthed" class="panel">
-            <div class="panel-header">
-              <h2>Locked</h2>
-            </div>
-            <p class="muted">Enter the admin password on the left to continue.</p>
-          </div>
-
-          <!-- Promotions Panel -->
-          <div v-else-if="activeKey === 'promotions'" class="panel">
-            <div class="panel-header">
-              <h2>Promotions Overview</h2>
-              <div class="panel-actions">
-                <button class="btn-sm" @click="refreshData">Refresh</button>
-                <button class="btn-sm ghost" @click="logout">Logout</button>
+        <!-- RIGHT: single “window” -->
+        <main class="desktop">
+          <div class="window">
+            <div class="window-titlebar">
+              <div class="window-title">
+                <span class="dot"></span>
+                {{ windowTitle }}
+              </div>
+              <div class="window-actions">
+                <button
+                  v-if="isAuthed && activeKey === 'promotions'"
+                  class="btn-sm"
+                  @click="refreshData"
+                >
+                  Refresh
+                </button>
+                <button
+                  v-if="isAuthed"
+                  class="btn-sm ghost"
+                  @click="logout"
+                >
+                  Logout
+                </button>
               </div>
             </div>
 
-            <!-- Filters -->
-            <div class="filters">
-              <div class="row">
-                <label class="control">
-                  <span>Search</span>
-                  <input type="text" v-model="search" placeholder="Name, rank, squad" />
-                </label>
-
-                <label class="control">
-                  <span>Squad</span>
-                  <select v-model="selectedSquad">
-                    <option value="__ALL__">All squads</option>
-                    <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
-                  </select>
-                </label>
-
-                <label class="control">
-                  <span>Sort by</span>
-                  <select v-model="sortKey">
-                    <option value="rank">Rank (high→low)</option>
-                    <option value="ops">Ops attended</option>
-                    <option value="progress">Progress to next rank</option>
-                    <option value="name">Name (A→Z)</option>
-                  </select>
-                </label>
-
-                <label class="control chk">
-                  <input type="checkbox" v-model="onlyPromotable" />
-                  Promotable only
-                </label>
-              </div>
-            </div>
-
-            <!-- Summary chips -->
-            <div class="chips">
-              <span class="chip">Total: {{ promotionsTable.length }}</span>
-              <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
-              <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
-            </div>
-
-            <!-- Table -->
-            <div class="table">
-              <div class="tr head">
-                <span class="th name">Name</span>
-                <span class="th rank">Rank</span>
-                <span class="th squad">Squad</span>
-                <span class="th ops">Ops</span>
-                <span class="th next">Next Rank</span>
-                <span class="th prog">Progress</span>
-                <span class="th act">Actions</span>
+            <div class="window-content">
+              <!-- Locked -->
+              <div v-if="!isAuthed">
+                <p class="muted">Enter the admin password on the left to continue.</p>
               </div>
 
-              <div v-for="row in promotionsTable" :key="row.id" class="tr">
-                <span class="td name">{{ row.name }}</span>
-                <span class="td rank">{{ row.rank }}</span>
-                <span class="td squad">{{ row.squad }}</span>
-                <span class="td ops">
-                  <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
-                  <span v-else class="muted">N/A</span>
-                </span>
-                <span class="td next">
-                  <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
-                  <span v-else class="muted">—</span>
-                </span>
-                <span class="td prog">
-                  <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
-                    <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
+              <!-- Promotions -->
+              <div v-else-if="activeKey === 'promotions'">
+                <!-- Filters -->
+                <div class="filters">
+                  <div class="row">
+                    <label class="control">
+                      <span>Search</span>
+                      <input type="text" v-model="search" placeholder="Name, rank, squad" />
+                    </label>
+
+                    <label class="control">
+                      <span>Squad</span>
+                      <select v-model="selectedSquad">
+                        <option value="__ALL__">All squads</option>
+                        <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
+                      </select>
+                    </label>
+
+                    <label class="control">
+                      <span>Sort by</span>
+                      <select v-model="sortKey">
+                        <option value="rank">Rank (high→low)</option>
+                        <option value="ops">Ops attended</option>
+                        <option value="progress">Progress to next rank</option>
+                        <option value="name">Name (A→Z)</option>
+                      </select>
+                    </label>
+
+                    <label class="control chk">
+                      <input type="checkbox" v-model="onlyPromotable" />
+                      Promotable only
+                    </label>
                   </div>
-                </span>
-                <span class="td act">
-                  <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">
-                    Mark Promoted
-                  </button>
-                  <button class="btn-sm ghost" @click="openMember(row)">Open</button>
-                </span>
-              </div>
-            </div>
-          </div>
+                </div>
 
-          <!-- Roster Audits (stub) -->
-          <div v-else-if="activeKey === 'audits'" class="panel">
-            <div class="panel-header">
-              <h2>Roster Audits</h2>
-              <div class="panel-actions">
-                <button class="btn-sm ghost" @click="logout">Logout</button>
-              </div>
-            </div>
-            <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
-          </div>
+                <!-- Summary chips -->
+                <div class="chips">
+                  <span class="chip">Total: {{ promotionsTable.length }}</span>
+                  <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
+                  <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
+                </div>
 
-          <!-- Placeholder for future panels -->
-          <div v-else class="panel">
-            <div class="panel-header">
-              <h2>Coming soon</h2>
-              <div class="panel-actions">
-                <button class="btn-sm ghost" v-if="isAuthed" @click="logout">Logout</button>
+                <!-- Table -->
+                <div class="table">
+                  <div class="tr head">
+                    <span class="th name">Name</span>
+                    <span class="th rank">Rank</span>
+                    <span class="th squad">Squad</span>
+                    <span class="th ops">Ops</span>
+                    <span class="th next">Next Rank</span>
+                    <span class="th prog">Progress</span>
+                    <span class="th act">Actions</span>
+                  </div>
+
+                  <div v-for="row in promotionsTable" :key="row.id" class="tr">
+                    <span class="td name">{{ row.name }}</span>
+                    <span class="td rank">{{ row.rank }}</span>
+                    <span class="td squad">{{ row.squad }}</span>
+                    <span class="td ops">
+                      <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                      <span v-else class="muted">N/A</span>
+                    </span>
+                    <span class="td next">
+                      <span v-if="row.nextRank">
+                        {{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small>
+                      </span>
+                      <span v-else class="muted">—</span>
+                    </span>
+                    <span class="td prog">
+                      <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
+                        <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
+                      </div>
+                    </span>
+                    <span class="td act">
+                      <button
+                        class="btn-sm"
+                        v-if="row.opsToNext === 0 && row.nextRank"
+                        @click="markPromoted(row)"
+                      >
+                        Mark Promoted
+                      </button>
+                      <button class="btn-sm ghost" @click="openMember(row)">Open</button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Audits (stub) -->
+              <div v-else-if="activeKey === 'audits'">
+                <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
+              </div>
+
+              <!-- Future -->
+              <div v-else>
+                <p class="muted">Select a tool from the left.</p>
               </div>
             </div>
-            <p class="muted">Select a tool from the left.</p>
           </div>
         </main>
       </div>
@@ -191,7 +200,7 @@ export default {
   data() {
     return {
       // auth
-      isAuthed: false,          // runtime only; reset on refresh
+      isAuthed: false,
       passwordInput: "",
       loginError: "",
       activeKey: "promotions",
@@ -202,7 +211,7 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // rank sort order
+      // rank order
       rankOrderHighToLow: [
         "MAJ","CAPT","1STLT","2NDLT",
         "CWO5","CWO4","CWO3","CWO2","WO",
@@ -211,7 +220,7 @@ export default {
         "HA"
       ],
 
-      // demo data (replace with API wiring)
+      // demo data
       members: [
         { id: 1, name: "J. Frost", rank: "CPL", squad: "Alpha", opsAttended: 8 },
         { id: 2, name: "R. Hart", rank: "LCPL", squad: "Alpha", opsAttended: 3 },
@@ -219,21 +228,24 @@ export default {
         { id: 4, name: "T. Wells", rank: "PFC", squad: "Bravo", opsAttended: 2 },
         { id: 5, name: "S. King", rank: "SGT", squad: "HQ", opsAttended: 12 },
       ],
-      orbat: [
-        { squad: "HQ" },
-        { squad: "Alpha" },
-        { squad: "Bravo" },
-      ],
+      orbat: [{ squad: "HQ" }, { squad: "Alpha" }, { squad: "Bravo" }],
     };
   },
   created() {
-    // Require fresh login on reload; ensure no leftover flags
+    // Always require fresh login on reload; clear any previous flags.
     try {
       localStorage.removeItem("admin-auth");
       sessionStorage.removeItem("admin-authed");
     } catch {}
   },
   computed: {
+    windowTitle() {
+      if (!this.isAuthed) return "Locked";
+      return {
+        promotions: "Promotions Overview",
+        audits: "Roster Audits",
+      }[this.activeKey] || "Admin Tools";
+    },
     sections() {
       return [
         {
@@ -245,24 +257,15 @@ export default {
             { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
           ],
         },
-        {
-          key: "audits",
-          title: "Roster Audits",
-          icon: "/icons/list.svg",
-          preview: [],
-        },
+        { key: "audits", title: "Roster Audits", icon: "/icons/list.svg", preview: [] },
       ];
     },
-
-    /* squads for filter */
     squads() {
       const set = new Set();
       (this.members || []).forEach(m => { const s = (m.squad || "").trim(); if (s) set.add(s); });
       (this.orbat || []).forEach(sq => { const s = (sq.squad || "").trim(); if (s) set.add(s); });
       return Array.from(set).sort((a,b)=>a.localeCompare(b));
     },
-
-    /* attendance map by id/name */
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach(m => {
@@ -275,17 +278,13 @@ export default {
       });
       return map;
     },
-
-    /* filtered + sorted promotions table rows */
     promotionsTable() {
       const term = (this.search || "").trim().toLowerCase();
       const squad = this.selectedSquad;
       const onlyProm = !!this.onlyPromotable;
 
       const rows = [];
-
       for (const m of (this.members || [])) {
-        // filters
         if (term) {
           const hit =
             (m.name || "").toLowerCase().includes(term) ||
@@ -321,10 +320,8 @@ export default {
         });
       }
 
-      // only promotable
       const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
 
-      // sorting
       const sorter = {
         rank: (a,b) => a.rankScore - b.rankScore,
         ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
@@ -334,8 +331,6 @@ export default {
 
       return filtered.sort(sorter);
     },
-
-    /* counters for preview + chips */
     eligibleNowCount() {
       return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
     },
@@ -343,30 +338,13 @@ export default {
       return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
     },
 
-    /* rank helpers */
+    // rank helpers
     rankKey() {
       const alias = {
-        PRIVATE: "PVT", PVT: "PVT",
-        PRIVATEFIRSTCLASS: "PFC", PFC: "PFC",
-        SPECIALIST: "SPC", SPC: "SPC",
-        SPECIALIST2: "SPC2", SPC2: "SPC2",
-        SPECIALIST3: "SPC3", SPC3: "SPC3",
-        SPECIALIST4: "SPC4", SPC4: "SPC4",
-        HOSPITALMANAPPRENTICE: "HA", HA: "HA",
-        LANCECORPORAL: "LCPL", LCPL: "LCPL",
-        CORPORAL: "CPL", CPL: "CPL",
-        SERGEANT: "SGT", SGT: "SGT",
-        STAFFSERGEANT: "SSGT", SSGT: "SSGT",
-        GUNNYSERGEANT: "GYSGT", GYSGT: "GYSGT",
-        WARRANTOFFICER: "WO", WO: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CWO2: "CWO2",
-        CHIEFWARRANTOFFICER3: "CWO3", CWO3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CWO4: "CWO4",
-        CHIEFWARRANTOFFICER5: "CWO5", CWO5: "CWO5",
-        SECONDLIEUTENANT: "2NDLT", "2NDLT": "2NDLT",
-        FIRSTLIEUTENANT: "1STLT", "1STLT": "1STLT",
-        CAPTAIN: "CAPT", CAPT: "CAPT",
-        MAJOR: "MAJ", MAJ: "MAJ",
+        PRIVATE: "PVT", PFC: "PFC", SPC: "SPC", SPC2: "SPC2", SPC3: "SPC3", SPC4: "SPC4",
+        LCPL: "LCPL", CPL: "CPL", SGT: "SGT", SSGT: "SSGT", GYSGT: "GYSGT",
+        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
+        "2NDLT": "2NDLT", "1STLT": "1STLT", CAPT: "CAPT", MAJ: "MAJ", HA: "HA",
       };
       return (rank) => {
         if (!rank) return "";
@@ -380,12 +358,11 @@ export default {
         const aliasWO = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
         const rk = aliasWO[k] || k;
         const idx = this.rankOrderHighToLow.indexOf(rk);
-        return idx === -1 ? 999 : idx; // lower = higher rank
+        return idx === -1 ? 999 : idx;
       };
     },
     promotionLadderFor() {
       const ladders = {
-        // Enlisted
         PVT:  { nextAt: 2, nextRank: "PFC" },
         PFC:  { nextAt: 4, nextRank: "SPC" },
         SPC:  { nextAt: 6, nextRank: "LCPL" },
@@ -393,16 +370,14 @@ export default {
         CPL:  { nextAt: 10, nextRank: "SGT" },
         SGT:  { nextAt: 12, nextRank: "SSGT" },
         SSGT: { nextAt: 14, nextRank: "GYSGT" },
-        GYSGT:{ nextAt: null, nextRank: null },
+        GYSGT: { nextAt: null, nextRank: null },
 
-        // Warrant
         WO:   { nextAt: 8, nextRank: "CWO2" },
         CWO2: { nextAt: 12, nextRank: "CWO3" },
         CWO3: { nextAt: 16, nextRank: "CWO4" },
         CWO4: { nextAt: 20, nextRank: "CWO5" },
         CWO5: { nextAt: null, nextRank: null },
 
-        // Commissioned
         "2NDLT": { nextAt: null, nextRank: "1STLT" },
         "1STLT": { nextAt: null, nextRank: "CAPT" },
         CAPT:    { nextAt: null, nextRank: "MAJ" },
@@ -415,10 +390,7 @@ export default {
     // Auth (runtime only)
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
-      if (!code) {
-        this.loginError = "Please enter the password.";
-        return;
-      }
+      if (!code) { this.loginError = "Please enter the password."; return; }
       if (code === "150th") {
         this.isAuthed = true;
         this.passwordInput = "";
@@ -435,15 +407,9 @@ export default {
     },
 
     // Actions
-    refreshData() {
-      console.log("Refresh requested");
-    },
-    markPromoted(row) {
-      alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`);
-    },
-    openMember(row) {
-      console.log("Open member (stub):", row);
-    },
+    refreshData() { console.log("Refresh requested"); },
+    markPromoted(row) { alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`); },
+    openMember(row) { console.log("Open member (stub):", row); },
 
     // Utils
     isFiniteNum(v) { return Number.isFinite(v); },
@@ -477,11 +443,16 @@ export default {
   border-radius: 0 .35rem .35rem 0;
 }
 
-/* Frame */
+/* Layout */
 .admin-frame {
   display: grid;
   grid-template-columns: 300px 1fr;
   gap: .8rem;
+}
+.desktop {
+  /* reserve a predictable window height; adjust if your header height changes */
+  min-height: calc(100vh - 52px - 24px);
+  display: grid;
 }
 
 /* Rail */
@@ -522,29 +493,35 @@ export default {
 .login-head { display: flex; align-items: center; gap: .5rem; }
 .login-error { color: #ffb080; margin: .2rem 0 0; }
 
-/* Panels */
-.panels { display: grid; gap: .8rem; }
-.panel {
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.25);
-  border-radius: .5rem;
-  padding: .6rem;
-}
-.panel-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: .6rem;
-}
-.panel-actions { display: flex; gap: .4rem; }
-.btn-sm {
-  font-size: .85rem;
-  padding: .25rem .5rem;
-  border-radius: .35rem;
+/* Window */
+.window {
   border: 1px solid rgba(30,144,255,0.45);
   background: rgba(0,10,30,0.25);
-  color: #cfe6ff;
-  cursor: pointer;
+  border-radius: .6rem;
+  box-shadow: 0 6px 28px rgba(0,0,0,.35);
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* flex overflow fix */
 }
-.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
+.window-titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .5rem .65rem;
+  background: linear-gradient(180deg, rgba(5,20,40,.75), rgba(5,20,40,.6));
+  border-bottom: 1px solid rgba(30,144,255,0.35);
+  border-radius: .6rem .6rem 0 0;
+}
+.window-title { display: flex; align-items: center; gap: .45rem; font-weight: 600; }
+.window-title .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgba(120,200,255,.9);
+  box-shadow: 0 0 8px rgba(120,200,255,.9);
+}
+.window-actions { display: flex; gap: .4rem; }
+.window-content {
+  padding: .6rem;
+  overflow: auto; /* independent scroll */
+  max-height: calc(100vh - 52px - 24px - 44px); /* page minus header, padding, titlebar */
+}
 
 /* Filters */
 .filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
@@ -581,15 +558,6 @@ export default {
 .tr:last-child .td { border-bottom: 0; }
 .td .muted { color: #9ec5e6; }
 
-/* table columns */
-.td.name, .th.name { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-.td.rank, .th.rank { text-align: left; }
-.td.squad, .th.squad { text-align: left; }
-.td.ops, .th.ops { text-align: right; }
-.td.next, .th.next { text-align: left; }
-.td.prog, .th.prog { }
-.td.act, .th.act { text-align: right; }
-
 /* progress bar */
 .bar {
   height: 8px;
@@ -599,20 +567,17 @@ export default {
   position: relative;
   overflow: hidden;
 }
-.bar .fill {
-  position: absolute; left: 0; top: 0; bottom: 0;
-  width: 0%; transition: width .25s ease;
-  background: rgba(120,200,255,0.6);
-}
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
 /* Misc */
 .empty { padding: .7rem .8rem; color: #9ec5e6; }
 .muted { color: #9ec5e6; }
 
-/* Responsive: stack rails under 980px */
+/* Responsive */
 @media (max-width: 980px) {
   .admin-frame { grid-template-columns: 1fr; }
   .rail { grid-auto-flow: column; grid-auto-columns: minmax(260px, 1fr); overflow-x: auto; }
+  .window-content { max-height: none; }
 }
 </style>
