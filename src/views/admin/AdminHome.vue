@@ -250,8 +250,8 @@ export default {
       onlyPromotable: false,
 
       // Discipline API
-      discEndpoint: "https://YOUR_WEB_APP_URL/exec", // <-- Apps Script Web App URL
-      discSecret: "CHANGE_ME",                       // <-- must match SECRET
+      discEndpoint: "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec", // <-- Apps Script Web App URL
+      discSecret: "PLEX",                       // <-- must match SECRET
       discLoading: false,
       discSaving: false,
       discError: "",
