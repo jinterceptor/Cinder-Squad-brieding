@@ -1,8 +1,7 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
-  <!-- Two independent windows as siblings -->
   <div class="windows-grid">
-    <!-- LEFT WINDOW -->
+    <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/protocol.svg" alt="" />
@@ -51,17 +50,16 @@
       </div>
     </section>
 
-    <!-- RIGHT WINDOW (dominant) -->
+    <!-- RIGHT WINDOW: Overview -->
     <section class="section-container right-window">
       <div class="section-header clipped-medium-backward right-header">
         <img src="/icons/protocol.svg" alt="" />
         <h1>{{ windowTitle }}</h1>
-        <div class="right-actions"><!-- buttons removed by request --></div>
+        <div class="right-actions"><!-- intentionally empty --></div>
       </div>
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container right-content">
-        <!-- Locked -->
         <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
 
         <!-- Promotions -->
@@ -73,7 +71,6 @@
                 <span>Search</span>
                 <input type="text" v-model="search" placeholder="Name, rank, squad" />
               </label>
-
               <label class="control">
                 <span>Squad</span>
                 <select v-model="selectedSquad">
@@ -81,7 +78,6 @@
                   <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
                 </select>
               </label>
-
               <label class="control">
                 <span>Sort by</span>
                 <select v-model="sortKey">
@@ -91,7 +87,6 @@
                   <option value="name">Name (A→Z)</option>
                 </select>
               </label>
-
               <label class="control chk">
                 <input type="checkbox" v-model="onlyPromotable" />
                 Promotable only
@@ -121,7 +116,7 @@
             <div v-for="row in promotionsTable" :key="row.id" class="tr">
               <span class="td name">{{ row.name }}</span>
               <span class="td rank">{{ row.rank }}</span>
-              <span class="td squad">{{ row.squad }}</span>
+              <span class="td squad">{{ row.squad || '—' }}</span>
               <span class="td ops">
                 <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
                 <span v-else class="muted">N/A</span>
@@ -143,12 +138,11 @@
           </div>
         </div>
 
-        <!-- Audits (stub) -->
+        <!-- Future pages -->
         <div v-else-if="activeKey === 'audits'">
           <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
         </div>
 
-        <!-- Future -->
         <div v-else class="muted">Select a tool from the left.</div>
       </div>
     </section>
@@ -158,8 +152,15 @@
 <script>
 export default {
   name: "AdminHome",
+  props: {
+    /* Same feed as PilotsView */ // :contentReference[oaicite:3]{index=3}
+    members: { type: Array, default: () => [] },
+    orbat:   { type: Array, default: () => [] },
+    attendance: { type: Array, default: () => [] },
+  },
   data() {
     return {
+      // auth
       isAuthed: false,
       passwordInput: "",
       loginError: "",
@@ -170,42 +171,139 @@ export default {
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
-
-      // rank order
-      rankOrderHighToLow: [
-        "MAJ","CAPT","1STLT","2NDLT",
-        "CWO5","CWO4","CWO3","CWO2","WO",
-        "GYSGT","SSGT","SGT","CPL","LCPL",
-        "SPC4","SPC3","SPC2","SPC","PFC","PVT",
-        "HA"
-      ],
-
-      // data (filled from Google Sheets; falls back to demo)
-      members: [
-        { id: 1, name: "J. Frost", rank: "CPL", squad: "Alpha", opsAttended: 8 },
-        { id: 2, name: "R. Hart", rank: "LCPL", squad: "Alpha", opsAttended: 3 },
-        { id: 3, name: "M. Ruiz", rank: "SPC3", squad: "Bravo", opsAttended: 5 },
-        { id: 4, name: "T. Wells", rank: "PFC", squad: "Bravo", opsAttended: 2 },
-        { id: 5, name: "S. King", rank: "SGT", squad: "HQ", opsAttended: 12 },
-      ],
-      orbat: [{ squad: "HQ" }, { squad: "Alpha" }, { squad: "Bravo" }],
-
-      // sheet config
-      sheetId: import.meta.env.VITE_SHEET_ID || "",
-      tabMembers: import.meta.env.VITE_TAB_MEMBERS || "Members",
     };
   },
   created() {
+    // fresh login on reload
     try {
       localStorage.removeItem("admin-auth");
       sessionStorage.removeItem("admin-authed");
     } catch {}
   },
-  mounted() {
-    // Load Google Sheet if configured.
-    this.loadFromSheet();
-  },
   computed: {
+    /* ======= Borrowed logic from PilotsView (normalized) ======= */ // :contentReference[oaicite:4]{index=4}
+    nameKey() {
+      return (name) =>
+        String(name || "")
+          .replace(/["'.]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toUpperCase();
+    },
+    attendanceMap() {
+      const map = Object.create(null);
+      (this.members || []).forEach(m => {
+        const ops = Number(m.opsAttended);
+        if (Number.isFinite(ops)) {
+          if (m.id) map[`ID:${m.id}`] = ops;
+          if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
+        }
+      });
+      (this.attendance || []).forEach(row => {
+        const ops = Number(row?.ops ?? row?.attended ?? row?.value);
+        if (!Number.isFinite(ops)) return;
+        if (row?.id) map[`ID:${row.id}`] = ops;
+        if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
+      });
+      return map;
+    },
+    rankKey() {
+      return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, "");
+    },
+    nextPromotion() {
+      // exact ruleset used in PilotsView (copied) // :contentReference[oaicite:5]{index=5}
+      const alias = {
+        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
+        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
+        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
+        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
+        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
+        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
+        HOSPITALCORPSMANTHIRDCLASS: "HM3",
+        HOSPITALCORPSMANSECONDCLASS: "HM2",
+        HOSPITALCORPSMANFIRSTCLASS: "HM1",
+        CHIEFHOSPITALCORPSMAN: "HMC",
+        WARRANTOFFICER: "WO",
+        CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
+        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
+      };
+      const rules = {
+        PVT:  { nextRank: "PFC",  nextAt: 10,  misc: null },
+        PFC:  { nextRank: "SPC",  nextAt: 20,  misc: null },
+        SPC:  { nextRank: "SPC2", nextAt: 30,  misc: null },
+        SPC2: { nextRank: "SPC3", nextAt: 40,  misc: null },
+        SPC3: { nextRank: "SPC4", nextAt: 50,  misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
+        SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
+        LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
+        CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
+        SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
+        SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
+        GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Support staff / Platoon lead" },
+
+        "2NDLT": { nextRank: "1stLt", nextAt: null, misc: null },
+        "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
+        CAPT:    { nextRank: null,    nextAt: null, misc: null },
+
+        HA:  { nextRank: "HN",  nextAt: 10,  misc: null },
+        HN:  { nextRank: "HM3", nextAt: 20,  misc: null },
+        HM3: { nextRank: "HM2", nextAt: 30,  misc: null },
+        HM2: { nextRank: "HM1", nextAt: null, misc: null },
+        HM1: { nextRank: "HMC", nextAt: null, misc: "Assigned to Corpsman slot & Medic Trainer" },
+        HMC: { nextRank: null,  nextAt: null, misc: null },
+
+        WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
+        CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
+        CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
+        CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
+        CWO5: { nextRank: null,   nextAt: null, misc: "Flight Lead" },
+      };
+      return (member) => {
+        const rk = alias[this.rankKey(member?.rank)] || this.rankKey(member?.rank);
+        return rules[rk] || { nextRank: null, nextAt: null, misc: null };
+      };
+    },
+    opsToNextPromotion() {
+      return (member) => {
+        const ops = this.getOps(member);
+        const rule = this.nextPromotion(member);
+        if (!Number.isFinite(ops)) return null;
+        if (!Number.isFinite(rule.nextAt)) return null;
+        return Math.max(0, rule.nextAt - ops);
+      };
+    },
+
+    /* ORBAT membership → squad lookup identical to how squads are structured */ // :contentReference[oaicite:6]{index=6}
+    membershipIndex() {
+      const idx = Object.create(null);
+      const nk = this.nameKey;
+
+      const addMember = (squadName, m) => {
+        if (!m) return;
+        if (m.id != null) idx[`ID:${m.id}`] = squadName;
+        if (m.name) idx[`NM:${nk(m.name)}`] = squadName;
+      };
+
+      (this.orbat || []).forEach((sq) => {
+        const squadName = String(sq?.squad || "").trim();
+        if (!squadName) return;
+
+        // fireteam/slots style
+        (sq?.fireteams || []).forEach(ft => (ft?.slots || []).forEach(slot => addMember(squadName, slot?.member)));
+        // flat members style
+        (sq?.members || []).forEach(m => addMember(squadName, m));
+      });
+
+      return idx;
+    },
+
+    /* Source squads list: union of ORBAT squads and member.squad fields */
+    squads() {
+      const set = new Set();
+      (this.orbat || []).forEach(sq => { const s = String(sq?.squad || "").trim(); if (s) set.add(s); });
+      (this.members || []).forEach(m => { const s = String(m?.squad || "").trim(); if (s) set.add(s); });
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    },
+
     windowTitle() {
       if (!this.isAuthed) return "Locked";
       return { promotions: "Promotions Overview", audits: "Roster Audits" }[this.activeKey] || "Admin Tools";
@@ -224,27 +322,11 @@ export default {
         { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
       ];
     },
-    squads() {
-      const set = new Set();
-      (this.members || []).forEach(m => { const s = (m.squad || "").trim(); if (s) set.add(s); });
-      (this.orbat || []).forEach(sq => { const s = (sq.squad || "").trim(); if (s) set.add(s); });
-      return Array.from(set).sort((a,b)=>a.localeCompare(b));
-    },
-    attendanceMap() {
-      const map = Object.create(null);
-      (this.members || []).forEach(m => {
-        const ops = Number(m.opsAttended);
-        if (Number.isFinite(ops)) {
-          map[m.id] = ops;
-          const key = (m.name || "").trim().toLowerCase();
-          if (key) map[key] = ops;
-        }
-      });
-      return map;
-    },
+
+    /* Build the table: resolve ops + next rank + correct squad by ORBAT */
     promotionsTable() {
       const term = (this.search || "").trim().toLowerCase();
-      const squad = this.selectedSquad;
+      const squadFilter = this.selectedSquad;
       const onlyProm = !!this.onlyPromotable;
 
       const rows = [];
@@ -256,36 +338,37 @@ export default {
             (m.squad || "").toLowerCase().includes(term);
           if (!hit) continue;
         }
-        if (squad && squad !== "__ALL__" && (m.squad || "") !== squad) continue;
 
-        const ladder = this.promotionLadderFor(m.rank);
-        const nextRank = ladder?.nextRank ?? null;
-        const nextAt = ladder?.nextAt ?? null;
+        // squad: prefer m.squad, else from ORBAT membership
+        const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${this.nameKey(m?.name)}`] || "").trim();
+        if (squadFilter && squadFilter !== "__ALL__" && squad !== squadFilter) continue;
 
-        const ops = this.attendanceMap[m.id];
-        const opsToNext = Number.isFinite(ops) && Number.isFinite(nextAt) ? Math.max(0, nextAt - ops) : null;
+        const rule = this.nextPromotion(m);
+        const ops = this.getOps(m);
+        const nextRank = rule?.nextRank ?? null;
+        const nextAt = rule?.nextAt ?? null;
 
-        let progress = 0;
-        if (nextAt !== null && Number.isFinite(ops)) {
+        let progress = 0, opsToNext = null;
+        if (Number.isFinite(nextAt) && Number.isFinite(ops)) {
           progress = Math.min(100, Math.max(0, Math.round((ops / nextAt) * 100)));
+          opsToNext = Math.max(0, nextAt - ops);
         }
 
         rows.push({
           id: m.id,
           name: m.name || "Unknown",
           rank: m.rank || "N/A",
-          rankScore: this.rankScore(m?.rank),
-          squad: m.squad || "",
+          squad,
           ops: Number.isFinite(ops) ? ops : null,
           nextRank,
           nextAt,
           progress,
           opsToNext,
+          rankScore: this.rankScore(m?.rank),
         });
       }
 
       const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
-
       const sorter = {
         rank: (a,b) => a.rankScore - b.rankScore,
         ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
@@ -295,66 +378,26 @@ export default {
 
       return filtered.sort(sorter);
     },
-    eligibleNowCount() {
-      return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
-    },
-    imminentCount() {
-      return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
-    },
 
-    // rank helpers
-    rankKey() {
-      const alias = {
-        PRIVATE: "PVT", PFC: "PFC", SPC: "SPC", SPC2: "SPC2", SPC3: "SPC3", SPC4: "SPC4",
-        LCPL: "LCPL", CPL: "CPL", SGT: "SGT", SSGT: "SSGT", GYSGT: "GYSGT",
-        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
-        "2NDLT": "2NDLT", "1STLT": "1STLT", CAPT: "CAPT", MAJ: "MAJ", HA: "HA",
-      };
-      return (rank) => {
-        if (!rank) return "";
-        const k = (rank || "").toUpperCase().replace(/\s+/g, "");
-        return alias[k] | k;
-      };
-    },
+    eligibleNowCount() { return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length; },
+    imminentCount()    { return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length; },
+
     rankScore() {
-      return (rank) => {
-        const k = this.rankKey(rank);
-        const aliasWO = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
-        const rk = aliasWO[k] || k;
-        const idx = this.rankOrderHighToLow.indexOf(rk);
-        return idx === -1 ? 999 : idx; // lower index = higher rank
+      const order = [
+        "MAJ","CAPT","1STLT","2NDLT",
+        "CWO5","CWO4","CWO3","CWO2","WO",
+        "GYSGT","SSGT","SGT","CPL","LCPL",
+        "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
+        "HMC","HM1","HM2","HM3","HN","HA","HR",
+      ];
+      return (r) => {
+        const idx = order.indexOf(this.rankKey(r));
+        return idx === -1 ? 999 : idx;
       };
-    },
-    promotionLadderFor() {
-      const ladders = {
-        // Enlisted
-        PVT:  { nextAt: 2, nextRank: "PFC" },
-        PFC:  { nextAt: 4, nextRank: "SPC" },
-        SPC:  { nextAt: 6, nextRank: "LCPL" },
-        LCPL: { nextAt: 8, nextRank: "CPL" },
-        CPL:  { nextAt: 10, nextRank: "SGT" },
-        SGT:  { nextAt: 12, nextRank: "SSGT" },
-        SSGT: { nextAt: 14, nextRank: "GYSGT" },
-        GYSGT:{ nextAt: null, nextRank: null },
-
-        // Warrant
-        WO:   { nextAt: 8, nextRank: "CWO2" },
-        CWO2: { nextAt: 12, nextRank: "CWO3" },
-        CWO3: { nextAt: 16, nextRank: "CWO4" },
-        CWO4: { nextAt: 20, nextRank: "CWO5" },
-        CWO5: { nextAt: null, nextRank: null },
-
-        // Commissioned
-        "2NDLT": { nextAt: null, nextRank: "1STLT" },
-        "1STLT": { nextAt: null, nextRank: "CAPT" },
-        CAPT:    { nextAt: null, nextRank: "MAJ" },
-        MAJ:     { nextAt: null, nextRank: null },
-      };
-      return (rank) => ladders[this.rankKey(rank)] || null;
     },
   },
   methods: {
-    // Auth (runtime only)
+    /* Auth */
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
       if (!code) { this.loginError = "Please enter the password."; return; }
@@ -362,69 +405,33 @@ export default {
       else { this.loginError = "Invalid password."; }
     },
 
-    // Sheets loader (public “Publish to web” → anyone with link)
-    async loadFromSheet() {
-      if (!this.sheetId || !this.tabMembers) return; // no config → keep demo
-      try {
-        const url = `https://docs.google.com/spreadsheets/d/${this.sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(this.tabMembers)}`;
-        const res = await fetch(url, { cache: "no-store" });
-        const text = await res.text();
-
-        // gviz wraps JSON in a function call; extract JSON
-        const json = JSON.parse(text.replace(/^[^\n]*\(/, "").replace(/\);?\s*$/, ""));
-        const cols = (json.table.cols || []).map(c => (c.label || "").toLowerCase().trim());
-        const rows = (json.table.rows || []).map(r => (r.c || []).map(c => (c ? c.v : null)));
-
-        // Helper to find column by likely names
-        const findIdx = (...names) => {
-          const lowered = names.map(n => n.toLowerCase());
-          let i = cols.findIndex(c => lowered.includes(c));
-          if (i !== -1) return i;
-          // fallback by substring (why: headers like 'Ops (attended)')
-          i = cols.findIndex(c => lowered.some(n => c.includes(n)));
-          return i;
-        };
-
-        const idxId   = findIdx("id","member_id","mid");
-        const idxName = findIdx("name","callsign","member","pilot");
-        const idxRank = findIdx("rank","grade");
-        const idxSquad= findIdx("squad","unit","section");
-        const idxOps  = findIdx("ops","opsattended","operations","attendance");
-
-        // Map into members
-        const mapped = rows
-          .map(r => ({
-            id: Number(r[idxId]) || undefined,
-            name: String(r[idxName] ?? "").trim(),
-            rank: String(r[idxRank] ?? "").trim(),
-            squad: String(r[idxSquad] ?? "").trim(),
-            opsAttended: Number(r[idxOps]),
-          }))
-          .filter(x => x.name); // minimal validity
-
-        if (mapped.length) {
-          // If no stable ids, synthesize
-          mapped.forEach((m, i) => { if (!Number.isFinite(m.id)) m.id = i + 1; });
-          this.members = mapped;
-        }
-      } catch (e) {
-        // Silent fallback to demo data (why: avoid breaking admin UI if sheet unplugged)
-        console.warn("Admin: failed to load Google Sheet, using demo data.", e);
+    /* Same as PilotsView resolution order (ID -> Name -> direct) */ // :contentReference[oaicite:7]{index=7}
+    getOps(member) {
+      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
+        return this.attendanceMap[`ID:${member.id}`];
       }
+      if (member?.name) {
+        const nk = this.nameKey(member.name);
+        if (this.attendanceMap[`NM:${nk}`] !== undefined) {
+          return this.attendanceMap[`NM:${nk}`];
+        }
+      }
+      const direct = Number(member?.opsAttended);
+      return Number.isFinite(direct) ? direct : null;
     },
 
-    // Actions (stubs)
+    /* Actions (stubbed) */
     markPromoted(row) { alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`); },
     openMember(row) { console.log("Open member (stub):", row); },
 
-    // Utils
+    /* Utils */
     isFiniteNum(v) { return Number.isFinite(v); },
   },
 };
 </script>
 
 <style scoped>
-/* Layout: LEFT 380px, RIGHT wider (min 1080px); big gutter; prevent overlap */
+/* Layout: LEFT 380px, RIGHT wide (dominant) */
 .windows-grid {
   display: grid;
   grid-template-columns: 380px minmax(1080px, 1fr);
@@ -432,11 +439,9 @@ export default {
   align-items: start;
   width: 100%;
 }
-
-/* Kill absolute/fixed positioning on these windows */
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; }
 
-/* Common ribbons */
+/* Decoration */
 .rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
 .clipped-medium-backward {
   clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
@@ -449,9 +454,8 @@ export default {
 .section-header { display: flex; align-items: center; gap: .6rem; }
 .section-header img { width: 28px; height: 28px; }
 
-/* Right header actions (now empty placeholder to keep layout) */
+/* Right header grid */
 .right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
-.right-actions { display: flex; gap: .4rem; }
 
 /* Left: tiles + login */
 .rail { display: grid; gap: .6rem; align-content: start; }
@@ -477,7 +481,7 @@ export default {
 .login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
 .login-error { color: #ffb080; margin: .2rem 0 0; }
 
-/* Buttons & controls */
+/* Controls */
 .btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
 .btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
 .control { display: grid; gap: .2rem; }
