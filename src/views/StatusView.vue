@@ -1,3 +1,4 @@
+<!-- src/views/StatusView.vue -->
 <template>
   <div
     id="status"
@@ -43,20 +44,39 @@
       </div>
       <div class="section-content-container">
         <div class="status-grid">
+          <!-- Block 1 -->
           <div class="status-block">
             <p><strong>Active Members:</strong> <span class="stat-num">{{ stats.activeMembers }}</span></p>
             <p><strong>Reserves:</strong> <span class="stat-num">{{ stats.reservesMembers }}</span></p>
             <p><strong>Elements:</strong> <span class="stat-num">{{ stats.totalElements }}</span></p>
           </div>
 
+          <!-- Block 2: REPLACED with Fill % by Element -->
           <div class="status-block">
-            <p><strong>Fireteams (with slots):</strong> <span class="stat-num">{{ stats.totalFireteams }}</span></p>
-            <p><strong>Filled Slots:</strong> <span class="stat-num">{{ stats.filledSlots }}</span></p>
-            <p><strong>Free Slots:</strong> <span class="stat-num">{{ stats.vacantSlots }}</span></p>
+            <p class="block-title"><strong>Fill % by Element</strong></p>
+            <div v-if="elementFillStats.length" class="element-fill-list">
+              <div
+                v-for="row in elementFillStats.slice(0, 8)"
+                :key="row.name"
+                class="element-row"
+                :title="`${row.filled}/${row.total} filled`"
+              >
+                <span class="el-name">{{ row.name }}</span>
+                <div class="el-bar">
+                  <div class="el-bar-fill" :style="{ width: row.percent + '%' }"></div>
+                </div>
+                <span class="el-percent">{{ row.percent }}%</span>
+              </div>
+              <p v-if="elementFillStats.length > 8" class="muted">(+{{ elementFillStats.length - 8 }} more)</p>
+            </div>
+            <div v-else class="muted">No elements with slots detected.</div>
           </div>
 
+          <!-- Block 3 -->
           <div class="status-block">
             <p><strong>Total Personnel:</strong> <span class="stat-num">{{ stats.totalMembers }}</span></p>
+            <p><strong>Filled Slots:</strong> <span class="stat-num">{{ stats.filledSlots }}</span></p>
+            <p><strong>Free Slots:</strong> <span class="stat-num">{{ stats.vacantSlots }}</span></p>
             <p><strong>Fill Rate:</strong> <span class="stat-num">{{ stats.fillRate }}%</span></p>
             <p><strong>Active Mission:</strong> <span class="stat-num">{{ currentAssignment ? currentAssignment.name : 'None' }}</span></p>
           </div>
@@ -152,6 +172,31 @@ export default {
         reservesMembers,
       };
     },
+
+    /* NEW: per-element fill stats */
+    elementFillStats() {
+      const out = [];
+      (this.orbat || []).forEach((sq) => {
+        let filled = 0, vacant = 0, hasSlots = false;
+        (sq.fireteams || []).forEach((ft) => {
+          const slots = ft.slots || [];
+          if (slots.length) hasSlots = true;
+          slots.forEach((s) => {
+            const st = String(s.status || "").toUpperCase();
+            if (st === "FILLED" && s.member) filled += 1;
+            else if (st === "VACANT") vacant += 1;
+          });
+        });
+        if (!hasSlots) return;
+        const total = filled + vacant;
+        const percent = total > 0 ? Math.round((filled / total) * 100) : 100;
+        out.push({ name: sq.squad || "Element", filled, total, percent });
+      });
+      // sort: lowest fill first (to highlight issues)
+      out.sort((a, b) => a.percent - b.percent || a.name.localeCompare(b.name));
+      return out;
+    },
+
     upcomingPromotions() {
       const list = [];
       (this.members || []).forEach((m) => {
@@ -288,12 +333,37 @@ export default {
 }
 .status-block p { margin: .25rem 0; color: #dce6f1; }
 .status-block strong { color: #e0f0ff; }
+.block-title { margin-bottom: .35rem; }
 
 /* Pop the numbers with a themed accent */
 .stat-num {
-  color: #7ec9ff; /* subtle cyan that fits your palette */
-  font-weight: 700; /* emphasize the figure */
+  color: #7ec9ff;
+  font-weight: 700;
 }
+
+/* Fill % by Element list */
+.element-fill-list { display: grid; gap: .38rem; }
+.element-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr auto;
+  gap: .5rem;
+  align-items: center;
+  font-size: .95rem;
+}
+.el-name { color: #cfe6ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.el-bar {
+  height: 8px;
+  background: rgba(30,144,255,0.18);
+  border: 1px solid rgba(30,144,255,0.35);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.el-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(126,201,255,0.95), rgba(126,201,255,0.65));
+}
+.el-percent { color: #a9d3ff; font-weight: 700; min-width: 3ch; text-align: right; }
+.muted { color: #9ec5e6; opacity: .8; font-size: .9rem; }
 
 /* Promotions list */
 .promotions { margin-top: 1rem; }
@@ -318,15 +388,10 @@ export default {
   border-color: rgba(255,190,80,0.85);
   box-shadow: 0 0 8px rgba(255,190,80,0.12) inset;
 }
-
-/* Accents remain */
 .p-name { color: #e0f0ff; }
 .p-ranks { color: #9ec5e6; }
 .p-ops { color: #cfdcea; }
 
 /* Markdown h3 override (leave h1/h2 as-is) */
 .markdown :deep(h3) { color: #9ec5e6; }
-/* If legacy deep selector is needed:
-::v-deep(.markdown h3) { color: #9ec5e6; }
-*/
 </style>
