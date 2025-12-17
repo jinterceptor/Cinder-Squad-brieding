@@ -125,12 +125,10 @@
 
         <!-- DISCIPLINE -->
         <div v-else-if="activeKey === 'discipline'" class="promotions-panel">
-          <!-- CSV error banner -->
           <div v-if="csvDiag.error" class="csv-error">
             <strong>Status CSV load failed:</strong> {{ csvDiag.error }}
           </div>
 
-          <!-- CSV controls -->
           <div class="filters">
             <div class="row csv-row">
               <label class="control">
@@ -154,6 +152,7 @@
               <span class="chip">CSV rows: {{ csvDiag.rowCount }}</span>
               <span class="chip ok">Matched: {{ csvDiag.matchedCount }}</span>
               <span class="chip">Header: {{ csvDiag.header.join(' | ') }}</span>
+              <span class="chip">Using: {{ csvDiag.statusHeaderUsed || 'Troop Status' }}</span>
               <span class="chip">Last: {{ csvDiag.lastAt }}</span>
               <label class="control chk" style="margin-left:auto;">
                 <input type="checkbox" v-model="showStatusDebug" />
@@ -162,7 +161,6 @@
             </div>
           </div>
 
-          <!-- Editor -->
           <div class="flag-form">
             <div class="row">
               <label class="control">
@@ -199,7 +197,6 @@
             </div>
           </div>
 
-          <!-- Debug table: who is Unknown and why -->
           <div v-if="showStatusDebug" class="table-scroll" style="margin-top:.4rem;">
             <div class="table-shell">
               <div class="tr head gridDebug">
@@ -219,7 +216,6 @@
             </div>
           </div>
 
-          <!-- Main list -->
           <div class="table-scroll" style="margin-top:.4rem;">
             <div class="table-shell">
               <div class="tr head gridFlags">
@@ -305,7 +301,7 @@ export default {
       // Status via CSV (RefData)
       troopStatusCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
       csvStatusIndex: Object.create(null),
-      csvDiag: { ok: false, error: "", header: [], rowCount: 0, matchedCount: 0, lastAt: null },
+      csvDiag: { ok: false, error: "", header: [], rowCount: 0, matchedCount: 0, lastAt: null, statusHeaderUsed: "" },
       showStatusDebug: false,
 
       // Filters + editor
@@ -336,7 +332,6 @@ export default {
           .trim()
           .toUpperCase();
     },
-    // strip squad/notes at end like "John Smith (Temp)" or "[X]"
     cleanMemberName() {
       return (name) => String(name || "").replace(/\s*[\(\[].*?[\)\]]\s*$/g, "").trim();
     },
@@ -371,9 +366,7 @@ export default {
         return this.statusIndex[nk] || "Unknown";
       };
     },
-    isDischarged() {
-      return (status) => String(status || "").toLowerCase() === "discharged";
-    },
+    isDischarged() { return (status) => String(status || "").toLowerCase() === "discharged"; },
 
     attendanceMap() {
       const map = Object.create(null);
@@ -628,7 +621,7 @@ export default {
     },
 
     async fetchTroopStatusCsv() {
-      this.csvDiag = { ok: false, error: "", header: [], rowCount: 0, matchedCount: 0, lastAt: null };
+      this.csvDiag = { ok: false, error: "", header: [], rowCount: 0, matchedCount: 0, lastAt: null, statusHeaderUsed: "" };
       try {
         if (!this.troopStatusCsvUrl) throw new Error("No CSV URL set.");
         const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
@@ -638,10 +631,13 @@ export default {
         if (!rows.length) throw new Error("CSV empty.");
 
         const header = rows[0].map(h => String(h || '').trim());
-        const hdrLower = header.map(h => h.toLowerCase());
-        const nameIdx = hdrLower.findIndex(h => h === 'troop list' || h === 'name' || h === 'member' || h === 'trooper');
-        const statusIdx = hdrLower.findIndex(h => h === 'troop status' || h === 'status');
-        if (nameIdx === -1 || statusIdx === -1) throw new Error(`Headers not found. Got: [${header.join(', ')}]`);
+        const hdrLower = header.map(h => h.toLowerCase().replace(/\s+/g,' ').trim());
+        const nameIdx = hdrLower.findIndex(h => ['troop list','name','member','trooper'].includes(h));
+        // STRICT: only "troop status"
+        const statusIdx = hdrLower.findIndex(h => h === 'troop status');
+
+        if (nameIdx === -1) throw new Error(`Name column not found. Got: [${header.join(', ')}]`);
+        if (statusIdx === -1) throw new Error(`"Troop Status" column not found. Got: [${header.join(', ')}]`);
 
         const map = Object.create(null);
         let matched = 0;
@@ -653,7 +649,6 @@ export default {
           const nk = this.nameKey(this.cleanMemberName(rawName));
           map[nk] = this.normalizeStatus(status);
         }
-        // count matches against current members
         const allMembers = this.members || [];
         for (const m of allMembers) {
           const nk = this.nameKey(this.cleanMemberName(m?.name));
@@ -661,13 +656,15 @@ export default {
         }
         this.csvStatusIndex = map;
         this.csvDiag = {
-          ok: true, error: "", header, rowCount: rows.length - 1, matchedCount: matched, lastAt: new Date().toLocaleString()
+          ok: true, error: "", header, rowCount: rows.length - 1, matchedCount: matched,
+          lastAt: new Date().toLocaleString(), statusHeaderUsed: header[statusIdx] || 'Troop Status'
         };
       } catch (e) {
-        this.csvDiag = { ok: false, error: String(e?.message || e), header: [], rowCount: 0, matchedCount: 0, lastAt: new Date().toLocaleString() };
+        this.csvDiag = { ok: false, error: String(e?.message || e), header: [], rowCount: 0, matchedCount: 0, lastAt: new Date().toLocaleString(), statusHeaderUsed: "" };
       }
     },
     parseCsv(text) {
+      // minimal RFC4180-ish parser
       const rows = [];
       let cur = [];
       let val = '';
@@ -769,7 +766,7 @@ export default {
       try {
         const res = await fetch(this.discEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // why: simple request to avoid preflight/CORS pain
           body: JSON.stringify(payload),
           redirect: 'follow',
         });
@@ -890,7 +887,6 @@ export default {
 .section-header img { width: 28px; height: 28px; }
 .right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
 .right-actions { display: flex; gap: .4rem; }
-
 .flag-form { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .6rem; display: grid; gap: .6rem; background: rgba(0,10,30,0.25); }
 .flag-form .row { display: grid; grid-template-columns: 1.6fr 1fr; gap: .6rem; }
 .flag-form .row.end { grid-template-columns: 1fr auto auto; align-items: center; }
