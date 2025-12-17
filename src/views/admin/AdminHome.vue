@@ -1,3 +1,4 @@
+<!-- src/views/admin/AdminHome.vue -->
 <!-- src/views/AdminView.vue -->
 <template>
   <section id="admin" class="section-container">
@@ -23,56 +24,65 @@
       <div v-else class="admin-frame">
         <!-- LEFT: Menu rail with preview cards -->
         <aside class="rail">
-          <button
-            class="rail-card"
-            :class="{ active: activeKey === 'promotions' }"
-            @click="activeKey = 'promotions'"
-          >
-            <div class="rail-card-head">
-              <img src="/icons/protocol.svg" class="rail-icon" alt="" />
-              <div class="rail-title">Promotions Overview</div>
-            </div>
-            <div class="rail-card-body">
-              <div class="rail-line">
-                <span class="label">Eligible now</span>
-                <span class="pill ok">{{ eligibleNowCount }}</span>
-              </div>
-              <div class="rail-line">
-                <span class="label">Imminent (≤3)</span>
-                <span class="pill warn">{{ imminentCount }}</span>
-              </div>
-              <div class="rail-foot">Click to open</div>
-            </div>
-          </button>
+  <button
+    v-for="s in sections"
+    :key="s.key"
+    class="rail-card"
+    :class="{ active: activeKey === s.key }"
+    @click="activeKey = s.key"
+  >
+    <div class="rail-card-head">
+      <img :src="s.icon" class="rail-icon" alt="" />
+      <div class="rail-title">{{ s.title }}</div>
+    </div>
 
-          <!-- Future items go here as more rail-card buttons -->
-        </aside>
+    <div v-if="s.preview && s.preview.length" class="rail-card-body">
+      <div v-for="line in s.preview" :key="line.label" class="rail-line">
+        <span class="label">{{ line.label }}</span>
+        <span class="pill" :class="line.kind">{{ line.value }}</span>
+      </div>
+      <div class="rail-foot">Click to open</div>
+    </div>
+  </button>
+</aside>
 
-        <!-- RIGHT: Main panel area -->
-        <main class="main">
-          <!-- PROMOTIONS OVERVIEW -->
+        <!-- RIGHT: Panels -->
+        <main class="panels">
+          <!-- Promotions Panel -->
           <div v-if="activeKey === 'promotions'" class="panel">
             <div class="panel-header">
               <h2>Promotions Overview</h2>
               <div class="panel-actions">
-                <input
-                  v-model="search"
-                  class="control input"
-                  type="text"
-                  placeholder="Search member…"
-                  aria-label="Search member"
-                />
-                <select v-model="selectedSquad" class="control select">
-                  <option value="__ALL__">All Squads</option>
-                  <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
-                </select>
-                <select v-model="sortKey" class="control select">
-                  <option value="rank">Sort: Rank (high→low)</option>
-                  <option value="closest">Sort: Closest to Promotion</option>
-                  <option value="ops">Sort: Total Ops (high→low)</option>
-                  <option value="name">Sort: Name (A→Z)</option>
-                  <option value="squad">Sort: Squad (A→Z)</option>
-                </select>
+                <button class="btn-sm" @click="refreshData">Refresh</button>
+              </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="filters">
+              <div class="row">
+                <label class="control">
+                  <span>Search</span>
+                  <input type="text" v-model="search" placeholder="Name, rank, squad" />
+                </label>
+
+                <label class="control">
+                  <span>Squad</span>
+                  <select v-model="selectedSquad">
+                    <option value="__ALL__">All squads</option>
+                    <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
+                  </select>
+                </label>
+
+                <label class="control">
+                  <span>Sort by</span>
+                  <select v-model="sortKey">
+                    <option value="rank">Rank (high→low)</option>
+                    <option value="ops">Ops attended</option>
+                    <option value="progress">Progress to next rank</option>
+                    <option value="name">Name (A→Z)</option>
+                  </select>
+                </label>
+
                 <label class="control chk">
                   <input type="checkbox" v-model="onlyPromotable" />
                   Promotable only
@@ -89,41 +99,31 @@
 
             <!-- Table -->
             <div class="table">
-              <div class="thead">
-                <span class="th name">Member</span>
+              <div class="tr head">
+                <span class="th name">Name</span>
                 <span class="th rank">Rank</span>
                 <span class="th squad">Squad</span>
                 <span class="th ops">Ops</span>
                 <span class="th next">Next Rank</span>
-                <span class="th to">To Next</span>
                 <span class="th prog">Progress</span>
                 <span class="th act">Actions</span>
               </div>
 
-              <div v-if="!promotionsTable.length" class="empty">
-                No members match your filters.
-              </div>
-
               <div
                 v-for="row in promotionsTable"
-                :key="row.id || row.name"
+                :key="row.id"
                 class="tr"
-                :class="{
-                  eligible: row.opsToNext === 0 && row.nextRank,
-                  imminent: row.opsToNext > 0 && row.opsToNext <= 3
-                }"
               >
-                <span class="td name" :title="row.name">{{ row.name }}</span>
-                <span class="td rank">{{ row.rank || 'N/A' }}</span>
-                <span class="td squad">{{ row.squad || '—' }}</span>
-                <span class="td ops">{{ isFiniteNum(row.ops) ? row.ops : '—' }}</span>
-                <span class="td next">{{ row.nextRank || '—' }}</span>
-                <span class="td to">
-                  <template v-if="row.nextAt !== null">
-                    <span v-if="isFiniteNum(row.opsToNext)">{{ row.opsToNext }}</span>
-                    <span v-else>—</span>
-                  </template>
-                  <template v-else>—</template>
+                <span class="td name">{{ row.name }}</span>
+                <span class="td rank">{{ row.rank }}</span>
+                <span class="td squad">{{ row.squad }}</span>
+                <span class="td ops">
+                  <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                  <span v-else class="muted">N/A</span>
+                </span>
+                <span class="td next">
+                  <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
+                  <span v-else class="muted">—</span>
                 </span>
                 <span class="td prog">
                   <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
@@ -140,6 +140,12 @@
             </div>
           </div>
 
+          <!-- Roster Audits (stub) -->
+          <div v-else-if="activeKey === 'audits'" class="panel">
+            <div class="panel-header"><h2>Roster Audits</h2></div>
+            <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
+          </div>
+
           <!-- Placeholder for future panels -->
           <div v-else class="panel">
             <div class="panel-header"><h2>Coming soon</h2></div>
@@ -154,16 +160,11 @@
 <script>
 import AdminLoginModal from "@/components/modals/AdminLoginModal.vue";
 
-const SESSION_KEY = "adminAuthed";
+const SESSION_KEY = "admin-authed";
 
 export default {
-  name: "AdminView",
+  name: "AdminHome",
   components: { AdminLoginModal },
-  props: {
-    members: { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] },
-    orbat: { type: Array, default: () => [] },
-  },
   data() {
     return {
       isAuthed: false,
@@ -180,8 +181,22 @@ export default {
         "MAJ","CAPT","1STLT","2NDLT",
         "CWO5","CWO4","CWO3","CWO2","WO",
         "GYSGT","SSGT","SGT","CPL","LCPL",
-        "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
-        "HMC","HM1","HM2","HM3","HN","HA","HR",
+        "SPC4","SPC3","SPC2","SPC","PFC","PVT",
+        "HA"
+      ],
+
+      // demo data (replace with API wiring)
+      members: [
+        { id: 1, name: "J. Frost", rank: "CPL", squad: "Alpha", opsAttended: 8 },
+        { id: 2, name: "R. Hart", rank: "LCPL", squad: "Alpha", opsAttended: 3 },
+        { id: 3, name: "M. Ruiz", rank: "SPC3", squad: "Bravo", opsAttended: 5 },
+        { id: 4, name: "T. Wells", rank: "PFC", squad: "Bravo", opsAttended: 2 },
+        { id: 5, name: "S. King", rank: "SGT", squad: "HQ", opsAttended: 12 },
+      ],
+      orbat: [
+        { squad: "HQ" },
+        { squad: "Alpha" },
+        { squad: "Bravo" },
       ],
     };
   },
@@ -190,6 +205,25 @@ export default {
     catch { this.isAuthed = false; }
   },
   computed: {
+    sections() {
+      return [
+        {
+          key: "promotions",
+          title: "Promotions Overview",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
+            { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
+          ],
+        },
+        {
+          key: "audits",
+          title: "Roster Audits",
+          icon: "/icons/list.svg",
+          preview: [],
+        },
+      ];
+    },
     /* squads for filter */
     squads() {
       const set = new Set();
@@ -205,30 +239,40 @@ export default {
       (this.members || []).forEach(m => {
         const ops = Number(m.opsAttended);
         if (Number.isFinite(ops)) {
-          if (m.id) map[`ID:${m.id}`] = ops;
-          if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
+          map[m.id] = ops;
+          const key = (m.name || "").trim().toLowerCase();
+          if (key) map[key] = ops;
         }
-      });
-
-      (this.attendance || []).forEach(row => {
-        const ops = Number(row?.ops ?? row?.attended ?? row?.value);
-        if (!Number.isFinite(ops)) return;
-        if (row?.id) map[`ID:${row.id}`] = ops;
-        if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
       });
 
       return map;
     },
 
-    /* raw rows with derived values */
-    promotionsRows() {
+    /* filtered + sorted promotions table rows */
+    promotionsTable() {
+      const term = (this.search || "").trim().toLowerCase();
+      const squad = this.selectedSquad;
+      const onlyProm = !!this.onlyPromotable;
+
       const rows = [];
-      (this.members || []).forEach((m) => {
-        const ops = this.getOps(m);
-        const ladder = this.promotionLadderFor(m?.rank);
+
+      for (const m of (this.members || [])) {
+        // filters
+        if (term) {
+          const hit =
+            (m.name || "").toLowerCase().includes(term) ||
+            (m.rank || "").toLowerCase().includes(term) ||
+            (m.squad || "").toLowerCase().includes(term);
+          if (!hit) continue;
+        }
+        if (squad && squad !== "__ALL__" && (m.squad || "") !== squad) continue;
+
+        const ladder = this.promotionLadderFor(m.rank);
         const nextRank = ladder?.nextRank ?? null;
-        const nextAt = Number.isFinite(ladder?.nextAt) ? ladder.nextAt : null;
-        const opsToNext = (nextAt !== null && Number.isFinite(ops)) ? Math.max(0, nextAt - ops) : null;
+        const nextAt = ladder?.nextAt ?? null;
+
+        const ops = this.attendanceMap[m.id];
+        const opsToNext = Number.isFinite(ops) && Number.isFinite(nextAt) ? Math.max(0, nextAt - ops) : null;
 
         let progress = 0;
         if (nextAt !== null && Number.isFinite(ops)) {
@@ -244,106 +288,65 @@ export default {
           ops: Number.isFinite(ops) ? ops : null,
           nextRank,
           nextAt,
+          progress,
           opsToNext,
-          progress: Number.isFinite(progress) ? progress : 0,
         });
-      });
-      return rows;
-    },
+      }
 
-    /* filtered + sorted table for right pane */
-    promotionsTable() {
-      const q = this.search.trim().toLowerCase();
+      // only promotable
+      const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
 
-      const rows = this.promotionsRows.filter(r => {
-        if (this.onlyPromotable && (r.nextAt === null)) return false;
-        if (this.selectedSquad !== "__ALL__" && String(r.squad || "") !== this.selectedSquad) return false;
-        if (!q) return true;
-        return (
-          String(r.name).toLowerCase().includes(q) ||
-          String(r.rank).toLowerCase().includes(q) ||
-          String(r.squad).toLowerCase().includes(q) ||
-          String(r.nextRank || "").toLowerCase().includes(q)
-        );
-      });
-
-      // sorters
-      const byRank = (a, b) => a.rankScore - b.rankScore || a.name.localeCompare(b.name);
-      const byClosest = (a, b) => {
-        const ax = (a.opsToNext === null ? 1e9 : a.opsToNext);
-        const bx = (b.opsToNext === null ? 1e9 : b.opsToNext);
-        if (ax !== bx) return ax - bx;
-        if (a.rankScore !== b.rankScore) return a.rankScore - b.rankScore;
-        if ((b.ops ?? -1) !== (a.ops ?? -1)) return (b.ops ?? -1) - (a.ops ?? -1);
-        return a.name.localeCompare(b.name);
-      };
-      const byOps = (a, b) => (b.ops ?? -1) - (a.ops ?? -1) || byRank(a, b);
-      const byName = (a, b) => a.name.localeCompare(b.name);
-      const bySquad = (a, b) => String(a.squad).localeCompare(String(b.squad)) || byRank(a, b);
-
+      // sorting
       const sorter = {
-        rank: byRank,
-        closest: byClosest,
-        ops: byOps,
-        name: byName,
-        squad: bySquad,
-      }[this.sortKey] || byRank;
+        rank: (a,b) => a.rankScore - b.rankScore,
+        ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
+        progress: (a,b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
+        name: (a,b) => a.name.localeCompare(b.name),
+      }[this.sortKey] || ((a,b)=>0);
 
-      return rows.slice().sort(sorter);
-    },
-
-    /* preview counts for left rail */
-    eligibleNowCount() { return this.promotionsRows.filter(r => r.opsToNext === 0 && r.nextRank).length; },
-    imminentCount() { return this.promotionsRows.filter(r => r.opsToNext > 0 && r.opsToNext <= 3).length; },
-  },
-  methods: {
-    onLoginSuccess() {
-      try { window.sessionStorage.setItem(SESSION_KEY, "true"); } catch {}
-      this.isAuthed = true;
-    },
-    onLoginClose() {
-      if (!this.isAuthed) this.$router.replace("/status");
+      return filtered.sort(sorter);
     },
 
-    /* normalize + lookups */
-    nameKey(name) {
-      return String(name || "")
-        .replace(/["'.]/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toUpperCase();
+    /* counters for preview + chips */
+    eligibleNowCount() {
+      return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
     },
-    getOps(member) {
-      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
-        return this.attendanceMap[`ID:${member.id}`];
-      }
-      if (member?.name) {
-        const nk = this.nameKey(member.name);
-        if (this.attendanceMap[`NM:${nk}`] !== undefined) {
-          return this.attendanceMap[`NM:${nk}`];
-        }
-      }
-      const direct = Number(member?.opsAttended);
-      return Number.isFinite(direct) ? direct : NaN;
+    imminentCount() {
+      return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
     },
-    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
+
+    /* rank helpers */
+    rankKey(rank) {
+      if (!rank) return "";
+      const k = (rank || "").toUpperCase().replace(/\s+/g, "");
+      const alias = {
+        PRIVATE: "PVT", PVT: "PVT",
+        PRIVATEFIRSTCLASS: "PFC", PFC: "PFC",
+        SPECIALIST: "SPC", SPC: "SPC",
+        SPECIALIST2: "SPC2", SPC2: "SPC2",
+        SPECIALIST3: "SPC3", SPC3: "SPC3",
+        SPECIALIST4: "SPC4", SPC4: "SPC4",
+        HOSPITALMANAPPRENTICE: "HA", HA: "HA",
+        LANCECORPORAL: "LCPL", LCPL: "LCPL",
+        CORPORAL: "CPL", CPL: "CPL",
+        SERGEANT: "SGT", SGT: "SGT",
+        STAFFSERGEANT: "SSGT", SSGT: "SSGT",
+        GUNNYSERGEANT: "GYSGT", GYSGT: "GYSGT",
+        WARRANTOFFICER: "WO", WO: "WO",
+        CHIEFWARRANTOFFICER2: "CWO2", CWO2: "CWO2",
+        CHIEFWARRANTOFFICER3: "CWO3", CWO3: "CWO3",
+        CHIEFWARRANTOFFICER4: "CWO4", CWO4: "CWO4",
+        CHIEFWARRANTOFFICER5: "CWO5", CWO5: "CWO5",
+        SECONDLIEUTENANT: "2NDLT", "2NDLT": "2NDLT",
+        FIRSTLIEUTENANT: "1STLT", "1STLT": "1STLT",
+        CAPTAIN: "CAPT", CAPT: "CAPT",
+        MAJOR: "MAJ", MAJ: "MAJ",
+      };
+      return alias[k] || k;
+    },
     rankScore(rank) {
       const k = this.rankKey(rank);
-      const alias = {
-        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
-        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
-        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
-        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
-        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT", MAJOR: "MAJ",
-        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3",
-        HOSPITALCORPSMANSECONDCLASS: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1",
-        CHIEFHOSPITALCORPSMAN: "HMC",
-        WARRANTOFFICER: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
-      };
+      const alias = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
       const rk = alias[k] || k;
       const idx = this.rankOrderHighToLow.indexOf(rk);
       return idx === -1 ? 999 : idx; // lower = higher rank
@@ -358,42 +361,39 @@ export default {
         SPECIALIST3: "SPC3", SPC3: "SPC3",
         SPECIALIST4: "SPC4", SPC4: "SPC4",
         HOSPITALMANAPPRENTICE: "HA", HA: "HA",
-        HOSPITALMAN: "HN", HN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3", HM3: "HM3",
-        HOSPITALCORPSMANSECONDCLASS: "HM2", HM2: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1", HM1: "HM1",
-        CHIEFHOSPITALCORPSMAN: "HMC", HMC: "HMC",
+        LANCECORPORAL: "LCPL", LCPL: "LCPL",
+        CORPORAL: "CPL", CPL: "CPL",
+        SERGEANT: "SGT", SGT: "SGT",
+        STAFFSERGEANT: "SSGT", SSGT: "SSGT",
+        GUNNYSERGEANT: "GYSGT", GYSGT: "GYSGT",
         WARRANTOFFICER: "WO", WO: "WO",
         CHIEFWARRANTOFFICER2: "CWO2", CWO2: "CWO2",
         CHIEFWARRANTOFFICER3: "CWO3", CWO3: "CWO3",
         CHIEFWARRANTOFFICER4: "CWO4", CWO4: "CWO4",
         CHIEFWARRANTOFFICER5: "CWO5", CWO5: "CWO5",
-        CAPTAIN: "CAPT", MAJOR: "MAJ",
+        SECONDLIEUTENANT: "2NDLT", "2NDLT": "2NDLT",
+        FIRSTLIEUTENANT: "1STLT", "1STLT": "1STLT",
+        CAPTAIN: "CAPT", CAPT: "CAPT",
+        MAJOR: "MAJ", MAJ: "MAJ",
       };
       const key = alias[r] || r;
 
       const ladders = {
         // Enlisted
-        PVT:  { nextAt: 2,  nextRank: "PFC" },
-        PFC:  { nextAt: 10, nextRank: "SPC" },
-        SPC:  { nextAt: 20, nextRank: "SPC2" },
-        SPC2: { nextAt: 30, nextRank: "SPC3" },
-        SPC3: { nextAt: 40, nextRank: "SPC4" },
-        SPC4: { nextAt: null, nextRank: null },
-
-        // Medical
-        HA:  { nextAt: 2,  nextRank: "HN" },
-        HN:  { nextAt: 10, nextRank: "HM3" },
-        HM3:{ nextAt: 20, nextRank: "HM2" },
-        HM2:{ nextAt: 30, nextRank: "HM1" },
-        HM1:{ nextAt: null, nextRank: "HMC" }, // misc-based
-        HMC:{ nextAt: null, nextRank: null },
+        PVT:  { nextAt: 2, nextRank: "PFC" },
+        PFC:  { nextAt: 4, nextRank: "SPC" },
+        SPC:  { nextAt: 6, nextRank: "LCPL" },
+        LCPL: { nextAt: 8, nextRank: "CPL" },
+        CPL:  { nextAt: 10, nextRank: "SGT" },
+        SGT:  { nextAt: 12, nextRank: "SSGT" },
+        SSGT: { nextAt: 14, nextRank: "GYSGT" },
+        GYSGT:{ nextAt: null, nextRank: null },
 
         // Warrant
-        WO:   { nextAt: null, nextRank: "CWO2" }, // role/flight-time based
-        CWO2: { nextAt: 10,  nextRank: "CWO3" },
-        CWO3: { nextAt: 20,  nextRank: "CWO4" },
-        CWO4: { nextAt: 30,  nextRank: "CWO5" },
+        WO:   { nextAt: 8, nextRank: "CWO2" },
+        CWO2: { nextAt: 12, nextRank: "CWO3" },
+        CWO3: { nextAt: 16, nextRank: "CWO4" },
+        CWO4: { nextAt: 20, nextRank: "CWO5" },
         CWO5: { nextAt: null, nextRank: null },
 
         // Commissioned
@@ -422,86 +422,110 @@ export default {
 <style scoped>
 /* Shell */
 .section-container {
-  padding: 2.5rem 3rem;
-  color: #dce6f1;
-  font-family: "Consolas","Courier New",monospace;
+  display: grid;
+  gap: .75rem;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+.section-header img { width: 28px; height: 28px; }
+.section-content-container { padding: .8rem; }
+
+.rhombus-back {
+  height: 6px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(30,144,255,.2) 0px,
+    rgba(30,144,255,.2) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
+.clipped-medium-backward {
+  clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
+  background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
+  padding: .4rem .75rem;
+  border: 1px solid rgba(30,144,255,.35);
+  border-left-width: 0;
+  border-radius: 0 .35rem .35rem 0;
 }
 
-/* Two-column admin frame */
+/* Frame */
 .admin-frame {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 1rem;
-  margin-top: .8rem;
-  min-height: calc(100vh - 220px);
+  grid-template-columns: 300px 1fr;
+  gap: .8rem;
 }
 
-/* Left rail */
+/* Rail */
 .rail {
   display: grid;
-  gap: .7rem;
+  gap: .6rem;
   align-content: start;
 }
 .rail-card {
-  width: 100%;
   text-align: left;
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,0,0,0.15);
-  border-radius: .4rem;
-  padding: .65rem .75rem;
-  color: #dce6f1;
+  border: 1px solid rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.35);
+  border-radius: .5rem;
+  padding: .6rem;
   cursor: pointer;
-  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.rail-card:hover { border-color: rgba(126,201,255,0.85); transform: translateY(-1px); }
-.rail-card.active { border-color: rgba(126,201,255,0.95); box-shadow: 0 0 8px rgba(126,201,255,0.15) inset; }
-.rail-card-head { display: grid; grid-template-columns: 32px 1fr; gap: .6rem; align-items: center; }
-.rail-icon { width: 28px; height: 28px; opacity: .9; }
-.rail-title { font-weight: 700; letter-spacing: .04em; color: #e0f0ff; }
-.rail-card-body { margin-top: .5rem; display: grid; gap: .35rem; }
-.rail-line { display: flex; justify-content: space-between; align-items: center; }
-.rail-line .label { color: #9ec5e6; font-size: .92rem; }
+.rail-card.active { border-color: rgba(120,255,170,0.7); }
+.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.rail-icon { width: 20px; height: 20px; }
+.rail-title { font-weight: 600; }
+.rail-card-body { display: grid; gap: .25rem; }
+.rail-line { display: flex; align-items: center; justify-content: space-between; }
 .pill {
-  padding: .1rem .5rem;
-  border-radius: 999px;
-  border: 1px solid rgba(30,144,255,.45);
-  background: rgba(0,10,30,.25);
-  color: #cfe6ff;
   font-size: .85rem;
+  border: 1px solid rgba(30,144,255,.45);
+  border-radius: 999px;
+  padding: .05rem .5rem;
 }
 .pill.ok { border-color: rgba(120,255,170,0.7); }
 .pill.warn { border-color: rgba(255,190,80,0.7); }
-.rail-foot { color: #7aa7c7; font-size: .82rem; }
+.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-/* Right main panel */
-.main {
+/* Panels */
+.panels { display: grid; gap: .8rem; }
+.panel {
   border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,0,0,0.12);
-  border-radius: .4rem;
-  padding: .85rem .9rem;
-  min-height: 360px;
+  background: rgba(0,10,30,0.25);
+  border-radius: .5rem;
+  padding: .6rem;
 }
-
-/* Panel header + controls */
 .panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .6rem;
+  display: flex; align-items: center; justify-content: space-between;
   margin-bottom: .6rem;
 }
-.panel-header h2 { margin: 0; color: #e0f0ff; letter-spacing: .04em; }
-.panel-actions { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
-.control {
-  background: #040a14;
-  border: 1px solid rgba(30,144,255,.45);
-  color: #dce6f1;
-  border-radius: .3rem;
-  padding: .35rem .45rem;
+.panel-actions { display: flex; gap: .4rem; }
+.btn-sm {
+  font-size: .85rem;
+  padding: .25rem .5rem;
+  border-radius: .35rem;
+  border: 1px solid rgba(30,144,255,0.45);
+  background: rgba(0,10,30,0.25);
+  color: #cfe6ff;
+  cursor: pointer;
 }
-.input { min-width: 220px; }
-.select { min-width: 180px; }
-.chk { display: inline-flex; gap: .35rem; user-select: none; }
+.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
+
+/* Filters */
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
+.control { display: grid; gap: .2rem; }
+.control span { font-size: .85rem; color: #9ec5e6; }
+.control input, .control select {
+  background: rgba(0,10,30,0.3);
+  border: 1px solid rgba(30,144,255,0.35);
+  border-radius: .35rem;
+  padding: .35rem .45rem;
+  color: #cfe6ff;
+}
+.control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
 
 /* Summary chips */
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
@@ -518,42 +542,36 @@ export default {
 
 /* Table */
 .table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
-.thead, .tr {
-  display: grid;
-  grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr .6fr 1.4fr .9fr;
-  gap: .35rem;
-  align-items: center;
+.tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr .9fr; align-items: center; }
+.tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
+.th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); }
+.tr:last-child .td { border-bottom: 0; }
+.td .muted { color: #9ec5e6; }
+
+/* table columns */
+.td.name, .th.name { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.td.rank, .th.rank { text-align: left; }
+.td.squad, .th.squad { text-align: left; }
+.td.ops, .th.ops { text-align: right; }
+.td.next, .th.next { text-align: left; }
+.td.prog, .th.prog { }
+.td.act, .th.act { text-align: right; }
+
+/* progress bar */
+.bar {
+  height: 8px;
+  background: rgba(0,10,30,0.35);
+  border: 1px solid rgba(30,144,255,0.35);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
 }
-.thead { background: rgba(0,10,30,0.45); padding: .5rem .6rem; border-bottom: 1px dashed rgba(30,144,255,0.25); }
-.th { font-weight: 700; color: #e0f0ff; letter-spacing: .03em; }
-.tr { padding: .45rem .6rem; background: rgba(0,10,30,0.25); border-bottom: 1px dashed rgba(30,144,255,0.15); }
-.tr:last-child { border-bottom: none; }
-
-.tr.eligible { box-shadow: inset 0 0 0 1px rgba(120,255,170,0.25); }
-.tr.imminent { box-shadow: inset 0 0 0 1px rgba(255,190,80,0.2); }
-
-.td { color: #dce6f1; }
-.td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.td.rank, .td.squad { color: #9ec5e6; }
-.td.ops { color: #a3e7ff; }
-.td.next { color: #7fffd4; font-weight: 700; }
-.td.to { color: #cfdcea; }
-
-/* Progress bar */
-.bar { height: 10px; background: rgba(30,144,255,0.18); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; overflow: hidden; }
-.bar .fill { height: 100%; background: linear-gradient(90deg, rgba(126,201,255,0.95), rgba(126,201,255,0.55)); }
-.bar.done .fill { background: linear-gradient(90deg, rgba(120,255,170,0.95), rgba(120,255,170,0.65)); }
-
-/* Buttons */
-.btn-sm {
-  background: rgba(126,201,255,0.2);
-  border: 1px solid rgba(126,201,255,0.6);
-  color: #dce6f1;
-  border-radius: .3rem;
-  padding: .2rem .45rem;
-  cursor: pointer;
+.bar .fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 0%; transition: width .25s ease;
+  background: rgba(120,200,255,0.6);
 }
-.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
+.bar.done .fill { background: rgba(120,255,170,0.7); }
 
 /* Misc */
 .empty { padding: .7rem .8rem; color: #9ec5e6; }
