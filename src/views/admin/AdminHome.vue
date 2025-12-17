@@ -11,48 +11,71 @@
     </div>
 
     <div class="section-content-container">
-      <!-- Session gate -->
-      <AdminLoginModal
-        v-if="!isAuthed"
-        :show="true"
-        @success="onLoginSuccess"
-        @close="onLoginClose"
-      />
-
-      <!-- Workspace -->
-      <div v-else class="admin-frame">
-        <!-- LEFT: Menu rail with preview cards -->
+      <!-- Workspace: always render; lock features until authed -->
+      <div class="admin-frame">
+        <!-- LEFT: Menu rail with login on top-left when not authed -->
         <aside class="rail">
-          <button
-            v-for="s in sections"
-            :key="s.key"
-            class="rail-card"
-            :class="{ active: activeKey === s.key }"
-            @click="activeKey = s.key"
-          >
-            <div class="rail-card-head">
-              <img :src="s.icon" class="rail-icon" alt="" />
-              <div class="rail-title">{{ s.title }}</div>
+          <!-- Login card (top-left) -->
+          <div v-if="!isAuthed" class="login-card">
+            <div class="login-head">
+              <img src="/icons/lock.svg" alt="" class="rail-icon" />
+              <div class="rail-title">Admin Access</div>
             </div>
+            <label class="control">
+              <span>Password</span>
+              <input
+                type="password"
+                v-model="passwordInput"
+                placeholder="Enter unit password"
+                @keyup.enter="tryLogin"
+              />
+            </label>
+            <button class="btn-sm" @click="tryLogin">Log in</button>
+            <p v-if="loginError" class="login-error">{{ loginError }}</p>
+          </div>
 
-            <div v-if="s.preview && s.preview.length" class="rail-card-body">
-              <div v-for="line in s.preview" :key="line.label" class="rail-line">
-                <span class="label">{{ line.label }}</span>
-                <span class="pill" :class="line.kind">{{ line.value }}</span>
+          <!-- Rail tiles (visible after auth) -->
+          <template v-else>
+            <button
+              v-for="s in sections"
+              :key="s.key"
+              class="rail-card"
+              :class="{ active: activeKey === s.key }"
+              @click="activeKey = s.key"
+            >
+              <div class="rail-card-head">
+                <img :src="s.icon" class="rail-icon" alt="" />
+                <div class="rail-title">{{ s.title }}</div>
               </div>
-              <div class="rail-foot">Click to open</div>
-            </div>
-          </button>
+
+              <div v-if="s.preview && s.preview.length" class="rail-card-body">
+                <div v-for="line in s.preview" :key="line.label" class="rail-line">
+                  <span class="label">{{ line.label }}</span>
+                  <span class="pill" :class="line.kind">{{ line.value }}</span>
+                </div>
+                <div class="rail-foot">Click to open</div>
+              </div>
+            </button>
+          </template>
         </aside>
 
         <!-- RIGHT: Panels -->
         <main class="panels">
+          <!-- Prompt while locked -->
+          <div v-if="!isAuthed" class="panel">
+            <div class="panel-header">
+              <h2>Locked</h2>
+            </div>
+            <p class="muted">Enter the admin password on the left to continue.</p>
+          </div>
+
           <!-- Promotions Panel -->
-          <div v-if="activeKey === 'promotions'" class="panel">
+          <div v-else-if="activeKey === 'promotions'" class="panel">
             <div class="panel-header">
               <h2>Promotions Overview</h2>
               <div class="panel-actions">
                 <button class="btn-sm" @click="refreshData">Refresh</button>
+                <button class="btn-sm ghost" @click="logout">Logout</button>
               </div>
             </div>
 
@@ -141,13 +164,23 @@
 
           <!-- Roster Audits (stub) -->
           <div v-else-if="activeKey === 'audits'" class="panel">
-            <div class="panel-header"><h2>Roster Audits</h2></div>
+            <div class="panel-header">
+              <h2>Roster Audits</h2>
+              <div class="panel-actions">
+                <button class="btn-sm ghost" @click="logout">Logout</button>
+              </div>
+            </div>
             <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
           </div>
 
           <!-- Placeholder for future panels -->
           <div v-else class="panel">
-            <div class="panel-header"><h2>Coming soon</h2></div>
+            <div class="panel-header">
+              <h2>Coming soon</h2>
+              <div class="panel-actions">
+                <button class="btn-sm ghost" v-if="isAuthed" @click="logout">Logout</button>
+              </div>
+            </div>
             <p class="muted">Select a tool from the left.</p>
           </div>
         </main>
@@ -157,14 +190,14 @@
 </template>
 
 <script>
-import AdminLoginModal from "@/components/modals/AdminLoginModal.vue";
-
 export default {
   name: "AdminHome",
-  components: { AdminLoginModal },
   data() {
     return {
-      isAuthed: false,           // runtime only; reset on refresh
+      // auth
+      isAuthed: false,          // runtime only; reset on refresh
+      passwordInput: "",
+      loginError: "",
       activeKey: "promotions",
 
       // filters
@@ -198,9 +231,7 @@ export default {
     };
   },
   created() {
-    // Always require fresh login after reload.
-    this.isAuthed = false;
-    // Defensive: clear any prior persisted flags our modal/util might set.
+    // Require fresh login on reload; ensure no leftover flags
     try {
       localStorage.removeItem("admin-auth");
       sessionStorage.removeItem("admin-authed");
@@ -386,11 +417,25 @@ export default {
   },
   methods: {
     // Auth (runtime only)
-    onLoginSuccess() {
-      this.isAuthed = true; // modal verified; no persistence
+    tryLogin() {
+      const code = String(this.passwordInput || "").trim().toLowerCase();
+      if (!code) {
+        this.loginError = "Please enter the password.";
+        return;
+      }
+      if (code === "150th") {
+        this.isAuthed = true;
+        this.passwordInput = "";
+        this.loginError = "";
+      } else {
+        this.loginError = "Invalid password.";
+      }
     },
-    onLoginClose() {
-      // keep modal open if not authed
+    logout() {
+      this.isAuthed = false;
+      this.activeKey = "promotions";
+      this.passwordInput = "";
+      this.loginError = "";
     },
 
     // Actions
@@ -468,6 +513,18 @@ export default {
 .pill.ok { border-color: rgba(120,255,170,0.7); }
 .pill.warn { border-color: rgba(255,190,80,0.7); }
 .rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
+
+/* Login card */
+.login-card {
+  border: 1px solid rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.35);
+  border-radius: .5rem;
+  padding: .6rem;
+  display: grid;
+  gap: .5rem;
+}
+.login-head { display: flex; align-items: center; gap: .5rem; }
+.login-error { color: #ffb080; margin: .2rem 0 0; }
 
 /* Panels */
 .panels { display: grid; gap: .8rem; }
