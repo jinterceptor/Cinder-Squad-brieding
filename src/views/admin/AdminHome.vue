@@ -273,7 +273,8 @@ export default {
 
       // Status via CSV (RefData)
       troopStatusCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
-      csvStatusIndex: Object.create(null),
+      csvStatusIndex: Object.create(null), // nameKey -> normalized status
+      csvTroopIndex: Object.create(null),  // nameKey -> true (from Troop List)
 
       // Filters + editor
       discSearch: "",
@@ -343,6 +344,14 @@ export default {
     isDischarged() {
       return (status) => String(status || "").toLowerCase() === "discharged";
     },
+    isInTroopList() {
+      return (m) => {
+        const nk = this.nameKey(this.cleanMemberName(m?.name));
+        // only filter if CSV was loaded (has entries)
+        const hasCsv = Object.keys(this.csvTroopIndex).length > 0;
+        return hasCsv ? !!this.csvTroopIndex[nk] : true;
+      };
+    },
 
     /* attendance map */
     attendanceMap() {
@@ -391,10 +400,13 @@ export default {
       return Array.from(set).sort((a, b) => a.localeCompare(b));
     },
     membersSorted() {
-      return [...(this.members || [])].sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+      // filtered against Troop List if we have it, discharged hidden
+      return [...(this.members || [])]
+        .filter(m => this.isInTroopList(m) && !this.isDischarged(this.memberStatusOf(m)))
+        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
     },
     membersSortedNonDischarged() {
-      return this.membersSorted.filter(m => !this.isDischarged(this.memberStatusOf(m)));
+      return this.membersSorted; // already filtered
     },
 
     /* window title / tiles */
@@ -467,8 +479,10 @@ export default {
 
       const rows = [];
       for (const m of (this.members || [])) {
+        // filter by Troop List (if CSV available) and discharge
+        if (!this.isInTroopList(m)) continue;
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) continue; // hide discharged
+        if (this.isDischarged(status)) continue;
 
         if (term) {
           const hay = [m.name, m.rank, m.squad, status].map(x => String(x || "").toLowerCase()).join(" ");
@@ -535,8 +549,9 @@ export default {
     discTable() {
       const rows = [];
       (this.members || []).forEach(m => {
+        if (!this.isInTroopList(m)) return;
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) return; // hide discharged
+        if (this.isDischarged(status)) return;
 
         const nk = this.nameKey(m?.name);
         const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
@@ -554,24 +569,8 @@ export default {
           warnCount,
         });
       });
-      // API-only rows (if any leftover not in members; status unknown)
-      (this.disciplineRows || []).forEach(r => {
-        const nk = this.nameKey(r.name || r.nameKey || '');
-        if (!rows.find(x => x.nameKey === nk)) {
-          const bits = (r.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase() === 'Y');
-          const warnCount = bits.filter(Boolean).length;
-          rows.push({
-            name: r.name || '',
-            nameKey: nk,
-            squad: '',
-            status: 'Unknown',
-            notes: r.notes || '',
-            warnings: r.warnings || 'N, N, N',
-            warnBits: [!!bits[0], !!bits[1], !!bits[2]],
-            warnCount,
-          });
-        }
-      });
+      // API-only rows are skipped from listing if they're not in Troop List or not in members.
+
       return rows.sort((a,b) => a.name.localeCompare(b.name));
     },
     discFiltered() {
@@ -614,7 +613,7 @@ export default {
       return 'unknown';
     },
 
-    /* CSV: fetch + parse */
+    /* CSV: fetch + parse (strict headers) */
     async fetchTroopStatusCsv() {
       try {
         const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
@@ -624,28 +623,30 @@ export default {
 
         const header = rows[0].map(h => String(h || '').trim());
         const hdrLower = header.map(h => h.toLowerCase().replace(/\s+/g,' ').trim());
-        const nameIdx = hdrLower.findIndex(h => ['troop list','name','member','trooper'].includes(h));
-        const statusIdx = hdrLower.findIndex(h => h === 'troop status'); // strict
-
+        const nameIdx = hdrLower.findIndex(h => h === 'troop list'); // strict Troop List
+        const statusIdx = hdrLower.findIndex(h => h === 'troop status'); // strict Troop Status
         if (nameIdx === -1 || statusIdx === -1) return;
 
-        const map = Object.create(null);
+        const statusMap = Object.create(null);
+        const troopMap = Object.create(null);
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           const rawName = String(r[nameIdx] || '').trim();
-          const status = String(r[statusIdx] || '').trim();
           if (!rawName) continue;
           const nk = this.nameKey(this.cleanMemberName(rawName));
-          map[nk] = this.normalizeStatus(status);
+          troopMap[nk] = true; // mark present in Troop List
+
+          const status = String(r[statusIdx] || '').trim();
+          statusMap[nk] = this.normalizeStatus(status);
         }
-        this.csvStatusIndex = map;
+        this.csvStatusIndex = statusMap;
+        this.csvTroopIndex = troopMap;
       } catch (e) {
-        // silent fallback to API/Unknown
         console.warn('CSV status load failed:', e);
       }
     },
     parseCsv(text) {
-      // RFC4180-ish minimal parser for commas and quotes
+      // Minimal CSV parser
       const rows = [];
       let cur = [];
       let val = '';
@@ -664,8 +665,7 @@ export default {
           else { val += ch; }
         }
       }
-      cur.push(val);
-      rows.push(cur);
+      cur.push(val); rows.push(cur);
       if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
       return rows;
     },
@@ -701,7 +701,8 @@ export default {
     focusMemberByNameKey(nk) {
       const m = (this.members || []).find(x => this.nameKey(this.cleanMemberName(x?.name)) === nk);
       if (!m) return;
-      if (this.isDischarged(this.memberStatusOf(m))) return; // ignore discharged
+      if (!this.isInTroopList(m)) return;
+      if (this.isDischarged(this.memberStatusOf(m))) return;
       this.edit.memberId = m.id || null;
       this.populateEditFromMember();
       this.$nextTick(() => {
@@ -737,6 +738,7 @@ export default {
       this.discError = ""; this.discOK = false;
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
       if (!m) { this.discError = "Select a member."; return; }
+      if (!this.isInTroopList(m)) { this.discError = "Member not in Troop List."; return; }
       if (this.isDischarged(this.memberStatusOf(m))) { this.discError = "Cannot edit a discharged member."; return; }
 
       const payload = {
