@@ -101,7 +101,7 @@
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table -->
+          <!-- Table (6 columns, no Actions) -->
           <div class="table">
             <div class="tr head">
               <span class="th name">Name</span>
@@ -110,7 +110,6 @@
               <span class="th ops">Ops</span>
               <span class="th next">Next Rank</span>
               <span class="th prog">Progress</span>
-              <span class="th act">Actions</span>
             </div>
 
             <div v-for="row in promotionsTable" :key="row.id" class="tr">
@@ -129,10 +128,6 @@
                 <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
                   <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
                 </div>
-              </span>
-              <span class="td act">
-                <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">Mark</button>
-                <button class="btn-sm ghost" @click="openMember(row)">Open</button>
               </span>
             </div>
           </div>
@@ -153,20 +148,17 @@
 export default {
   name: "AdminHome",
   props: {
-    /* Same feed as PilotsView */ // :contentReference[oaicite:3]{index=3}
     members: { type: Array, default: () => [] },
-    orbat:   { type: Array, default: () => [] },
+    orbat: { type: Array, default: () => [] },
     attendance: { type: Array, default: () => [] },
   },
   data() {
     return {
-      // auth
       isAuthed: false,
       passwordInput: "",
       loginError: "",
       activeKey: "promotions",
 
-      // filters
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
@@ -174,14 +166,12 @@ export default {
     };
   },
   created() {
-    // fresh login on reload
     try {
       localStorage.removeItem("admin-auth");
       sessionStorage.removeItem("admin-authed");
     } catch {}
   },
   computed: {
-    /* ======= Borrowed logic from PilotsView (normalized) ======= */ // :contentReference[oaicite:4]{index=4}
     nameKey() {
       return (name) =>
         String(name || "")
@@ -192,17 +182,17 @@ export default {
     },
     attendanceMap() {
       const map = Object.create(null);
-      (this.members || []).forEach(m => {
+      (this.members || []).forEach((m) => {
         const ops = Number(m.opsAttended);
         if (Number.isFinite(ops)) {
-          if (m.id) map[`ID:${m.id}`] = ops;
+          if (m.id != null) map[`ID:${m.id}`] = ops;
           if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
         }
       });
-      (this.attendance || []).forEach(row => {
+      (this.attendance || []).forEach((row) => {
         const ops = Number(row?.ops ?? row?.attended ?? row?.value);
         if (!Number.isFinite(ops)) return;
-        if (row?.id) map[`ID:${row.id}`] = ops;
+        if (row?.id != null) map[`ID:${row.id}`] = ops;
         if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
       });
       return map;
@@ -211,7 +201,6 @@ export default {
       return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, "");
     },
     nextPromotion() {
-      // exact ruleset used in PilotsView (copied) // :contentReference[oaicite:5]{index=5}
       const alias = {
         PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
         SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
@@ -271,39 +260,34 @@ export default {
         return Math.max(0, rule.nextAt - ops);
       };
     },
-
-    /* ORBAT membership → squad lookup identical to how squads are structured */ // :contentReference[oaicite:6]{index=6}
     membershipIndex() {
       const idx = Object.create(null);
       const nk = this.nameKey;
-
       const addMember = (squadName, m) => {
         if (!m) return;
         if (m.id != null) idx[`ID:${m.id}`] = squadName;
         if (m.name) idx[`NM:${nk(m.name)}`] = squadName;
       };
-
       (this.orbat || []).forEach((sq) => {
         const squadName = String(sq?.squad || "").trim();
         if (!squadName) return;
-
-        // fireteam/slots style
-        (sq?.fireteams || []).forEach(ft => (ft?.slots || []).forEach(slot => addMember(squadName, slot?.member)));
-        // flat members style
-        (sq?.members || []).forEach(m => addMember(squadName, m));
+        (sq?.fireteams || []).forEach((ft) => (ft?.slots || []).forEach((slot) => addMember(squadName, slot?.member)));
+        (sq?.members || []).forEach((m) => addMember(squadName, m));
       });
-
       return idx;
     },
-
-    /* Source squads list: union of ORBAT squads and member.squad fields */
     squads() {
       const set = new Set();
-      (this.orbat || []).forEach(sq => { const s = String(sq?.squad || "").trim(); if (s) set.add(s); });
-      (this.members || []).forEach(m => { const s = String(m?.squad || "").trim(); if (s) set.add(s); });
+      (this.orbat || []).forEach((sq) => {
+        const s = String(sq?.squad || "").trim();
+        if (s) set.add(s);
+      });
+      (this.members || []).forEach((m) => {
+        const s = String(m?.squad || "").trim();
+        if (s) set.add(s);
+      });
       return Array.from(set).sort((a, b) => a.localeCompare(b));
     },
-
     windowTitle() {
       if (!this.isAuthed) return "Locked";
       return { promotions: "Promotions Overview", audits: "Roster Audits" }[this.activeKey] || "Admin Tools";
@@ -322,8 +306,6 @@ export default {
         { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
       ];
     },
-
-    /* Build the table: resolve ops + next rank + correct squad by ORBAT */
     promotionsTable() {
       const term = (this.search || "").trim().toLowerCase();
       const squadFilter = this.selectedSquad;
@@ -339,8 +321,12 @@ export default {
           if (!hit) continue;
         }
 
-        // squad: prefer m.squad, else from ORBAT membership
-        const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${this.nameKey(m?.name)}`] || "").trim();
+        const squad = String(
+          m?.squad ||
+            this.membershipIndex[`ID:${m?.id}`] ||
+            this.membershipIndex[`NM:${this.nameKey(m?.name)}`] ||
+            ""
+        ).trim();
         if (squadFilter && squadFilter !== "__ALL__" && squad !== squadFilter) continue;
 
         const rule = this.nextPromotion(m);
@@ -348,7 +334,8 @@ export default {
         const nextRank = rule?.nextRank ?? null;
         const nextAt = rule?.nextAt ?? null;
 
-        let progress = 0, opsToNext = null;
+        let progress = 0;
+        let opsToNext = null;
         if (Number.isFinite(nextAt) && Number.isFinite(ops)) {
           progress = Math.min(100, Math.max(0, Math.round((ops / nextAt) * 100)));
           opsToNext = Math.max(0, nextAt - ops);
@@ -368,27 +355,53 @@ export default {
         });
       }
 
-      const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
-      const sorter = {
-        rank: (a,b) => a.rankScore - b.rankScore,
-        ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
-        progress: (a,b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
-        name: (a,b) => a.name.localeCompare(b.name),
-      }[this.sortKey] || ((a,b)=>0);
+      const filtered = onlyProm ? rows.filter((r) => r.opsToNext === 0 && !!r.nextRank) : rows;
+      const sorter =
+        {
+          rank: (a, b) => a.rankScore - b.rankScore,
+          ops: (a, b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
+          progress: (a, b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
+          name: (a, b) => a.name.localeCompare(b.name),
+        }[this.sortKey] || ((a, b) => 0);
 
       return filtered.sort(sorter);
     },
-
-    eligibleNowCount() { return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length; },
-    imminentCount()    { return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length; },
-
+    eligibleNowCount() {
+      return this.promotionsTable.filter((r) => r.opsToNext === 0 && !!r.nextRank).length;
+    },
+    imminentCount() {
+      return this.promotionsTable.filter((r) => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
+    },
     rankScore() {
       const order = [
-        "MAJ","CAPT","1STLT","2NDLT",
-        "CWO5","CWO4","CWO3","CWO2","WO",
-        "GYSGT","SSGT","SGT","CPL","LCPL",
-        "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
-        "HMC","HM1","HM2","HM3","HN","HA","HR",
+        "MAJ",
+        "CAPT",
+        "1STLT",
+        "2NDLT",
+        "CWO5",
+        "CWO4",
+        "CWO3",
+        "CWO2",
+        "WO",
+        "GYSGT",
+        "SSGT",
+        "SGT",
+        "CPL",
+        "LCPL",
+        "SPC4",
+        "SPC3",
+        "SPC2",
+        "SPC",
+        "PFC",
+        "PVT",
+        "RCT",
+        "HMC",
+        "HM1",
+        "HM2",
+        "HM3",
+        "HN",
+        "HA",
+        "HR",
       ];
       return (r) => {
         const idx = order.indexOf(this.rankKey(r));
@@ -397,17 +410,22 @@ export default {
     },
   },
   methods: {
-    /* Auth */
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
-      if (!code) { this.loginError = "Please enter the password."; return; }
-      if (code === "150th") { this.isAuthed = true; this.passwordInput = ""; this.loginError = ""; }
-      else { this.loginError = "Invalid password."; }
+      if (!code) {
+        this.loginError = "Please enter the password.";
+        return;
+      }
+      if (code === "150th") {
+        this.isAuthed = true;
+        this.passwordInput = "";
+        this.loginError = "";
+      } else {
+        this.loginError = "Invalid password.";
+      }
     },
-
-    /* Same as PilotsView resolution order (ID -> Name -> direct) */ // :contentReference[oaicite:7]{index=7}
     getOps(member) {
-      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
+      if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) {
         return this.attendanceMap[`ID:${member.id}`];
       }
       if (member?.name) {
@@ -419,13 +437,9 @@ export default {
       const direct = Number(member?.opsAttended);
       return Number.isFinite(direct) ? direct : null;
     },
-
-    /* Actions (stubbed) */
-    markPromoted(row) { alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`); },
-    openMember(row) { console.log("Open member (stub):", row); },
-
-    /* Utils */
-    isFiniteNum(v) { return Number.isFinite(v); },
+    isFiniteNum(v) {
+      return Number.isFinite(v);
+    },
   },
 };
 </script>
@@ -439,85 +453,260 @@ export default {
   align-items: start;
   width: 100%;
 }
-.windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; }
+.windows-grid > .section-container {
+  position: relative !important;
+  width: 100%;
+  max-width: none;
+}
 
 /* Decoration */
-.rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
+.rhombus-back {
+  height: 6px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(30, 144, 255, 0.2) 0px,
+    rgba(30, 144, 255, 0.2) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
 .clipped-medium-backward {
   clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
-  background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
-  padding: .4rem .75rem;
-  border: 1px solid rgba(30,144,255,.35);
+  background: linear-gradient(90deg, rgba(5, 20, 40, 0.85), rgba(5, 20, 40, 0.5));
+  padding: 0.4rem 0.75rem;
+  border: 1px solid rgba(30, 144, 255, 0.35);
   border-left-width: 0;
-  border-radius: 0 .35rem .35rem 0;
+  border-radius: 0 0.35rem 0.35rem 0;
 }
-.section-header { display: flex; align-items: center; gap: .6rem; }
-.section-header img { width: 28px; height: 28px; }
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.section-header img {
+  width: 28px;
+  height: 28px;
+}
 
 /* Right header grid */
-.right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
+.right-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+}
+.right-actions {
+  display: flex;
+  gap: 0.4rem;
+}
 
 /* Left: tiles + login */
-.rail { display: grid; gap: .6rem; align-content: start; }
+.rail {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
 .rail-card {
   text-align: left;
-  border: 1px solid rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.35);
-  border-radius: .5rem;
-  padding: .6rem;
+  border: 1px solid rgba(30, 144, 255, 0.35);
+  background: rgba(0, 10, 30, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.6rem;
   cursor: pointer;
 }
-.rail-card.active { border-color: rgba(120,255,170,0.7); }
-.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
-.rail-icon { width: 20px; height: 20px; }
-.rail-title { font-weight: 600; }
-.rail-card-body { display: grid; gap: .25rem; }
-.rail-line { display: flex; align-items: center; justify-content: space-between; }
-.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,.45); border-radius: 999px; padding: .05rem .5rem; }
-.pill.ok { border-color: rgba(120,255,170,0.7); }
-.pill.warn { border-color: rgba(255,190,80,0.7); }
-.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
+.rail-card.active {
+  border-color: rgba(120, 255, 170, 0.7);
+}
+.rail-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.rail-icon {
+  width: 20px;
+  height: 20px;
+}
+.rail-title,
+.rail-line .label {
+  color: #d9ebff; /* ensure readable */
+}
+.rail-card-body {
+  display: grid;
+  gap: 0.25rem;
+}
+.pill {
+  font-size: 0.85rem;
+  border: 1px solid rgba(30, 144, 255, 0.45);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  color: #e6f3ff; /* readable */
+}
+.pill.ok {
+  border-color: rgba(120, 255, 170, 0.7);
+}
+.pill.warn {
+  border-color: rgba(255, 190, 80, 0.7);
+}
+.rail-foot {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #9ec5e6;
+}
 
-.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
-.login-error { color: #ffb080; margin: .2rem 0 0; }
+.login-card {
+  border: 1px solid rgba(30, 144, 255, 0.35);
+  background: rgba(0, 10, 30, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.login-error {
+  color: #ffb080;
+  margin: 0.2rem 0 0;
+}
 
-/* Controls */
-.btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
-.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
-.control { display: grid; gap: .2rem; }
-.control span { font-size: .85rem; color: #9ec5e6; }
-.control input, .control select { background: rgba(0,10,30,0.3); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #cfe6ff; }
-.control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
+/* Buttons & controls */
+.btn-sm {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(30, 144, 255, 0.45);
+  background: rgba(0, 10, 30, 0.25);
+  color: #cfe6ff;
+  cursor: pointer;
+}
+.btn-sm.ghost {
+  background: transparent;
+  border-color: rgba(30, 144, 255, 0.45);
+}
+.control {
+  display: grid;
+  gap: 0.2rem;
+}
+.control span {
+  font-size: 0.85rem;
+  color: #9ec5e6;
+}
+.control input,
+.control select {
+  background: rgba(0, 10, 30, 0.3);
+  border: 1px solid rgba(30, 144, 255, 0.35);
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  color: #cfe6ff;
+}
+.control.chk {
+  align-items: center;
+  grid-auto-flow: column;
+  gap: 0.35rem;
+}
 
 /* Right content */
-.right-content { padding: .6rem; }
-.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
-.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
-.chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
-.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,.45); color: #cfe6ff; font-size: .85rem; }
-.chip.ok { border-color: rgba(120,255,170,0.7); }
-.chip.warn { border-color: rgba(255,190,80,0.7); }
+.right-content {
+  padding: 0.6rem;
+}
 
-/* Table */
-.table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
-.tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr .9fr; align-items: center; }
-.tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
-.th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); }
-.tr:last-child .td { border-bottom: 0; }
-.muted { color: #9ec5e6; }
+/* Filters / chips */
+.filters {
+  border: 1px dashed rgba(30, 144, 255, 0.35);
+  border-radius: 0.35rem;
+  padding: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.filters .row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+.chips {
+  display: flex;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+  flex-wrap: wrap;
+}
+.chip {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 10, 30, 0.25);
+  border: 1px solid rgba(30, 144, 255, 0.45);
+  color: #e6f3ff; /* readable */
+  font-size: 0.85rem;
+}
+.chip.ok {
+  border-color: rgba(120, 255, 170, 0.7);
+}
+.chip.warn {
+  border-color: rgba(255, 190, 80, 0.7);
+}
+.muted {
+  color: #9ec5e6;
+}
+
+/* Table (6 columns) */
+.table {
+  border: 1px dashed rgba(30, 144, 255, 0.35);
+  border-radius: 0.35rem;
+  overflow: hidden;
+}
+.tr {
+  display: grid;
+  grid-template-columns: 1.6fr 0.8fr 1fr 0.6fr 0.9fr 1.2fr; /* 6 columns */
+  align-items: center;
+}
+.tr.head {
+  background: rgba(0, 10, 30, 0.35);
+  font-weight: 600;
+}
+.th,
+.td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px dashed rgba(30, 144, 255, 0.25);
+  color: #e6f3ff; /* ensure readable text */
+}
+.tr:last-child .td {
+  border-bottom: 0;
+}
 
 /* Progress bar */
-.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
-.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
-.bar.done .fill { background: rgba(120,255,170,0.7); }
+.bar {
+  height: 8px;
+  background: rgba(0, 10, 30, 0.35);
+  border: 1px solid rgba(30, 144, 255, 0.35);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+}
+.bar .fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  transition: width 0.25s ease;
+  background: rgba(120, 200, 255, 0.6);
+}
+.bar.done .fill {
+  background: rgba(120, 255, 170, 0.7);
+}
 
 /* Responsive */
 @media (max-width: 1200px) {
-  .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
+  .windows-grid {
+    grid-template-columns: 340px 1fr;
+    column-gap: 1.4rem;
+  }
 }
 @media (max-width: 980px) {
-  .windows-grid { grid-template-columns: 1fr; }
-  .right-window { order: 1; }
-  .left-window { order: 2; }
+  .windows-grid {
+    grid-template-columns: 1fr;
+  }
+  .right-window {
+    order: 1;
+  }
+  .left-window {
+    order: 2;
+  }
 }
 </style>
