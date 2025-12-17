@@ -89,7 +89,7 @@
                 </select>
               </label>
 
-              <!-- Improved checkbox: high-contrast label + tight spacing -->
+              <!-- QOL: readable label + tight spacing -->
               <label class="control chk">
                 <input type="checkbox" v-model="onlyPromotable" />
                 <span>Promotable only</span>
@@ -480,7 +480,18 @@ export default {
   min-height: 0;
   overflow: auto;
 }
-.table { min-height: 100%; }
+.table { min-height: 100%; position: relative; }
+
+/* Sticky header (category titles) */
+.tr.head {
+  position: sticky;   /* keep visible while scrolling */
+  top: 0;
+  z-index: 2;         /* sit above rows */
+  background: rgba(0, 10, 30, 0.9); /* solid backdrop for readability */
+  backdrop-filter: blur(2px);       /* subtle: why → separate from rows */
+  border-bottom: 1px solid rgba(30,144,255,0.35);
+  box-shadow: 0 2px 0 rgba(30,144,255,0.15);
+}
 
 /* Decoration */
 .rhombus-back {
@@ -533,11 +544,11 @@ export default {
 .control span { font-size: .85rem; color: #9ec5e6; }
 .control input,
 .control select {
-  background: rgba(5,20,40,0.85); /* darker field background */
+  background: rgba(5,20,40,0.85);
   border: 1px solid rgba(30,144,255,0.35);
   border-radius: .35rem;
   padding: .35rem .45rem;
-  color: #e6f3ff; /* light text */
+  color: #e6f3ff;
 }
 .control input::placeholder { color: #aac7e6; }
 .control input:focus,
@@ -545,7 +556,7 @@ export default {
 
 /* Keep dropdown menu dark too */
 .control select option {
-  background: rgba(5,20,40,0.98); /* dark dropdown list */
+  background: rgba(5,20,40,0.98);
   color: #e6f3ff;
 }
 
@@ -553,15 +564,15 @@ export default {
 .control.chk {
   display: flex;
   align-items: center;
-  gap: .45rem;        /* tighter spacing to checkbox */
-  padding-top: 1.25rem; /* align with other controls’ label line */
+  gap: .45rem;
+  padding-top: 1.25rem; /* aligns baseline with other fields */
 }
 .control.chk input[type="checkbox"] {
   width: 16px; height: 16px;
-  accent-color: #78ffd0; /* reason: improve visibility on dark UI */
+  accent-color: #78ffd0; /* why: visibility on dark UI */
 }
 .control.chk span {
-  color: #e6f3ff;     /* high-contrast label */
+  color: #e6f3ff;
   font-size: .9rem;
 }
 
@@ -569,7 +580,7 @@ export default {
 .filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
 .filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
-.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,.45); color: #e6f3ff; font-size: .85rem; }
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; font-size: .85rem; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
 .chip.warn { border-color: rgba(255,190,80,0.7); }
 .muted { color: #9ec5e6; }
@@ -577,7 +588,7 @@ export default {
 /* Table (6 columns) */
 .table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
 .tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
-.tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
+.tr.head { font-weight: 600; }
 .th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); color: #e6f3ff; }
 .tr:last-child .td { border-bottom: 0; }
 
