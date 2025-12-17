@@ -1,786 +1,546 @@
-<!-- src/views/PilotsView.vue -->
+<!-- src/views/admin/AdminHome.vue -->
 <template>
-  <section id="members" class="section-container">
-    <div style="height: 52px; overflow: hidden">
-      <div class="section-header clipped-medium-backward-pilot">
-        <img src="/icons/license.svg" alt="Members Icon" />
-        <h1>Unit ORBAT</h1>
+  <!-- Two independent windows as siblings -->
+  <div class="windows-grid">
+    <!-- LEFT WINDOW -->
+    <section class="section-container left-window">
+      <div class="section-header clipped-medium-backward">
+        <img src="/icons/protocol.svg" alt="" />
+        <h1>Admin</h1>
       </div>
       <div class="rhombus-back">&nbsp;</div>
-    </div>
 
-    <div class="section-content-container">
-      <div class="orbat-wrapper">
-        <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
+      <div class="section-content-container">
+        <!-- Inline login -->
+        <div v-if="!isAuthed" class="login-card">
+          <label class="control">
+            <span>Password</span>
+            <input
+              type="password"
+              v-model="passwordInput"
+              placeholder="Enter unit password"
+              @keyup.enter="tryLogin"
+            />
+          </label>
+          <button class="btn-sm" @click="tryLogin">Log in</button>
+          <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        </div>
 
-        <div v-else class="hierarchy-container">
-          <!-- BROADSWORD COMMAND -->
-          <div v-if="hierarchy.broadswordCommand" class="orbat-row center-row actual-row">
-            <div class="squad-row single">
-              <div class="squad-card" @click="openSquad(hierarchy.broadswordCommand)">
-                <div class="squad-header">
-                  <div class="squad-insignia">
-                    <span>{{ squadInitials(hierarchy.broadswordCommand.squad) }}</span>
-                  </div>
-                  <div class="squad-meta">
-                    <h2>{{ hierarchy.broadswordCommand.squad }}</h2>
-                    <p class="squad-subtitle">{{ squadDescriptor(hierarchy.broadswordCommand.squad) }}</p>
-                    <p class="squad-count">{{ personnelCount(hierarchy.broadswordCommand) }} PERSONNEL</p>
-                  </div>
-                </div>
-              </div>
+        <!-- Tiles -->
+        <div v-else class="rail">
+          <button
+            v-for="s in sections"
+            :key="s.key"
+            class="rail-card"
+            :class="{ active: activeKey === s.key }"
+            @click="activeKey = s.key"
+          >
+            <div class="rail-card-head">
+              <img :src="s.icon" class="rail-icon" alt="" />
+              <div class="rail-title">{{ s.title }}</div>
             </div>
-          </div>
-
-          <!-- CHALK ACTUAL -->
-          <div v-if="hierarchy.chalkActual" class="orbat-row center-row actual-row">
-            <div class="squad-row single">
-              <div class="squad-card" @click="openSquad(hierarchy.chalkActual)">
-                <div class="squad-header">
-                  <div class="squad-insignia">
-                    <span>{{ squadInitials(hierarchy.chalkActual.squad) }}</span>
-                  </div>
-                  <div class="squad-meta">
-                    <h2>{{ hierarchy.chalkActual.squad }}</h2>
-                    <p class="squad-subtitle">{{ squadDescriptor(hierarchy.chalkActual.squad) }}</p>
-                    <p class="squad-count">{{ personnelCount(hierarchy.chalkActual) }} PERSONNEL</p>
-                  </div>
-                </div>
+            <div v-if="s.preview && s.preview.length" class="rail-card-body">
+              <div v-for="line in s.preview" :key="line.label" class="rail-line">
+                <span class="label">{{ line.label }}</span>
+                <span class="pill" :class="line.kind">{{ line.value }}</span>
               </div>
+              <div class="rail-foot">Click to open</div>
             </div>
-          </div>
-
-          <!-- CHALKS -->
-          <div v-if="hierarchy.chalks.length" class="orbat-row chalk-row">
-            <div class="squad-row three">
-              <div
-                v-for="sq in hierarchy.chalks"
-                :key="sq.squad"
-                class="squad-card"
-                @click="openSquad(sq)"
-              >
-                <div class="squad-header">
-                  <div class="squad-insignia">
-                    <span>{{ squadInitials(sq.squad) }}</span>
-                  </div>
-                  <div class="squad-meta">
-                    <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
-                    <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- SUPPORT -->
-          <div v-if="hierarchy.support.length" class="orbat-row">
-            <div class="squad-row three">
-              <div
-                v-for="sq in hierarchy.support"
-                :key="sq.squad"
-                class="squad-card"
-                @click="openSquad(sq)"
-              >
-                <div class="squad-header">
-                  <div class="squad-insignia">
-                    <span>{{ squadInitials(sq.squad) }}</span>
-                  </div>
-                  <div class="squad-meta">
-                    <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
-                    <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- OTHER -->
-          <div v-if="hierarchy.other.length" class="orbat-row">
-            <div class="squad-row three">
-              <div
-                v-for="sq in hierarchy.other"
-                :key="sq.squad"
-                class="squad-card"
-                @click="openSquad(sq)"
-              >
-                <div class="squad-header">
-                  <div class="squad-insignia">
-                    <span>{{ squadInitials(sq.squad) }}</span>
-                  </div>
-                  <div class="squad-meta">
-                    <h2>{{ sq.squad }}</h2>
-                    <p class="squad-subtitle">{{ squadDescriptor(sq.squad) }}</p>
-                    <p class="squad-count">{{ personnelCount(sq) }} PERSONNEL</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
+          </button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Modal -->
-    <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
-      <div class="squad-modal">
-        <div class="squad-modal-header">
-          <div class="squad-header-left">
-            <div class="section-header clipped-medium-backward-bio">
-              <img src="/icons/license.svg" />
-              <h1>SQUAD ROSTER</h1>
+    <!-- RIGHT WINDOW (dominant) -->
+    <section class="section-container right-window">
+      <div class="section-header clipped-medium-backward right-header">
+        <img src="/icons/protocol.svg" alt="" />
+        <h1>{{ windowTitle }}</h1>
+        <div class="right-actions"><!-- intentionally empty --></div>
+      </div>
+      <div class="rhombus-back">&nbsp;</div>
+
+      <div class="section-content-container right-content">
+        <!-- Locked -->
+        <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
+
+        <!-- Promotions -->
+        <div v-else-if="activeKey === 'promotions'">
+          <!-- Filters -->
+          <div class="filters">
+            <div class="row">
+              <label class="control">
+                <span>Search</span>
+                <input type="text" v-model="search" placeholder="Name, rank, squad" />
+              </label>
+
+              <label class="control">
+                <span>Squad</span>
+                <select v-model="selectedSquad">
+                  <option value="__ALL__">All squads</option>
+                  <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
+                </select>
+              </label>
+
+              <label class="control">
+                <span>Sort by</span>
+                <select v-model="sortKey">
+                  <option value="rank">Rank (high→low)</option>
+                  <option value="ops">Ops attended</option>
+                  <option value="progress">Progress to next rank</option>
+                  <option value="name">Name (A→Z)</option>
+                </select>
+              </label>
+
+              <label class="control chk">
+                <input type="checkbox" v-model="onlyPromotable" />
+                Promotable only
+              </label>
             </div>
-            <div class="rhombus-back">&nbsp;</div>
           </div>
 
-          <button class="squad-close" @click="closeSquad">✕</button>
-        </div>
+          <!-- Summary chips -->
+          <div class="chips">
+            <span class="chip">Total: {{ promotionsTable.length }}</span>
+            <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
+            <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
+          </div>
 
-        <div class="squad-modal-meta" :class="{ invalid: !squadLoadoutStatus.valid }">
-          <div class="squad-title">
-            <h2>{{ activeSquad.squad }}</h2>
-            <p class="subtitle">
-              {{ squadDescriptor(activeSquad.squad) }} ·
-              {{ personnelCount(activeSquad) }} PERSONNEL
-            </p>
+          <!-- Table -->
+          <div class="table">
+            <div class="tr head">
+              <span class="th name">Name</span>
+              <span class="th rank">Rank</span>
+              <span class="th squad">Squad</span>
+              <span class="th ops">Ops</span>
+              <span class="th next">Next Rank</span>
+              <span class="th prog">Progress</span>
+              <span class="th act">Actions</span>
+            </div>
 
-            <div class="loadout-status">
-              <span class="points">LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS</span>
-              <span v-if="!squadLoadoutStatus.valid" class="warn" :title="squadLoadoutStatus.errors.join(' • ')">
-                ⚠ LOADOUT INVALID
+            <div v-for="row in promotionsTable" :key="row.id" class="tr">
+              <span class="td name">{{ row.name }}</span>
+              <span class="td rank">{{ row.rank }}</span>
+              <span class="td squad">{{ row.squad }}</span>
+              <span class="td ops">
+                <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                <span v-else class="muted">N/A</span>
               </span>
-              <span v-else class="ok">✓ VALID</span>
+              <span class="td next">
+                <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
+                <span v-else class="muted">—</span>
+              </span>
+              <span class="td prog">
+                <div class="bar" :class="{ done: row.opsToNext === 0 && row.nextRank }">
+                  <div class="fill" :style="{ width: (row.progress ?? 0) + '%' }"></div>
+                </div>
+              </span>
+              <span class="td act">
+                <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">Mark</button>
+                <button class="btn-sm ghost" @click="openMember(row)">Open</button>
+              </span>
             </div>
           </div>
-
-          <div class="squad-tag"><span>{{ squadInitials(activeSquad.squad) }}</span></div>
         </div>
 
-        <div class="squad-modal-scroll">
-          <div v-for="ft in activeFireteams" :key="ft.name" class="fireteam-block">
-            <div class="fireteam-header">
-              <span class="fireteam-title">{{ ft.name.toUpperCase() }}</span>
-              <span class="fireteam-count">({{ ft.slots.length }} SLOTS)</span>
-            </div>
-
-            <div class="squad-members-grid">
-              <div
-                v-for="(slot, idx) in ft.slots"
-                :key="slotKey(slot, idx)"
-                class="member-card"
-                :class="{ vacant: slot.status === 'VACANT', closed: slot.status === 'CLOSED' }"
-              >
-                <!-- VACANT / CLOSED -->
-                <template v-if="slot.status === 'VACANT' || slot.status === 'CLOSED'">
-                  <div class="member-header">
-                    <div class="member-header-text">
-                      <h3>{{ slot.status }}</h3>
-                      <p class="rank-line">
-                        <span class="rank">{{ slot.role }}</span>
-                        <span class="id">UNFILLED SLOT</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="member-body">
-                    <div class="member-column left">
-                      <p class="detail-line">
-                        <strong>Role:</strong>
-                        <span
-                          class="role-accent"
-                          :class="{ 'role-corpsman': isMedicalRank(slot.role) || isCorpsmanRole(slot.role) }"
-                        >
-                          {{ slot.role }}
-                        </span>
-                      </p>
-                    </div>
-                    <div class="member-column right">
-                      <p><strong>Certifications:</strong></p>
-                      <span class="cert-none">N/A</span>
-                    </div>
-                  </div>
-
-                  <div class="member-footer">
-                    <span>SLOT STATUS: {{ slot.status }}</span>
-                    <span>UNSC SYSTEMS DATABASE</span>
-                  </div>
-                </template>
-
-                <!-- FILLED -->
-                <template v-else>
-                  <div class="member-header">
-                    <div class="member-rank-insignia-wrapper" v-if="rankInsignia(slot.member?.rank)">
-                      <img
-                        :src="rankInsignia(slot.member.rank)"
-                        :alt="slot.member.rank + ' insignia'"
-                        class="member-rank-insignia"
-                      />
-                    </div>
-
-                    <div class="member-header-text">
-                      <h3>{{ (slot.member?.name || 'UNKNOWN').toUpperCase() }}</h3>
-                      <p class="rank-line">
-                        <span class="rank">{{ slot.member?.rank || 'N/A' }}</span>
-                        <span class="id">ID: {{ slot.member?.id || 'N/A' }}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="member-body">
-                    <div class="member-column left">
-                      <p class="detail-line">
-                        <strong>Role:</strong>
-                        <span
-                          class="role-accent"
-                          :class="{ 'role-corpsman': isMedicalRank(slot.member?.rank) || isCorpsmanRole(slot.role || slot.member?.slot) }"
-                        >
-                          {{ slot.role || slot.member?.slot || 'Unassigned' }}
-                        </span>
-                      </p>
-
-                      <p class="detail-line">
-                        <strong>Join Date:</strong>
-                        <span class="date-accent join-date">{{ slot.member?.joinDate || 'Unknown' }}</span>
-                      </p>
-
-                      <div
-                        class="ops-promo"
-                        :class="{ imminent: opsToNextPromotion(slot.member) === 1 || opsToNextPromotion(slot.member) === 0 }"
-                      >
-                        <p class="detail-line">
-                          <strong>Ops Attended:</strong>
-                          <span class="accent-strong">{{ formatOps(getOps(slot.member)) }}</span>
-                        </p>
-                        <p class="detail-line next-rank-line">
-                          <strong>Next Rank:</strong>
-                          <span class="accent-strong">
-                            {{ nextPromotion(slot.member)?.nextRank || '—' }}
-                          </span>
-                          <span v-if="opsToNextPromotion(slot.member) !== null" class="accent">
-                            ({{ opsToNextPromotion(slot.member) }} ops)
-                          </span>
-                        </p>
-                        <p v-if="nextPromotion(slot.member)?.misc" class="detail-line">
-                          <strong>Requirements:</strong>
-                          <span class="accent-strong">{{ nextPromotion(slot.member).misc }}</span>
-                        </p>
-                      </div>
-
-                      <div class="loadout-row">
-                        <label class="disposable">
-                          <input
-                            type="checkbox"
-                            :checked="getLoadout(slot.member).disposable"
-                            @change="toggleDisposable(slot.member)"
-                          />
-                          Disposable Rocket (1pt)
-                        </label>
-                      </div>
-
-                      <div class="loadout-row">
-                        <label class="primary-label">Assigned Loadout</label>
-                        <select
-                          class="loadout-select"
-                          :value="getLoadout(slot.member).primary"
-                          @change="setPrimary(slot.member, $event.target.value)"
-                        >
-                          <option value="">None / Standard</option>
-                          <option v-for="opt in availableLoadouts(slot.member)" :key="opt" :value="opt">
-                            {{ loadoutLabel(opt) }}
-                          </option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div class="member-column right">
-                      <p><strong>Certifications:</strong></p>
-                      <div class="cert-list">
-                        <div v-for="(label, cidx) in certLabels" :key="label" class="cert-row">
-                          <span class="cert-checkbox" :class="{ checked: hasCert(slot.member, cidx) }">
-                            <span v-if="hasCert(slot.member, cidx)" class="checkbox-dot"></span>
-                          </span>
-                          <span class="cert-label">{{ label }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="member-footer">
-                    <span>BIOMETRIC RECORD VALID</span>
-                    <span>UNSC SYSTEMS DATABASE</span>
-                  </div>
-                </template>
-              </div>
-            </div>
-
-            <div class="fireteam-divider"></div>
-          </div>
+        <!-- Audits (stub) -->
+        <div v-else-if="activeKey === 'audits'">
+          <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
         </div>
+
+        <!-- Future -->
+        <div v-else class="muted">Select a tool from the left.</div>
       </div>
-    </div>
-
-    <audio ref="orbatClickAudio" preload="auto">
-      <source src="/sound/Orbat Main Menu Click.ogg" type="audio/ogg" />
-    </audio>
-  </section>
+    </section>
+  </div>
 </template>
 
 <script>
 export default {
-  name: "PilotsView",
+  name: "AdminHome",
   props: {
-    members: { type: Array, default: () => [] },
-    orbat:   { type: Array, default: () => [] },
-    attendance: { type: Array, default: () => [] },
+    /* mirror PilotsView so we use the same Google Sheets-fed props */
+    members: { type: Array, default: () => [] },         /* [{ id, name, rank, squad, opsAttended, ...}] */
+    orbat:   { type: Array, default: () => [] },         /* unused here except for squads list merge */
+    attendance: { type: Array, default: () => [] },      /* optional: rows with { id|name, ops } */
   },
   data() {
     return {
-      activeSquad: null,
-      certLabels: [
-        "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
-        "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
+      // auth
+      isAuthed: false,
+      passwordInput: "",
+      loginError: "",
+      activeKey: "promotions",
+
+      // filters
+      search: "",
+      selectedSquad: "__ALL__",
+      sortKey: "rank",
+      onlyPromotable: false,
+
+      // local fallback when props are empty (optional)
+      localMembers: [
+        { id: 1, name: "J. Frost", rank: "CPL", squad: "Alpha", opsAttended: 8 },
+        { id: 2, name: "R. Hart", rank: "LCPL", squad: "Alpha", opsAttended: 3 },
+        { id: 3, name: "M. Ruiz", rank: "SPC3", squad: "Bravo", opsAttended: 5 },
+        { id: 4, name: "T. Wells", rank: "PFC", squad: "Bravo", opsAttended: 2 },
+        { id: 5, name: "S. King", rank: "SGT", squad: "HQ", opsAttended: 12 },
       ],
-      loadouts: {},
-      loadoutOptions: {
-        grenadier: { label: "Grenadier", points: 2, explosive: true },
-        antitank:  { label: "Anti-Tank", points: 3, explosive: true },
-        m247:      { label: "M247 SAW", points: 3 },
-        m247_50:   { label: "M247 .50", points: 5 },
-        engineer:  { label: "Combat Engineer", points: 2 },
-        marksman:  { label: "Marksman", points: 2 },
-      },
+      localOrbat: [{ squad: "HQ" }, { squad: "Alpha" }, { squad: "Bravo" }],
+
+      // env for optional direct fetch (only used if props are empty)
+      sheetId: import.meta.env.VITE_SHEET_ID || "",
+      tabMembers: import.meta.env.VITE_TAB_MEMBERS || "",
     };
   },
+  created() {
+    try {
+      localStorage.removeItem("admin-auth");
+      sessionStorage.removeItem("admin-authed");
+    } catch {}
+  },
+  mounted() {
+    // Optional: if parent didn't pass data, try to fetch a minimal members list
+    if (!this.members?.length && this.sheetId && this.tabMembers) {
+      this.loadFromSheet().catch(() => {});
+    }
+  },
   computed: {
+    // Use props first; fallback to local
+    useMembers() { return (this.members && this.members.length) ? this.members : this.localMembers; },
+    useOrbat()   { return (this.orbat && this.orbat.length) ? this.orbat : this.localOrbat; },
+
+    windowTitle() {
+      if (!this.isAuthed) return "Locked";
+      return { promotions: "Promotions Overview", audits: "Roster Audits" }[this.activeKey] || "Admin Tools";
+    },
+    sections() {
+      return [
+        {
+          key: "promotions",
+          title: "Promotions Overview",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
+            { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
+          ],
+        },
+        { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
+      ];
+    },
+    squads() {
+      const set = new Set();
+      (this.useMembers || []).forEach(m => { const s = (m.squad || "").trim(); if (s) set.add(s); });
+      (this.useOrbat || []).forEach(sq => { const s = (sq.squad || "").trim(); if (s) set.add(s); });
+      return Array.from(set).sort((a,b)=>a.localeCompare(b));
+    },
     attendanceMap() {
+      // Follow PilotsView approach for name/id keys (so Sheets-driven attendance also works). :contentReference[oaicite:2]{index=2}
       const map = Object.create(null);
-      (this.members || []).forEach(m => {
+      const nameKey = (nm) => String(nm || "").replace(/["'.]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+
+      (this.useMembers || []).forEach(m => {
         const ops = Number(m.opsAttended);
         if (Number.isFinite(ops)) {
           if (m.id) map[`ID:${m.id}`] = ops;
-          if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
+          if (m.name) map[`NM:${nameKey(m.name)}`] = ops;
         }
       });
       (this.attendance || []).forEach(row => {
         const ops = Number(row?.ops ?? row?.attended ?? row?.value);
         if (!Number.isFinite(ops)) return;
         if (row?.id) map[`ID:${row.id}`] = ops;
-        if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
+        if (row?.name) map[`NM:${nameKey(row.name)}`] = ops;
       });
       return map;
     },
-    hierarchy() {
-      const groups = { broadswordCommand: null, chalkActual: null, chalks: [], support: [], other: [] };
-      (this.orbat || []).forEach((sq) => {
-        const n = String(sq.squad || "").trim().toLowerCase();
-        if (n === "broadsword command") groups.broadswordCommand = sq;
-        else if (n === "chalk actual") groups.chalkActual = sq;
-        else if (["chalk 1","chalk 2","chalk 3","chalk 4"].includes(n)) groups.chalks.push(sq);
-        else if (["broadsword","wyvern","wyvern air wing","caladrius","ifrit"].includes(n)) groups.support.push(sq);
-        else groups.other.push(sq);
-      });
-      groups.chalks.sort((a,b)=>a.squad.localeCompare(b.squad, undefined, {numeric:true}));
-      groups.support.sort((a,b)=>a.squad.localeCompare(b.squad));
-      groups.other.sort((a,b)=>a.squad.localeCompare(b.squad));
-      return groups;
-    },
-    activeFireteams() {
-      if (!this.activeSquad) return [];
-      if (this.activeSquad.fireteams && this.activeSquad.fireteams.length) {
-        const sorted = this.activeSquad.fireteams.slice().map((ft) => ({
-          name: ft.name || "Element",
-          slots: (ft.slots || []).slice(),
-        }));
-        const orderKey = (n) => {
-          const t = String(n || "").toLowerCase();
-          if (t === "fireteam 1") return 0;
-          if (t === "fireteam 2") return 1;
-          if (t === "fireteam 3") return 2;
-          if (t === "fireteam 4") return 3;
-          if (t === "element") return 90;
-          return 50;
-        };
-        sorted.sort((a,b)=>{
-          const ka = orderKey(a.name), kb = orderKey(b.name);
-          if (ka !== kb) return ka - kb;
-          return String(a.name).localeCompare(String(b.name), undefined, {numeric:true});
-        });
+    promotionsTable() {
+      const term = (this.search || "").trim().toLowerCase();
+      const squad = this.selectedSquad;
+      const onlyProm = !!this.onlyPromotable;
 
-        const rankOrder = [
+      const rows = [];
+      for (const m of (this.useMembers || [])) {
+        if (term) {
+          const hit =
+            (m.name || "").toLowerCase().includes(term) ||
+            (m.rank || "").toLowerCase().includes(term) ||
+            (m.squad || "").toLowerCase().includes(term);
+          if (!hit) continue;
+        }
+        if (squad && squad !== "__ALL__" && (m.squad || "") !== squad) continue;
+
+        const ladder = this.promotionLadderFor(m.rank);
+        const nextRank = ladder?.nextRank ?? null;
+        const nextAt = ladder?.nextAt ?? null;
+
+        const ops = this.getOps(m);
+        const opsToNext = Number.isFinite(ops) && Number.isFinite(nextAt) ? Math.max(0, nextAt - ops) : null;
+
+        let progress = 0;
+        if (nextAt !== null && Number.isFinite(ops)) {
+          progress = Math.min(100, Math.max(0, Math.round((ops / nextAt) * 100)));
+        }
+
+        rows.push({
+          id: m.id,
+          name: m.name || "Unknown",
+          rank: m.rank || "N/A",
+          rankScore: this.rankScore(m?.rank),
+          squad: m.squad || "",
+          ops: Number.isFinite(ops) ? ops : null,
+          nextRank,
+          nextAt,
+          progress,
+          opsToNext,
+        });
+      }
+
+      const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
+
+      const sorter = {
+        rank: (a,b) => a.rankScore - b.rankScore,
+        ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
+        progress: (a,b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
+        name: (a,b) => a.name.localeCompare(b.name),
+      }[this.sortKey] || ((a,b)=>0);
+
+      return filtered.sort(sorter);
+    },
+    eligibleNowCount() {
+      return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
+    },
+    imminentCount() {
+      return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
+    },
+
+    rankKey() {
+      const alias = {
+        PRIVATE: "PVT", PFC: "PFC", SPC: "SPC", SPC2: "SPC2", SPC3: "SPC3", SPC4: "SPC4",
+        LANCECORPORAL: "LCPL", LCPL: "LCPL", CORPORAL: "CPL", CPL: "CPL",
+        SERGEANT: "SGT", SGT: "SGT", STAFFSERGEANT: "SSGT", SSGT: "SSGT", GUNNYSERGEANT: "GYSGT", GYSGT: "GYSGT",
+        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
+        "2NDLT": "2NDLT", SECONDLIEUTENANT: "2NDLT", "1STLT": "1STLT", FIRSTLIEUTENANT: "1STLT", CAPT: "CAPT", CAPTAIN: "CAPT", MAJ: "MAJ",
+        HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
+      };
+      return (rank) => {
+        if (!rank) return "";
+        const k = String(rank || "").trim().toUpperCase().replace(/\s+/g, "");
+        return alias[k] || k;
+      };
+    },
+    rankScore() {
+      return (rank) => {
+        const rk = this.rankKey(rank);
+        const order = [
           "MAJ","CAPT","1STLT","2NDLT",
           "CWO5","CWO4","CWO3","CWO2","WO",
           "GYSGT","SSGT","SGT","CPL","LCPL",
           "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
           "HMC","HM1","HM2","HM3","HN","HA","HR",
         ];
-        const normalizeRank = (r) => String(r || "").trim().toUpperCase().replace(/\s+/g, "");
-        const rankScore = (r) => { const rr = normalizeRank(r); const idx = rankOrder.indexOf(rr); return idx === -1 ? 999 : idx; };
-        const statusScore = (s) => { const st = String(s || "").toUpperCase(); if (st === "FILLED") return 0; if (st === "VACANT") return 1; if (st === "CLOSED") return 2; return 3; };
-        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-
-        sorted.forEach((ft) => {
-          ft.slots = (ft.slots || []).slice().sort((a, b) => {
-            const as = statusScore(a.status), bs = statusScore(b.status);
-            if (as !== bs) return as - bs;
-            if (a.status !== "FILLED" || b.status !== "FILLED") return collator.compare(String(a.role || ""), String(b.role || ""));
-            const ar = rankScore(a.member?.rank), br = rankScore(b.member?.rank);
-            if (ar !== br) return ar - br;
-            return collator.compare(String(a.member?.name || ""), String(b.member?.name || ""));
-          });
-        });
-        return sorted.filter((ft) => ft.slots && ft.slots.length);
-      }
-
-      const map = {};
-      (this.activeSquad.members || []).forEach((m) => {
-        const ft = (m.fireteam || "Element").trim() || "Element";
-        if (!map[ft]) map[ft] = [];
-        map[ft].push({ status: "FILLED", role: m.slot || "Unassigned", member: m });
-      });
-      return Object.entries(map).map(([name, slots]) => ({ name, slots }));
+        const idx = order.indexOf(rk);
+        return idx === -1 ? 999 : idx;
+      };
     },
-    squadLoadoutStatus() {
-      if (!this.activeSquad) return { valid: true, points: 0, errors: [] };
-      let points = 0; const errors = []; const explosiveTaken = new Set();
-      this.activeFireteams.forEach((ft) => (ft.slots || []).forEach((slot) => {
-        const member = slot.member; if (!member) return;
-        const l = this.getLoadout(member);
-        if (l.disposable) { points += 1; if (explosiveTaken.has("disposable")) errors.push("Duplicate explosive weapon: Disposable"); explosiveTaken.add("disposable"); }
-        if (l.primary) { const def = this.loadoutOptions[l.primary]; if (def) { points += def.points; if (def.explosive) { if (explosiveTaken.has(l.primary)) errors.push(`Duplicate explosive weapon: ${def.label}`); explosiveTaken.add(l.primary); } } }
-      }));
-      if (points > 10) errors.push("Exceeds 10 point maximum");
-      return { valid: errors.length === 0, points, errors };
+    promotionLadderFor() {
+      // Mirrors PilotsView rules where applicable; ops thresholds simplified for enlisted; others mostly policy-driven. :contentReference[oaicite:3]{index=3}
+      const ladders = {
+        PVT:  { nextAt: 10, nextRank: "PFC" },
+        PFC:  { nextAt: 20, nextRank: "SPC" },
+        SPC:  { nextAt: 30, nextRank: "SPC2" },
+        SPC2: { nextAt: 40, nextRank: "SPC3" },
+        SPC3: { nextAt: 50, nextRank: "SPC4" },
+        SPC4: { nextAt: null, nextRank: "LCPL" },
+        LCPL: { nextAt: null, nextRank: "CPL" },
+        CPL:  { nextAt: null, nextRank: "SGT" },
+        SGT:  { nextAt: null, nextRank: "SSGT" },
+        SSGT: { nextAt: null, nextRank: "GYSGT" },
+        GYSGT:{ nextAt: null, nextRank: "2NDLT" },
+
+        WO:   { nextAt: 10, nextRank: "CWO2" },
+        CWO2: { nextAt: 20, nextRank: "CWO3" },
+        CWO3: { nextAt: 30, nextRank: "CWO4" },
+        CWO4: { nextAt: null, nextRank: "CWO5" },
+        CWO5: { nextAt: null, nextRank: null },
+
+        "2NDLT": { nextAt: null, nextRank: "1STLT" },
+        "1STLT": { nextAt: null, nextRank: "CAPT" },
+        CAPT:    { nextAt: null, nextRank: "MAJ" },
+        MAJ:     { nextAt: null, nextRank: null },
+
+        HA:  { nextAt: 10, nextRank: "HN" },
+        HN:  { nextAt: 20, nextRank: "HM3" },
+        HM3: { nextAt: 30, nextRank: "HM2" },
+        HM2: { nextAt: null, nextRank: "HM1" },
+        HM1: { nextAt: null, nextRank: "HMC" },
+        HMC: { nextAt: null, nextRank: null },
+      };
+      return (rank) => ladders[this.rankKey(rank)] || null;
     },
   },
   methods: {
-    nameKey(name) {
-      return String(name || "")
-        .replace(/["'.]/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toUpperCase();
+    // Auth (runtime only)
+    tryLogin() {
+      const code = String(this.passwordInput || "").trim().toLowerCase();
+      if (!code) { this.loginError = "Please enter the password."; return; }
+      if (code === "150th") { this.isAuthed = true; this.passwordInput = ""; this.loginError = ""; }
+      else { this.loginError = "Invalid password."; }
     },
+
+    // Read ops consistently with PilotsView’s map. :contentReference[oaicite:4]{index=4}
     getOps(member) {
-      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) {
-        return this.attendanceMap[`ID:${member.id}`];
-      }
-      if (member?.name) {
-        const nk = this.nameKey(member.name);
-        if (this.attendanceMap[`NM:${nk}`] !== undefined) {
-          return this.attendanceMap[`NM:${nk}`];
-        }
-      }
+      const nk = (nm) => String(nm || "").replace(/["'.]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+      if (member?.id && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
+      if (member?.name && this.attendanceMap[`NM:${nk(member.name)}`] !== undefined) return this.attendanceMap[`NM:${nk(member.name)}`];
       const direct = Number(member?.opsAttended);
       return Number.isFinite(direct) ? direct : null;
     },
 
-    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
-    nextPromotion(member) {
-      const key = this.rankKey(member?.rank);
-      const alias = {
-        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
-        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
-        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
-        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
-        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
-        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3",
-        HOSPITALCORPSMANSECONDCLASS: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1",
-        CHIEFHOSPITALCORPSMAN: "HMC",
-        WARRANTOFFICER: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
-      };
-      const rk = alias[key] || key;
+    // Optional: minimal GViz fetch if props are empty and env provided
+    async loadFromSheet() {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${this.sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(this.tabMembers)}`;
+        const res = await fetch(url, { cache: "no-store" });
+        const text = await res.text();
+        const json = JSON.parse(text.replace(/^[^\n]*\(/, "").replace(/\);?\s*$/, ""));
+        const cols = (json.table.cols || []).map(c => (c.label || "").toLowerCase().trim());
+        const rows = (json.table.rows || []).map(r => (r.c || []).map(c => (c ? c.v : null)));
 
-      const rules = {
-        PVT:  { nextRank: "PFC",  nextAt: 10,  misc: null },
-        PFC:  { nextRank: "SPC",  nextAt: 20, misc: null },
-        SPC:  { nextRank: "SPC2", nextAt: 30, misc: null },
-        SPC2: { nextRank: "SPC3", nextAt: 40, misc: null },
-        SPC3: { nextRank: "SPC4", nextAt: 50, misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
-        SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
-        LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
-        CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
-        SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
-        SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
-        GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Support staff / Platoon lead" },
+        const findIdx = (...names) => {
+          const lowered = names.map(n => n.toLowerCase());
+          let i = cols.findIndex(c => lowered.includes(c));
+          if (i !== -1) return i;
+          i = cols.findIndex(c => lowered.some(n => c.includes(n)));
+          return i;
+        };
 
-        "2NDLT": { nextRank: "1stLt", nextAt: null, misc: null },
-        "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
-        CAPT:    { nextRank: null,    nextAt: null, misc: null },
+        const idxId   = findIdx("id","member_id","mid");
+        const idxName = findIdx("name","callsign","member","pilot");
+        const idxRank = findIdx("rank","grade");
+        const idxSquad= findIdx("squad","unit","section");
+        const idxOps  = findIdx("ops","opsattended","operations","attendance");
 
-        HA:  { nextRank: "HN",  nextAt: 10,  misc: null },
-        HN:  { nextRank: "HM3", nextAt: 20, misc: null },
-        HM3: { nextRank: "HM2", nextAt: 30, misc: null },
-        HM2: { nextRank: "HM1", nextAt: null, misc: null },
-        HM1: { nextRank: "HMC", nextAt: null, misc: "Assigned to Corpsman slot & Medic Trainer" },
-        HMC: { nextRank: null,  nextAt: null, misc: null },
+        const mapped = rows
+          .map(r => ({
+            id: Number(r[idxId]) || undefined,
+            name: String(r[idxName] ?? "").trim(),
+            rank: String(r[idxRank] ?? "").trim(),
+            squad: String(r[idxSquad] ?? "").trim(),
+            opsAttended: Number(r[idxOps]),
+          }))
+          .filter(x => x.name);
 
-        WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
-        CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
-        CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
-        CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
-        CWO5: { nextRank: null,   nextAt: null, misc: "Flight Lead" },
-      };
-      return rules[rk] || { nextRank: null, nextAt: null, misc: null };
-    },
-    opsToNextPromotion(member) {
-      const ops = this.getOps(member);
-      const rule = this.nextPromotion(member);
-      if (!Number.isFinite(ops)) return null;
-      if (!Number.isFinite(rule.nextAt)) return null;
-      return Math.max(0, rule.nextAt - ops);
-    },
-
-    /* Medical role detection */
-    isMedicalRank(rankOrRole) {
-      const r = String(rankOrRole || "").toUpperCase();
-      return ["HR","HA","HN","HM3","HM2","HM1","HMC"].includes(r);
-    },
-    isCorpsmanRole(role) {
-      const s = String(role || "").toUpperCase();
-      return /CORPSMAN|MEDIC|PJ/.test(s);
-    },
-
-    /* UI */
-    playOrbatClick() {
-      const a = this.$refs.orbatClickAudio;
-      if (!a || typeof a.play !== "function") return;
-      try { a.currentTime = 0; a.play().catch(() => {}); } catch {}
-    },
-    openSquad(sq) { this.playOrbatClick(); this.activeSquad = sq; },
-    closeSquad() { this.activeSquad = null; },
-
-    personnelCount(sq) {
-      if (sq.fireteams && sq.fireteams.length) {
-        let count = 0;
-        sq.fireteams.forEach((ft) => (ft.slots || []).forEach((s) => { if (s.status === "FILLED" && s.member) count++; }));
-        return count;
+        if (mapped.length) {
+          mapped.forEach((m, i) => { if (!Number.isFinite(m.id)) m.id = i + 1; });
+          this.localMembers = mapped;
+        }
+      } catch (e) {
+        console.warn("Admin: failed to load Google Sheet (fallback to demo).", e);
       }
-      return (sq.members || []).length;
-    },
-    slotKey(slot, idx) { return slot.member?.id || `${slot.status}-${slot.role}-${idx}`; },
-
-    squadInitials(name) {
-      if (!name) return "UNSC";
-      const parts = String(name).trim().split(/\s+/);
-      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-      return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
-                  .join("").toUpperCase();
-    },
-    squadDescriptor(name) {
-      const n = String(name || "").toLowerCase();
-      if (n.includes("chalk")) return "INFANTRY ELEMENT";
-      if (n.includes("air") || n.includes("wing") || n.includes("wyvern")) return "AVIATION SUPPORT";
-      if (n.includes("command") || n.includes("actual")) return "COMMAND ELEMENT";
-      return "UNSC ELEMENT";
     },
 
-    /* Certs & loadouts */
-    hasCert(member, idx) {
-      const certs = member?.certifications || [];
-      return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
-    },
-    getLoadout(member) {
-      const id = member?.id;
-      if (!id) return { primary: "", disposable: false };
-      if (!this.loadouts[id]) this.loadouts[id] = { primary: "", disposable: false };
-      return this.loadouts[id];
-    },
-    toggleDisposable(member) {
-      const id = member?.id; if (!id) return;
-      const curr = this.getLoadout(member);
-      this.loadouts[id] = { ...curr, disposable: !curr.disposable };
-    },
-    setPrimary(member, value) {
-      const id = member?.id; if (!id) return;
-      const curr = this.getLoadout(member);
-      this.loadouts[id] = { ...curr, primary: value || "" };
-    },
-    loadoutLabel(key) { const def = this.loadoutOptions[key]; return def ? `${def.label} (${def.points}pt)` : key; },
-    availableLoadouts(member) {
-      const has = (label) => this.hasCert(member, this.certLabels.indexOf(label));
-      const opts = [];
-      if (has("Grenadier")) opts.push("grenadier");
-      if (has("Anti Tank")) opts.push("antitank");
-      if (has("Machine Gunner")) { opts.push("m247", "m247_50"); }
-      if (has("Combat Engineer")) opts.push("engineer");
-      if (has("Marksman")) opts.push("marksman");
-      return opts;
-    },
+    // Actions (stubs)
+    markPromoted(row) { alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`); },
+    openMember(row) { console.log("Open member (stub):", row); },
 
-    /* Rank insignia */
-    rankCode(rank) {
-      if (!rank) return null;
-      const key = rank.trim().toUpperCase();
-      const map = {
-        RCT: "Rct", PVT: "Pvt", PFC: "PFC", SPC: "Spc", SPC2: "Spc2", SPC3: "Spc3", SPC4: "Spc4",
-        LCPL: "LCpl", CPL: "Cpl", SGT: "Sgt", SSGT: "SSgt", GYSGT: "GySgt",
-        WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5",
-        "2NDLT": "2ndLt", "1STLT": "1stLt", CAPT: "Capt", MAJ: "Maj",
-        HR: "HR", HA: "HA", HN: "HN", HM3: "HM3", HM2: "HM2", HM1: "HM1", HMC: "HMC",
-      };
-      return map[key] || null;
-    },
-    rankInsignia(rank) { const base = this.rankCode(rank); return base ? `/ranks/${base}.png` : null; },
-
-    formatOps(v) {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : "—";
-    },
+    // Utils
+    isFiniteNum(v) { return Number.isFinite(v); },
   },
 };
 </script>
 
 <style scoped>
-/* Layout */
-.section-container { height: 100vh; overflow-y: auto; padding: 2.5rem 3rem; color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
-.section-content_container { width: 100% !important; }
-.orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
-.hierarchy-container { width: 100%; margin-top: 2rem; }
-.orbat-row { margin-bottom: 3rem; }
-.center-row { display: flex; justify-content: center; }
-.squad-row.single { display: flex; justify-content: center; }
-.squad-row.three { display: grid; grid-template-columns: repeat(3, minmax(280px, 1fr)); gap: 2.5rem; }
-@media (max-width: 1400px) { .squad-row.three { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
-@media (max-width: 900px) { .squad-row.three { grid-template-columns: 1fr; } }
-
-/* Connector lines */
-@media (min-width: 900px) {
-  .actual-row { position: relative; }
-  .actual-row::after { content: ""; position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); width: 3px; height: 24px; background: rgba(30, 144, 255, 0.6); border-radius: 2px; pointer-events: none; }
-  .chalk-row { position: relative; margin-top: 2.5rem; padding-top: 1.5rem; }
-  .chalk-row::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 3px; background: rgba(30,144,255,0.6); border-radius: 2px; }
-}
-
-/* Squad tiles */
-.squad-card { background: radial-gradient(circle at top left, rgba(30,144,255,0.25), transparent 65%), rgba(0,10,30,0.9); border: 2px solid rgba(30,144,255,0.85); border-radius: 0.8rem; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; min-height: 210px; padding-right: 1.5rem; transition: 0.15s ease-in-out; }
-.squad-card:hover { transform: translateY(-2px); border-color: #5ab3ff; }
-.squad-header { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: 1.4rem 2rem; }
-.squad-insignia { width: 95px; height: 95px; border-radius: 0.6rem; border: 4px solid #1e90ff; display: flex; align-items: center; justify-content: center; margin-right: 1.6rem; font-size: 2rem; font-weight: bold; color: #1e90ff; background: rgba(0,0,0,0.7); text-align: center; }
-.squad-meta h2 { margin: 0; font-size: 2.3rem; color: #e0f0ff; letter-spacing: 0.05em; }
-.squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
-.squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
-
-/* Modal shell */
-.squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-/* widened to better fit 5-up grid */
-.squad-modal { background-color: #050811; color: #dce6f1; width: 95vw; max-width: 1860px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
-.squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
-.squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
-
-/* Meta */
-.squad-modal-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(30,144,255,0.6); padding-bottom: 0.5rem; }
-.squad-modal-meta.invalid { border-bottom-color: rgba(255,190,80,0.9); }
-.loadout-status { margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center; font-size: 0.85rem; text-transform: uppercase; }
-.loadout-status .points { color: #9ec5e6; }
-.loadout-status .warn { color: rgba(255,190,80,0.95); }
-.loadout-status .ok { color: rgba(120,255,170,0.9); }
-
-/* Scroll + Fireteam blocks */
-.squad-modal-scroll { overflow: auto; padding-right: .4rem; margin-top: .8rem; max-height: calc(90vh - 200px); }
-.fireteam-block { margin-bottom: 1.2rem; }
-.fireteam-header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: baseline; padding: .35rem .25rem; background: linear-gradient(to bottom, rgba(5,8,17,.92), rgba(5,8,17,.75)); z-index: 1; border-top: 1px solid rgba(30,144,255,.35); border-bottom: 1px solid rgba(30,144,255,.15); }
-.fireteam-title { font-weight: 700; letter-spacing: .06em; color: #e0f0ff; }
-.fireteam-count { color: #9ec5e6; font-size: .9rem; }
-.fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
-
-/* Cards grid – set to 5-up, with responsive fallbacks */
-.squad-members-grid {
+/* Layout: LEFT 380px, RIGHT wider (min 1080px); big gutter; prevent overlap */
+.windows-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: .95rem;
+  grid-template-columns: 380px minmax(1080px, 1fr);
+  column-gap: 2.4rem;
+  align-items: start;
+  width: 100%;
 }
-@media (max-width: 1680px) {
-  .squad-members-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* Ensure these two windows behave as separate blocks */
+.windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; }
+
+/* Common ribbons */
+.rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
+.clipped-medium-backward {
+  clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
+  background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5));
+  padding: .4rem .75rem;
+  border: 1px solid rgba(30,144,255,.35);
+  border-left-width: 0;
+  border-radius: 0 .35rem .35rem 0;
 }
-@media (max-width: 1350px) {
-  .squad-members-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.section-header { display: flex; align-items: center; gap: .6rem; }
+.section-header img { width: 28px; height: 28px; }
+
+/* Right header actions placeholder */
+.right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
+.right-actions { display: flex; gap: .4rem; }
+
+/* Left: tiles + login */
+.rail { display: grid; gap: .6rem; align-content: start; }
+.rail-card {
+  text-align: left;
+  border: 1px solid rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.35);
+  border-radius: .5rem;
+  padding: .6rem;
+  cursor: pointer;
+}
+.rail-card.active { border-color: rgba(120,255,170,0.7); }
+.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.rail-icon { width: 20px; height: 20px; }
+.rail-title { font-weight: 600; }
+.rail-card-body { display: grid; gap: .25rem; }
+.rail-line { display: flex; align-items: center; justify-content: space-between; }
+.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,.45); border-radius: 999px; padding: .05rem .5rem; }
+.pill.ok { border-color: rgba(120,255,170,0.7); }
+.pill.warn { border-color: rgba(255,190,80,0.7); }
+.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
+
+.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
+.login-error { color: #ffb080; margin: .2rem 0 0; }
+
+/* Buttons & controls */
+.btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
+.btn-sm.ghost { background: transparent; border-color: rgba(30,144,255,0.45); }
+.control { display: grid; gap: .2rem; }
+.control span { font-size: .85rem; color: #9ec5e6; }
+.control input, .control select { background: rgba(0,10,30,0.3); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #cfe6ff; }
+.control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
+
+/* Right content */
+.right-content { padding: .6rem; }
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
+.chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,.45); color: #cfe6ff; font-size: .85rem; }
+.chip.ok { border-color: rgba(120,255,170,0.7); }
+.chip.warn { border-color: rgba(255,190,80,0.7); }
+
+/* Table */
+.table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
+.tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr .9fr; align-items: center; }
+.tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
+.th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); }
+.tr:last-child .td { border-bottom: 0; }
+.muted { color: #9ec5e6; }
+
+/* Progress bar */
+.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
+.bar.done .fill { background: rgba(120,255,170,0.7); }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
 }
 @media (max-width: 980px) {
-  .squad-members-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .windows-grid { grid-template-columns: 1fr; }
+  .right-window { order: 1; }
+  .left-window { order: 2; }
 }
-@media (max-width: 620px) {
-  .squad-members-grid { grid-template-columns: 1fr; }
-}
-
-/* Cards */
-.member-card { position: relative; background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
-.member-card.vacant, .member-card.closed { border-left-color: rgba(30,144,255,0.35); }
-
-/* VACANT: light stripes & dashed left border */
-.member-card.vacant {
-  background:
-    repeating-linear-gradient(45deg, rgba(30,144,255,0.06) 0, rgba(30,144,255,0.06) 10px, transparent 10px, transparent 20px),
-    rgba(0, 12, 25, 0.9);
-  border-left-style: dashed;
-}
-
-/* CLOSED: darker, grayscaled, subtle crosshatch, muted text */
-.member-card.closed {
-  filter: grayscale(85%);
-  opacity: 0.6;
-  background:
-    repeating-linear-gradient(45deg, rgba(200,200,200,0.06) 0, rgba(200,200,200,0.06) 8px, transparent 8px, transparent 16px),
-    repeating-linear-gradient(-45deg, rgba(200,200,200,0.04) 0, rgba(200,200,200,0.04) 8px, transparent 8px, transparent 16px),
-    rgba(1, 6, 14, 0.9);
-}
-.member-card.closed .member-header h3,
-.member-card.closed .rank-line,
-.member-card.closed .detail-line,
-.member-card.closed .cert-label,
-.member-card.closed .cert-none,
-.member-card.closed .member-footer { opacity: 0.75; }
-
-/* Header */
-.member-header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .9rem; }
-.member-header h3 { margin: 0; font-size: 1.1rem; color: #e0f0ff; word-break: break-word; }
-.rank-line { margin: 0.15rem 0 0; font-size: 0.88rem; color: #9ec5e6; display: flex; gap: .6rem; flex-wrap: wrap; }
-.member-rank-insignia-wrapper { width: 46px; height: 46px; display: grid; place-items: center; }
-.member-rank-insignia { max-width: 46px; max-height: 46px; object-fit: contain; }
-
-/* Body */
-.member-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.6rem; font-size: 0.9rem; }
-.member-column p { margin: 0.18rem 0; }
-
-/* Info accents */
-.detail-line strong { color: #9ec5e6; }
-.role-accent { color: #55ff88; font-weight: 600; }
-.role-corpsman { color: #ff6b6b; font-weight: 700; }
-.date-accent { color: #55ff88; }
-.accent { color: #a3e7ff; }
-.accent-strong { color: #7fffd4; font-weight: 700; }
-
-/* Keep on one line */
-.join-date { white-space: nowrap; }
-.next-rank-line { white-space: nowrap; }
-
-/* Ops / promo */
-.ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
-.ops-promo.imminent { border-color: rgba(120,255,170,0.85); background: rgba(0,50,20,0.35); color: rgba(120,255,170,0.95); box-shadow: 0 0 10px rgba(120,255,170,0.15) inset; }
-
-/* Loadout controls */
-.loadout-row { margin-top: 0.4rem; }
-.disposable { user-select: none; }
-.primary-label { display: block; margin-bottom: .15rem; font-size: .85rem; color: #9ec5e6; }
-.loadout-select { width: 100%; background: #040a14; border: 1px solid rgba(30,144,255,.45); color: #dce6f1; border-radius: .3rem; padding: .25rem .35rem; }
-
-/* Certs */
-.cert-list { display: grid; grid-template-columns: 20px 1fr; row-gap: .28rem; }
-.cert-row { display: contents; }
-.cert-checkbox { width: 16px; height: 16px; border: 1px solid rgba(30,144,255,.6); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
-.cert-checkbox.checked { border-color: rgba(120,255,170,.9); box-shadow: 0 0 6px rgba(120,255,170,.25) inset; }
-.checkbox-dot { width: 10px; height: 10px; background: rgba(120,255,170,.95); border-radius: 2px; display: block; }
-.cert-label { color: #dce6f1; }
-.cert-none { font-size: .85rem; opacity: .75; }
-
-/* Footer */
-.member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
-
-/* Safety belt */
-:deep(.squad-modal img) { max-width: 100%; height: auto; }
 </style>
