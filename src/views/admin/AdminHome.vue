@@ -197,14 +197,19 @@
                   v-for="r in discFiltered"
                   :key="r.nameKey"
                   class="tr gridFlags"
+                  :class="['warn-row', 'warn-'+r.warnCount]"
                   @click="focusMemberByNameKey(r.nameKey)"
                   style="cursor:pointer"
                   :title="'Click to edit '+r.name"
                 >
                   <span class="td">{{ r.name }}</span>
                   <span class="td">{{ r.squad || '—' }}</span>
-                  <span class="td">
-                    <span class="sev" :class="r.warnCount >= 1 ? 'warn' : 'info'">{{ r.warnings }}</span>
+                  <span class="td warncells">
+                    <div class="warn-badges" :class="'w'+r.warnCount" aria-label="Warnings">
+                      <span class="dot" :class="{ on: r.warnBits[0] }" title="Warning 1"></span>
+                      <span class="dot" :class="{ on: r.warnBits[1] }" title="Warning 2"></span>
+                      <span class="dot" :class="{ on: r.warnBits[2] }" title="Warning 3"></span>
+                    </div>
                   </span>
                   <span class="td">{{ r.notes || '—' }}</span>
                 </div>
@@ -250,8 +255,8 @@ export default {
       onlyPromotable: false,
 
       // Discipline API
-      discEndpoint: "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec", // <-- Apps Script Web App URL
-      discSecret: "PLEX",                       // <-- must match SECRET
+      discEndpoint: "https://YOUR_WEB_APP_URL/exec", // <-- Apps Script Web App URL
+      discSecret: "CHANGE_ME",                       // <-- must match SECRET
       discLoading: false,
       discSaving: false,
       discError: "",
@@ -479,20 +484,33 @@ export default {
         const nk = this.nameKey(m?.name);
         const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
         const api = this.disciplineRowsIndexed[nk] || { notes: '', warnings: 'N, N, N' };
-        const warnCount = (api.warnings || '').split(',').map(s => s.trim().toUpperCase()).filter(x => x === 'Y').length;
+        const bits = (api.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase() === 'Y');
+        const warnCount = bits.filter(Boolean).length;
         rows.push({
           name: m?.name || 'Unknown',
           nameKey: nk,
           squad,
           notes: api.notes || '',
           warnings: api.warnings || 'N, N, N',
+          warnBits: [!!bits[0], !!bits[1], !!bits[2]],
           warnCount,
         });
       });
+      // Include rows present only in API (rare)
       (this.disciplineRows || []).forEach(r => {
-        if (!rows.find(x => x.nameKey === r.nameKey)) {
-          const warnCount = (r.warnings || '').split(',').map(s => s.trim().toUpperCase()).filter(x => x === 'Y').length;
-          rows.push({ name: r.name, nameKey: r.nameKey, squad: '', notes: r.notes || '', warnings: r.warnings || 'N, N, N', warnCount });
+        const nk = this.nameKey(r.name || r.nameKey || '');
+        if (!rows.find(x => x.nameKey === nk)) {
+          const bits = (r.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase() === 'Y');
+          const warnCount = bits.filter(Boolean).length;
+          rows.push({
+            name: r.name || '',
+            nameKey: nk,
+            squad: '',
+            notes: r.notes || '',
+            warnings: r.warnings || 'N, N, N',
+            warnBits: [!!bits[0], !!bits[1], !!bits[2]],
+            warnCount,
+          });
         }
       });
       return rows.sort((a,b) => a.name.localeCompare(b.name));
@@ -501,7 +519,7 @@ export default {
       const term = (this.discSearch || '').trim().toLowerCase();
       if (!term) return this.discTable;
       return this.discTable.filter(r => {
-        const hay = [r.name, r.squad, r.notes, r.warnings].map(x => String(x||'').toLowerCase()).join(' ');
+        const hay = [r.name, r.squad, r.notes].map(x => String(x||'').toLowerCase()).join(' ');
         return hay.includes(term);
       });
     },
@@ -593,15 +611,14 @@ export default {
 
       this.discSaving = true;
       try {
-        // IMPORTANT: make this a "simple request" (no preflight) to avoid Apps Script CORS issues
+        // Send a "simple request" to avoid preflight (Apps Script CORS quirk)
         const res = await fetch(this.discEndpoint, {
           method: 'POST',
-          // no custom headers; text/plain is a "simple" content-type
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // keep simple
           body: JSON.stringify(payload),
           redirect: 'follow',
         });
-        const text = await res.text(); // parse manually to avoid edge cases
+        const text = await res.text();
         let data;
         try { data = JSON.parse(text); } catch { data = { ok: false, error: 'Bad JSON from server' }; }
         if (!data?.ok) throw new Error(data?.error || 'Save failed');
@@ -680,8 +697,38 @@ export default {
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* Severity pill reuse */
-.sev { padding: .05rem .5rem; border-radius: 999px; border: 1px solid rgba(30,144,255,0.45); text-transform: uppercase; }
+/* ---- Discipline visuals ---- */
+/* Row tint and left bar by warning count */
+.warn-row { position: relative; }
+.warn-row::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: transparent;
+}
+.warn-0 { background: transparent; }
+.warn-1 { background: rgba(255, 200, 80, 0.06); }
+.warn-1::before { background: rgba(255, 200, 80, 0.8); }
+.warn-2 { background: rgba(255, 140, 60, 0.08); }
+.warn-2::before { background: rgba(255, 140, 60, 0.85); }
+.warn-3 { background: rgba(255, 90, 90, 0.10); }
+.warn-3::before { background: rgba(255, 90, 90, 0.9); }
+
+/* Dots for warnings column */
+.warncells { display: flex; align-items: center; }
+.warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
+.warn-badges .dot {
+  width: 14px; height: 14px; border-radius: 3px;
+  border: 1px solid rgba(150,190,230,0.35);
+  background: rgba(0,10,30,0.25);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2);
+}
+.warn-badges .dot.on { border-color: rgba(150,190,230,0.6); }
+/* Color when on, intensified per count */
+.warn-badges.w1 .dot.on { background: rgba(255, 200, 80, 0.75); }
+.warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
+.warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
 
 /* Header deco */
 .rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
