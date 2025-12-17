@@ -1,5 +1,4 @@
 <!-- src/views/admin/AdminHome.vue -->
-<!-- src/views/AdminView.vue -->
 <template>
   <section id="admin" class="section-container">
     <!-- Header -->
@@ -24,27 +23,27 @@
       <div v-else class="admin-frame">
         <!-- LEFT: Menu rail with preview cards -->
         <aside class="rail">
-  <button
-    v-for="s in sections"
-    :key="s.key"
-    class="rail-card"
-    :class="{ active: activeKey === s.key }"
-    @click="activeKey = s.key"
-  >
-    <div class="rail-card-head">
-      <img :src="s.icon" class="rail-icon" alt="" />
-      <div class="rail-title">{{ s.title }}</div>
-    </div>
+          <button
+            v-for="s in sections"
+            :key="s.key"
+            class="rail-card"
+            :class="{ active: activeKey === s.key }"
+            @click="activeKey = s.key"
+          >
+            <div class="rail-card-head">
+              <img :src="s.icon" class="rail-icon" alt="" />
+              <div class="rail-title">{{ s.title }}</div>
+            </div>
 
-    <div v-if="s.preview && s.preview.length" class="rail-card-body">
-      <div v-for="line in s.preview" :key="line.label" class="rail-line">
-        <span class="label">{{ line.label }}</span>
-        <span class="pill" :class="line.kind">{{ line.value }}</span>
-      </div>
-      <div class="rail-foot">Click to open</div>
-    </div>
-  </button>
-</aside>
+            <div v-if="s.preview && s.preview.length" class="rail-card-body">
+              <div v-for="line in s.preview" :key="line.label" class="rail-line">
+                <span class="label">{{ line.label }}</span>
+                <span class="pill" :class="line.kind">{{ line.value }}</span>
+              </div>
+              <div class="rail-foot">Click to open</div>
+            </div>
+          </button>
+        </aside>
 
         <!-- RIGHT: Panels -->
         <main class="panels">
@@ -134,7 +133,7 @@
                   <button class="btn-sm" v-if="row.opsToNext === 0 && row.nextRank" @click="markPromoted(row)">
                     Mark Promoted
                   </button>
-                  <button class="btn-sm ghost" @click="openMember(row)">Open</button>
+                  <button class="btn-sm. ghost" @click="openMember(row)">Open</button>
                 </span>
               </div>
             </div>
@@ -224,7 +223,7 @@ export default {
         },
       ];
     },
-    /* squads for filter */
+
     squads() {
       const set = new Set();
       (this.members || []).forEach(m => { const s = (m.squad || "").trim(); if (s) set.add(s); });
@@ -232,10 +231,8 @@ export default {
       return Array.from(set).sort((a,b)=>a.localeCompare(b));
     },
 
-    /* attendance map by id/name */
     attendanceMap() {
       const map = Object.create(null);
-
       (this.members || []).forEach(m => {
         const ops = Number(m.opsAttended);
         if (Number.isFinite(ops)) {
@@ -244,11 +241,9 @@ export default {
           if (key) map[key] = ops;
         }
       });
-
       return map;
     },
 
-    /* filtered + sorted promotions table rows */
     promotionsTable() {
       const term = (this.search || "").trim().toLowerCase();
       const squad = this.selectedSquad;
@@ -257,7 +252,6 @@ export default {
       const rows = [];
 
       for (const m of (this.members || [])) {
-        // filters
         if (term) {
           const hit =
             (m.name || "").toLowerCase().includes(term) ||
@@ -293,10 +287,8 @@ export default {
         });
       }
 
-      // only promotable
       const filtered = onlyProm ? rows.filter(r => r.opsToNext === 0 && !!r.nextRank) : rows;
 
-      // sorting
       const sorter = {
         rank: (a,b) => a.rankScore - b.rankScore,
         ops: (a,b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
@@ -307,7 +299,6 @@ export default {
       return filtered.sort(sorter);
     },
 
-    /* counters for preview + chips */
     eligibleNowCount() {
       return this.promotionsTable.filter(r => r.opsToNext === 0 && !!r.nextRank).length;
     },
@@ -315,10 +306,8 @@ export default {
       return this.promotionsTable.filter(r => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
     },
 
-    /* rank helpers */
-    rankKey(rank) {
-      if (!rank) return "";
-      const k = (rank || "").toUpperCase().replace(/\s+/g, "");
+    rankKey() {
+      // returns a function for template/calc usage
       const alias = {
         PRIVATE: "PVT", PVT: "PVT",
         PRIVATEFIRSTCLASS: "PFC", PFC: "PFC",
@@ -342,44 +331,23 @@ export default {
         CAPTAIN: "CAPT", CAPT: "CAPT",
         MAJOR: "MAJ", MAJ: "MAJ",
       };
-      return alias[k] || k;
-    },
-    rankScore(rank) {
-      const k = this.rankKey(rank);
-      const alias = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
-      const rk = alias[k] || k;
-      const idx = this.rankOrderHighToLow.indexOf(rk);
-      return idx === -1 ? 999 : idx; // lower = higher rank
-    },
-    promotionLadderFor(rank) {
-      const r = this.rankKey(rank);
-      const alias = {
-        PRIVATE: "PVT", PVT: "PVT",
-        PRIVATEFIRSTCLASS: "PFC", PFC: "PFC",
-        SPECIALIST: "SPC", SPC: "SPC",
-        SPECIALIST2: "SPC2", SPC2: "SPC2",
-        SPECIALIST3: "SPC3", SPC3: "SPC3",
-        SPECIALIST4: "SPC4", SPC4: "SPC4",
-        HOSPITALMANAPPRENTICE: "HA", HA: "HA",
-        LANCECORPORAL: "LCPL", LCPL: "LCPL",
-        CORPORAL: "CPL", CPL: "CPL",
-        SERGEANT: "SGT", SGT: "SGT",
-        STAFFSERGEANT: "SSGT", SSGT: "SSGT",
-        GUNNYSERGEANT: "GYSGT", GYSGT: "GYSGT",
-        WARRANTOFFICER: "WO", WO: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CWO2: "CWO2",
-        CHIEFWARRANTOFFICER3: "CWO3", CWO3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CWO4: "CWO4",
-        CHIEFWARRANTOFFICER5: "CWO5", CWO5: "CWO5",
-        SECONDLIEUTENANT: "2NDLT", "2NDLT": "2NDLT",
-        FIRSTLIEUTENANT: "1STLT", "1STLT": "1STLT",
-        CAPTAIN: "CAPT", CAPT: "CAPT",
-        MAJOR: "MAJ", MAJ: "MAJ",
+      return (rank) => {
+        if (!rank) return "";
+        const k = (rank || "").toUpperCase().replace(/\s+/g, "");
+        return alias[k] || k;
       };
-      const key = alias[r] || r;
-
+    },
+    rankScore() {
+      return (rank) => {
+        const k = this.rankKey(rank);
+        const aliasWO = { WO: "WO", CWO2: "CWO2", CWO3: "CWO3", CWO4: "CWO4", CWO5: "CWO5" };
+        const rk = aliasWO[k] || k;
+        const idx = this.rankOrderHighToLow.indexOf(rk);
+        return idx === -1 ? 999 : idx;
+      };
+    },
+    promotionLadderFor() {
       const ladders = {
-        // Enlisted
         PVT:  { nextAt: 2, nextRank: "PFC" },
         PFC:  { nextAt: 4, nextRank: "SPC" },
         SPC:  { nextAt: 6, nextRank: "LCPL" },
@@ -389,31 +357,50 @@ export default {
         SSGT: { nextAt: 14, nextRank: "GYSGT" },
         GYSGT:{ nextAt: null, nextRank: null },
 
-        // Warrant
         WO:   { nextAt: 8, nextRank: "CWO2" },
         CWO2: { nextAt: 12, nextRank: "CWO3" },
         CWO3: { nextAt: 16, nextRank: "CWO4" },
         CWO4: { nextAt: 20, nextRank: "CWO5" },
         CWO5: { nextAt: null, nextRank: null },
 
-        // Commissioned
         "2NDLT": { nextAt: null, nextRank: "1STLT" },
         "1STLT": { nextAt: null, nextRank: "CAPT" },
         CAPT:    { nextAt: null, nextRank: "MAJ" },
         MAJ:     { nextAt: null, nextRank: null },
       };
-      return ladders[key] || null;
+      return (rank) => ladders[this.rankKey(rank)] || null;
+    },
+  },
+  methods: {
+    // Auth wiring
+    setAuthed(v) {
+      this.isAuthed = !!v;
+      try { window.sessionStorage.setItem(SESSION_KEY, this.isAuthed ? "true" : "false"); } catch {}
+    },
+    onLoginSuccess(code) {
+      // Accept "150th" (case-insensitive, trimmed)
+      const ok = String(code || "").trim().toLowerCase() === "150th";
+      if (ok) this.setAuthed(true);
+      else alert("Invalid unit code."); // keep modal open
+    },
+    onLoginClose() {
+      // Keep modal if not authed; do nothing here.
     },
 
-    /* actions */
+    // Actions
+    refreshData() {
+      // Stub: replace with real fetch
+      console.log("Refresh requested");
+    },
     markPromoted(row) {
-      alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub — wire to your data store)`);
+      // Why: feedback until wired to backend
+      alert(`${row.name} marked as promoted to ${row.nextRank}. (Stub)`);
     },
     openMember(row) {
       console.log("Open member (stub):", row);
     },
 
-    /* utils */
+    // Utils
     isFiniteNum(v) { return Number.isFinite(v); },
   },
 };
@@ -421,15 +408,8 @@ export default {
 
 <style scoped>
 /* Shell */
-.section-container {
-  display: grid;
-  gap: .75rem;
-}
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-}
+.section-container { display: grid; gap: .75rem; }
+.section-header { display: flex; align-items: center; gap: .6rem; }
 .section-header img { width: 28px; height: 28px; }
 .section-content-container { padding: .8rem; }
 
@@ -460,11 +440,7 @@ export default {
 }
 
 /* Rail */
-.rail {
-  display: grid;
-  gap: .6rem;
-  align-content: start;
-}
+.rail { display: grid; gap: .6rem; align-content: start; }
 .rail-card {
   text-align: left;
   border: 1px solid rgba(30,144,255,0.35);
@@ -577,7 +553,7 @@ export default {
 .empty { padding: .7rem .8rem; color: #9ec5e6; }
 .muted { color: #9ec5e6; }
 
-/* Responsive: stack rails under 980px */
+/* Responsive */
 @media (max-width: 980px) {
   .admin-frame { grid-template-columns: 1fr; }
   .rail { grid-auto-flow: column; grid-auto-columns: minmax(260px, 1fr); overflow-x: auto; }
