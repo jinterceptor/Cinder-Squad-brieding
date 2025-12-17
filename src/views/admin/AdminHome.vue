@@ -50,22 +50,20 @@
       </div>
     </section>
 
-    <!-- RIGHT WINDOW: Overview (independent) -->
+    <!-- RIGHT WINDOW -->
     <section class="section-container right-window">
       <div class="section-header clipped-medium-backward right-header">
         <img src="/icons/protocol.svg" alt="" />
         <h1>{{ windowTitle }}</h1>
-        <div class="right-actions"><!-- empty --></div>
+        <div class="right-actions"></div>
       </div>
       <div class="rhombus-back">&nbsp;</div>
 
-      <!-- Right content: no outer scroll; inner panel/table manage scroll -->
       <div class="section-content-container right-content">
         <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
 
         <!-- Promotions -->
         <div v-else-if="activeKey === 'promotions'" class="promotions-panel">
-          <!-- Filters -->
           <div class="filters">
             <div class="row">
               <label class="control">
@@ -88,8 +86,6 @@
                   <option value="name">Name (A→Z)</option>
                 </select>
               </label>
-
-              <!-- QOL: readable label + tight spacing -->
               <label class="control chk">
                 <input type="checkbox" v-model="onlyPromotable" />
                 <span>Promotable only</span>
@@ -97,17 +93,15 @@
             </div>
           </div>
 
-          <!-- Summary chips -->
           <div class="chips">
             <span class="chip">Total: {{ promotionsTable.length }}</span>
             <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table shell: header fixed, body scrolls -->
+          <!-- Table: fixed header, scroll body -->
           <div class="table-scroll">
             <div class="table-shell">
-              <!-- Fixed header -->
               <div class="tr head grid6">
                 <span class="th name">Name</span>
                 <span class="th rank">Rank</span>
@@ -116,17 +110,12 @@
                 <span class="th next">Next Rank</span>
                 <span class="th prog">Progress</span>
               </div>
-
-              <!-- Scrollable body -->
               <div class="rows-scroll">
                 <div v-for="row in promotionsTable" :key="row.id" class="tr grid6">
                   <span class="td name">{{ row.name }}</span>
                   <span class="td rank">{{ row.rank }}</span>
                   <span class="td squad">{{ row.squad || '—' }}</span>
-                  <span class="td ops">
-                    <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
-                    <span v-else class="muted">N/A</span>
-                  </span>
+                  <span class="td ops"><span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span><span v-else class="muted">N/A</span></span>
                   <span class="td next">
                     <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
                     <span v-else class="muted">—</span>
@@ -140,7 +129,89 @@
               </div>
             </div>
           </div>
-          <!-- /table shell -->
+        </div>
+
+        <!-- Discipline (notes + warnings) -->
+        <div v-else-if="activeKey === 'discipline'" class="promotions-panel">
+          <!-- Filters / refresh -->
+          <div class="filters">
+            <div class="row">
+              <label class="control">
+                <span>Search</span>
+                <input type="text" v-model="discSearch" placeholder="Name, squad, note" />
+              </label>
+              <div class="control" style="align-self:end">
+                <span>&nbsp;</span>
+                <button class="btn-sm" @click="loadDiscipline" :disabled="discLoading">{{ discLoading ? 'Refreshing…' : 'Refresh' }}</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Editor -->
+          <div class="flag-form">
+            <div class="row">
+              <label class="control">
+                <span>Member</span>
+                <select v-model="edit.memberId" @change="populateEditFromMember">
+                  <option :value="null">Select member…</option>
+                  <option v-for="m in membersSorted" :key="m.id || m.name" :value="m.id || null">
+                    {{ m.name }} <span v-if="m.squad">— {{ m.squad }}</span>
+                  </option>
+                </select>
+              </label>
+              <label class="control">
+                <span>Warnings (3 slots)</span>
+                <div class="warn-grid">
+                  <label class="warnBox"><input type="checkbox" v-model="edit.warn[0]" /> <span>1</span></label>
+                  <label class="warnBox"><input type="checkbox" v-model="edit.warn[1]" /> <span>2</span></label>
+                  <label class="warnBox"><input type="checkbox" v-model="edit.warn[2]" /> <span>3</span></label>
+                </div>
+              </label>
+            </div>
+
+            <label class="control">
+              <span>Disciplinary Notes</span>
+              <textarea v-model="edit.notes" rows="3" placeholder="Notes visible to staff"></textarea>
+            </label>
+
+            <div class="row end">
+              <button class="btn-sm" @click="saveDiscipline" :disabled="discSaving || !edit.memberId">
+                {{ discSaving ? 'Saving…' : 'Save' }}
+              </button>
+              <p v-if="discError" class="login-error" style="margin:0">{{ discError }}</p>
+              <p v-if="discOK" class="ok-text" style="margin:0">Saved.</p>
+            </div>
+          </div>
+
+          <!-- List (read from RefData via API) -->
+          <div class="table-scroll">
+            <div class="table-shell">
+              <div class="tr head gridFlags">
+                <span class="th">Member</span>
+                <span class="th">Squad</span>
+                <span class="th">Warnings</span>
+                <span class="th">Notes</span>
+              </div>
+              <div class="rows-scroll">
+                <div
+                  v-for="r in discFiltered"
+                  :key="r.nameKey"
+                  class="tr gridFlags"
+                  @click="focusMemberByNameKey(r.nameKey)"
+                  style="cursor:pointer"
+                  :title="'Click to edit '+r.name"
+                >
+                  <span class="td">{{ r.name }}</span>
+                  <span class="td">{{ r.squad || '—' }}</span>
+                  <span class="td">
+                    <span class="sev" :class="r.warnCount >= 1 ? 'warn' : 'info'">{{ r.warnings }}</span>
+                  </span>
+                  <span class="td">{{ r.notes || '—' }}</span>
+                </div>
+                <div v-if="!discFiltered.length && !discLoading" class="empty">No entries.</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Future pages -->
@@ -164,14 +235,32 @@ export default {
   },
   data() {
     return {
+      // Auth
       isAuthed: false,
       passwordInput: "",
       loginError: "",
+
+      // Nav
       activeKey: "promotions",
+
+      // Promotions
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
+
+      // Discipline API
+      discEndpoint: "https://YOUR_WEB_APP_URL/exec", // <-- Apps Script Web App URL
+      discSecret: "CHANGE_ME",                       // <-- must match SECRET
+      discLoading: false,
+      discSaving: false,
+      discError: "",
+      discOK: false,
+      disciplineRows: [],
+
+      // Filters + editor
+      discSearch: "",
+      edit: { memberId: null, notes: "", warn: [false, false, false] },
     };
   },
   created() {
@@ -180,7 +269,11 @@ export default {
       sessionStorage.removeItem("admin-authed");
     } catch {}
   },
+  watch: {
+    isAuthed(v) { if (v) this.loadDiscipline(); },
+  },
   computed: {
+    /* utils */
     nameKey() {
       return (name) =>
         String(name || "")
@@ -189,6 +282,9 @@ export default {
           .trim()
           .toUpperCase();
     },
+    rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
+
+    /* attendance map */
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach((m) => {
@@ -205,69 +301,6 @@ export default {
         if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
       });
       return map;
-    },
-    rankKey() {
-      return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, "");
-    },
-    nextPromotion() {
-      const alias = {
-        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
-        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
-        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
-        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
-        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
-        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3",
-        HOSPITALCORPSMANSECONDCLASS: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1",
-        CHIEFHOSPITALCORPSMAN: "HMC",
-        WARRANTOFFICER: "WO",
-        CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
-      };
-      const rules = {
-        PVT:  { nextRank: "PFC",  nextAt: 10,  misc: null },
-        PFC:  { nextRank: "SPC",  nextAt: 20,  misc: null },
-        SPC:  { nextRank: "SPC2", nextAt: 30,  misc: null },
-        SPC2: { nextRank: "SPC3", nextAt: 40,  misc: null },
-        SPC3: { nextRank: "SPC4", nextAt: 50,  misc: "Multiple Specialist Certs; Trainer / S-Shop personnel" },
-        SPC4: { nextRank: "LCpl", nextAt: null, misc: "Junior NCO, RTO; NCOs in training / New FTLs" },
-        LCPL: { nextRank: "Cpl",  nextAt: null, misc: "Junior NCO, RTO; Active FTLs & FTL experience" },
-        CPL:  { nextRank: "Sgt",  nextAt: null, misc: "Senior NCO, RTO; Active SLs only" },
-        SGT:  { nextRank: "SSgt", nextAt: null, misc: "Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC" },
-        SSGT: { nextRank: "GySgt",nextAt: null, misc: "Senior NCO, RTO; Active Platoon NCOIC & experience" },
-        GYSGT:{ nextRank: "2ndLt",nextAt: null, misc: "Support staff / Platoon lead" },
-
-        "2NDLT": { nextRank: "1stLt", nextAt: null, misc: null },
-        "1STLT": { nextRank: "Capt",  nextAt: null, misc: null },
-        CAPT:    { nextRank: null,    nextAt: null, misc: null },
-
-        HA:  { nextRank: "HN",  nextAt: 10,  misc: null },
-        HN:  { nextRank: "HM3", nextAt: 20,  misc: null },
-        HM3: { nextRank: "HM2", nextAt: 30,  misc: null },
-        HM2: { nextRank: "HM1", nextAt: null, misc: null },
-        HM1: { nextRank: "HMC", nextAt: null, misc: "Assigned to Corpsman slot & Medic Trainer" },
-        HMC: { nextRank: null,  nextAt: null, misc: null },
-
-        WO:   { nextRank: "CWO2", nextAt: 10, misc: null },
-        CWO2: { nextRank: "CWO3", nextAt: 20, misc: null },
-        CWO3: { nextRank: "CWO4", nextAt: 30, misc: null },
-        CWO4: { nextRank: "CWO5", nextAt: null, misc: null },
-        CWO5: { nextRank: null,   nextAt: null, misc: "Flight Lead" },
-      };
-      return (member) => {
-        const rk = alias[this.rankKey(member?.rank)] || this.rankKey(member?.rank);
-        return rules[rk] || { nextRank: null, nextAt: null, misc: null };
-      };
-    },
-    opsToNextPromotion() {
-      return (member) => {
-        const ops = this.getOps(member);
-        const rule = this.nextPromotion(member);
-        if (!Number.isFinite(ops)) return null;
-        if (!Number.isFinite(rule.nextAt)) return null;
-        return Math.max(0, rule.nextAt - ops);
-      };
     },
     membershipIndex() {
       const idx = Object.create(null);
@@ -297,9 +330,18 @@ export default {
       });
       return Array.from(set).sort((a, b) => a.localeCompare(b));
     },
+    membersSorted() {
+      return [...(this.members || [])].sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+    },
+
+    /* window title / tiles */
     windowTitle() {
       if (!this.isAuthed) return "Locked";
-      return { promotions: "Promotions Overview", audits: "Roster Audits" }[this.activeKey] || "Admin Tools";
+      return {
+        promotions: "Promotions Overview",
+        discipline: "Discipline (Notes & Warnings)",
+        audits: "Roster Audits",
+      }[this.activeKey] || "Admin Tools";
     },
     sections() {
       return [
@@ -312,8 +354,53 @@ export default {
             { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
           ],
         },
+        {
+          key: "discipline",
+          title: "Discipline",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Members w/ notes", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
+            { label: "Any warnings", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
+          ],
+        },
         { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
       ];
+    },
+
+    /* promotions logic (unchanged) */
+    nextPromotion() {
+      const alias = {
+        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
+        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
+        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
+        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
+        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
+        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
+        HOSPITALCORPSMANTHIRDCLASS: "HM3", HOSPITALCORPSMANSECONDCLASS: "HM2",
+        HOSPITALCORPSMANFIRSTCLASS: "HM1", CHIEFHOSPITALCORPSMAN: "HMC",
+        WARRANTOFFICER: "WO", CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
+        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
+      };
+      const rules = {
+        PVT:{nextRank:"PFC",nextAt:10,misc:null}, PFC:{nextRank:"SPC",nextAt:20,misc:null},
+        SPC:{nextRank:"SPC2",nextAt:30,misc:null}, SPC2:{nextRank:"SPC3",nextAt:40,misc:null},
+        SPC3:{nextRank:"SPC4",nextAt:50,misc:"Multiple Specialist Certs; Trainer / S-Shop personnel"},
+        SPC4:{nextRank:"LCpl",nextAt:null,misc:"Junior NCO, RTO; NCOs in training / New FTLs"},
+        LCPL:{nextRank:"Cpl",nextAt:null,misc:"Junior NCO, RTO; Active FTLs & FTL experience"},
+        CPL:{nextRank:"Sgt",nextAt:null,misc:"Senior NCO, RTO; Active SLs only"},
+        SGT:{nextRank:"SSgt",nextAt:null,misc:"Senior NCO, RTO; Active SLs only & SL experience / Platoon NCOIC"},
+        SSGT:{nextRank:"GySgt",nextAt:null,misc:"Senior NCO, RTO; Active Platoon NCOIC & experience"},
+        GYSGT:{nextRank:"2ndLt",nextAt:null,misc:"Support staff / Platoon lead"},
+        "2NDLT":{nextRank:"1stLt",nextAt:null,misc:null}, "1STLT":{nextRank:"Capt",nextAt:null,misc:null}, CAPT:{nextRank:null,nextAt:null,misc:null},
+        HA:{nextRank:"HN",nextAt:10,misc:null}, HN:{nextRank:"HM3",nextAt:20,misc:null}, HM3:{nextRank:"HM2",nextAt:30,misc:null},
+        HM2:{nextRank:"HM1",nextAt:null,misc:null}, HM1:{nextRank:"HMC",nextAt:null,misc:"Assigned to Corpsman slot & Medic Trainer"}, HMC:{nextRank:null,nextAt:null,misc:null},
+        WO:{nextRank:"CWO2",nextAt:10,misc:null}, CWO2:{nextRank:"CWO3",nextAt:20,misc:null}, CWO3:{nextRank:"CWO4",nextAt:30,misc:null},
+        CWO4:{nextRank:"CWO5",nextAt:null,misc:null}, CWO5:{nextRank:null,nextAt:null,misc:"Flight Lead"},
+      };
+      return (member) => {
+        const rk = alias[this.rankKey(member?.rank)] || this.rankKey(member?.rank);
+        return rules[rk] || { nextRank: null, nextAt: null, misc: null };
+      };
     },
     promotionsTable() {
       const term = (this.search || "").trim().toLowerCase();
@@ -329,12 +416,11 @@ export default {
             (m.squad || "").toLowerCase().includes(term);
           if (!hit) continue;
         }
-
         const squad = String(
           m?.squad ||
-            this.membershipIndex[`ID:${m?.id}`] ||
-            this.membershipIndex[`NM:${this.nameKey(m?.name)}`] ||
-            ""
+          this.membershipIndex[`ID:${m?.id}`] ||
+          this.membershipIndex[`NM:${this.nameKey(m?.name)}`] ||
+          ""
         ).trim();
         if (squadFilter && squadFilter !== "__ALL__" && squad !== squadFilter) continue;
 
@@ -365,66 +451,171 @@ export default {
       }
 
       const filtered = onlyProm ? rows.filter((r) => r.opsToNext === 0 && !!r.nextRank) : rows;
-      const sorter =
-        {
-          rank: (a, b) => a.rankScore - b.rankScore,
-          ops: (a, b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
-          progress: (a, b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
-          name: (a, b) => a.name.localeCompare(b.name),
-        }[this.sortKey] || ((a, b) => 0);
+      const sorter = {
+        rank: (a, b) => a.rankScore - b.rankScore,
+        ops: (a, b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
+        progress: (a, b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
+        name: (a, b) => a.name.localeCompare(b.name),
+      }[this.sortKey] || ((a, b) => 0);
 
       return filtered.sort(sorter);
     },
-    eligibleNowCount() {
-      return this.promotionsTable.filter((r) => r.opsToNext === 0 && !!r.nextRank).length;
-    },
-    imminentCount() {
-      return this.promotionsTable.filter((r) => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length;
-    },
+    eligibleNowCount() { return this.promotionsTable.filter((r) => r.opsToNext === 0 && !!r.nextRank).length; },
+    imminentCount()     { return this.promotionsTable.filter((r) => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length; },
     rankScore() {
-      const order = [
-        "MAJ","CAPT","1STLT","2NDLT",
-        "CWO5","CWO4","CWO3","CWO2","WO",
-        "GYSGT","SSGT","SGT","CPL","LCPL",
-        "SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT",
-        "HMC","HM1","HM2","HM3","HN","HA","HR",
-      ];
-      return (r) => {
-        const idx = order.indexOf(this.rankKey(r));
-        return idx === -1 ? 999 : idx;
-      };
+      const order = ["MAJ","CAPT","1STLT","2NDLT","CWO5","CWO4","CWO3","CWO2","WO","GYSGT","SSGT","SGT","CPL","LCPL","SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT","HMC","HM1","HM2","HM3","HN","HA","HR"];
+      return (r) => { const idx = order.indexOf(this.rankKey(r)); return idx === -1 ? 999 : idx; };
+    },
+
+    /* discipline computed */
+    disciplineRowsIndexed() {
+      // Combine API rows with squad lookup
+      const idx = Object.create(null);
+      (this.disciplineRows || []).forEach(r => { idx[r.nameKey] = r; });
+      return idx;
+    },
+    discTable() {
+      const rows = [];
+      (this.members || []).forEach(m => {
+        const nk = this.nameKey(m?.name);
+        const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
+        const api = this.disciplineRowsIndexed[nk] || { notes: '', warnings: 'N, N, N' };
+        const warnCount = (api.warnings || '').split(',').map(s => s.trim().toUpperCase()).filter(x => x === 'Y').length;
+        rows.push({
+          name: m?.name || 'Unknown',
+          nameKey: nk,
+          squad,
+          notes: api.notes || '',
+          warnings: api.warnings || 'N, N, N',
+          warnCount,
+        });
+      });
+      // Add any extra from API that aren't in members (rare)
+      (this.disciplineRows || []).forEach(r => {
+        if (!rows.find(x => x.nameKey === r.nameKey)) {
+          const squad = '';
+          const warnCount = (r.warnings || '').split(',').map(s => s.trim().toUpperCase()).filter(x => x === 'Y').length;
+          rows.push({ name: r.name, nameKey: r.nameKey, squad, notes: r.notes || '', warnings: r.warnings || 'N, N, N', warnCount });
+        }
+      });
+      return rows.sort((a,b) => a.name.localeCompare(b.name));
+    },
+    discFiltered() {
+      const term = (this.discSearch || '').trim().toLowerCase();
+      if (!term) return this.discTable;
+      return this.discTable.filter(r => {
+        const hay = [r.name, r.squad, r.notes, r.warnings].map(x => String(x||'').toLowerCase()).join(' ');
+        return hay.includes(term);
+      });
     },
   },
   methods: {
+    /* auth */
     tryLogin() {
       const code = String(this.passwordInput || "").trim().toLowerCase();
-      if (!code) {
-        this.loginError = "Please enter the password.";
-        return;
-      }
-      if (code === "150th") {
-        this.isAuthed = true;
-        this.passwordInput = "";
-        this.loginError = "";
-      } else {
-        this.loginError = "Invalid password.";
-      }
+      if (!code) { this.loginError = "Please enter the password."; return; }
+      if (code === "150th") { this.isAuthed = true; this.passwordInput = ""; this.loginError = ""; }
+      else { this.loginError = "Invalid password."; }
     },
+
+    /* helpers */
+    isFiniteNum(v) { return Number.isFinite(v); },
     getOps(member) {
-      if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) {
-        return this.attendanceMap[`ID:${member.id}`];
-      }
+      if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
       if (member?.name) {
         const nk = this.nameKey(member.name);
-        if (this.attendanceMap[`NM:${nk}`] !== undefined) {
-          return this.attendanceMap[`NM:${nk}`];
-        }
+        if (this.attendanceMap[`NM:${nk}`] !== undefined) return this.attendanceMap[`NM:${nk}`];
       }
       const direct = Number(member?.opsAttended);
       return Number.isFinite(direct) ? direct : null;
     },
-    isFiniteNum(v) {
-      return Number.isFinite(v);
+
+    /* discipline api */
+    async loadDiscipline() {
+      if (!this.discEndpoint || !this.discSecret) return;
+      this.discLoading = true; this.discError = ""; this.discOK = false;
+      try {
+        const url = new URL(this.discEndpoint);
+        url.searchParams.set('secret', this.discSecret);
+        url.searchParams.set('path', 'discipline'); // optional; not required by script
+        const res = await fetch(url.toString() + '?secret=' + encodeURIComponent(this.discSecret) + '&discipline=1'); // ensure cache-bust param
+        const data = await res.json();
+        if (data?.error) throw new Error(data.error);
+        const arr = Array.isArray(data) ? data : [];
+        // normalize
+        this.disciplineRows = arr.map(r => ({
+          name: r.name || '',
+          nameKey: this.nameKey(r.name || r.nameKey || ''),
+          notes: r.notes || '',
+          warnings: r.warnings || 'N, N, N',
+        }));
+      } catch (e) {
+        this.discError = String(e?.message || e);
+      } finally {
+        this.discLoading = false;
+      }
+    },
+
+    focusMemberByNameKey(nk) {
+      const m = (this.members || []).find(x => this.nameKey(x?.name) === nk);
+      if (!m) return;
+      this.edit.memberId = m.id || null;
+      this.populateEditFromMember();
+      // focus editor textarea for speed
+      this.$nextTick(() => {
+        const ta = this.$el.querySelector('textarea');
+        if (ta) ta.focus();
+      });
+    },
+
+    populateEditFromMember() {
+      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
+      if (!m) { this.edit.notes = ''; this.edit.warn = [false,false,false]; return; }
+      const nk = this.nameKey(m.name);
+      const api = (this.disciplineRows || []).find(r => this.nameKey(r.name || r.nameKey) === nk);
+      const warnings = (api?.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase());
+      this.edit.notes = api?.notes || '';
+      this.edit.warn = [0,1,2].map(i => warnings[i] === 'Y');
+    },
+
+    warnArrayToString(arr) {
+      const a = Array.isArray(arr) ? arr : [false, false, false];
+      const out = a.slice(0,3).map(x => (x ? 'Y' : 'N'));
+      while (out.length < 3) out.push('N');
+      return out.join(', ');
+    },
+
+    async saveDiscipline() {
+      this.discError = ""; this.discOK = false;
+      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
+      if (!m) { this.discError = "Select a member."; return; }
+
+      const payload = {
+        secret: this.discSecret,
+        name: m.name || '',
+        nameKey: this.nameKey(m.name || ''),
+        notes: (this.edit.notes || '').trim(),
+        warnings: this.warnArrayToString(this.edit.warn),
+      };
+
+      this.discSaving = true;
+      try {
+        const res = await fetch(this.discEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!data?.ok) throw new Error(data?.error || 'Save failed');
+
+        this.discOK = true;
+        await this.loadDiscipline();
+      } catch (e) {
+        this.discError = String(e?.message || e);
+      } finally {
+        this.discSaving = false;
+        setTimeout(() => (this.discOK = false), 1500);
+      }
     },
   },
 };
@@ -432,66 +623,57 @@ export default {
 
 <style scoped>
 /* Two-window layout; right dominates width */
-.windows-grid {
-  display: grid;
-  grid-template-columns: 380px minmax(1080px, 1fr);
-  column-gap: 2.4rem;
-  align-items: start;
-  width: 100%;
-}
-
-/* Independent windows */
+.windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
-
-/* Left window stays short */
 .left-window { height: auto !important; max-height: none !important; }
-
-/* Right window container */
 .right-window { display: flex; flex-direction: column; max-height: 100vh; overflow: hidden; }
-
-/* No outer scroll; keep padding minimal */
 .right-window .section-content-container.right-content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: .6rem .6rem .2rem; }
 
-/* Promotions panel: fixed height so list reaches the bottom */
+/* Panel sizing */
 .promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
 
-/* Table container */
-.table-scroll {
-  display: flex;             /* why: let inner shell size/scroll properly */
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;             /* critical for nested flex scrolling */
-  overflow: hidden;          /* body inside handles scroll */
-}
-.table-shell {
-  flex: 1 1 auto;
-  min-height: 0;             /* allow rows area to shrink */
-  border: 1px dashed rgba(30,144,255,0.35);
-  border-radius: .35rem;
-  background: rgba(0,10,30,0.18);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+/* Shared controls */
+.control { display: grid; gap: .2rem; }
+.control span { font-size: .85rem; color: #9ec5e6; }
+.control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #e6f3ff; }
+.control textarea { resize: vertical; }
+.control input::placeholder, .control textarea::placeholder { color: #aac7e6; }
+.control input:focus, .control select:focus, .control textarea:focus { outline: none; border-color: rgba(30,144,255,0.6); }
+.control select option { background: rgba(5,20,40,0.98); color: #e6f3ff; }
+.control.chk { display: flex; align-items: center; gap: .45rem; padding-top: 1.25rem; }
+.control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
+.control.chk span { color: #e6f3ff; font-size: .9rem; }
 
-/* Shared grid for header + rows to keep columns aligned */
+/* Filters / chips */
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr auto; gap: .6rem; align-items: end; }
+.chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; font-size: .85rem; }
+.chip.ok { border-color: rgba(120,255,170,0.7); }
+.chip.warn { border-color: rgba(255,190,80,0.7); }
+.muted { color: #9ec5e6; }
+.ok-text { color: #79ffba; }
+.empty { color: #9ec5e6; padding: .8rem; text-align: center; }
+
+/* Login & tiles */
+.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
+.login-error { color: #ffb080; margin: .2rem 0 0; }
+.rail { display: grid; gap: .6rem; align-content: start; }
+.rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; cursor: pointer; }
+.rail-card.active { border-color: rgba(120,255,170,0.7); }
+.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.rail-icon { width: 20px; height: 20px; }
+.rail-title, .rail-line .label { color: #d9ebff; }
+.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
+.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
+
+/* Table containers */
+.table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
-
-/* Fixed header */
-.tr.head {
-  font-weight: 600;
-  background: rgba(0,10,30,0.35);
-  border-bottom: 1px dashed rgba(30,144,255,0.25);
-  flex: 0 0 auto;
-}
-
-/* Scrollable rows */
-.rows-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;            /* actual scrolling happens here */
-}
-
+.gridFlags { display: grid; grid-template-columns: 1.4fr .9fr 1fr 2.7fr; align-items: center; }
+.tr.head { font-weight: 600; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; }
+.rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .rows-scroll .tr:last-child .td { border-bottom: 0; }
 
@@ -500,74 +682,34 @@ export default {
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* Decoration */
+/* Severity pill reuse */
+.sev { padding: .05rem .5rem; border-radius: 999px; border: 1px solid rgba(30,144,255,0.45); text-transform: uppercase; }
+
+/* Header deco */
 .rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
 .clipped-medium-backward { clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%); background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5)); padding: .4rem .75rem; border: 1px solid rgba(30,144,255,.35); border-left-width: 0; border-radius: 0 .35rem .35rem 0; }
 .section-header { display: flex; align-items: center; gap: .6rem; }
 .section-header img { width: 28px; height: 28px; }
-
-/* Right header grid */
 .right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
 .right-actions { display: flex; gap: .4rem; }
 
-/* Left: tiles + login */
-.rail { display: grid; gap: .6rem; align-content: start; }
-.rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; cursor: pointer; }
-.rail-card.active { border-color: rgba(120,255,170,0.7); }
-.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
-.rail-icon { width: 20px; height: 20px; }
-.rail-title, .rail-line .label { color: #d9ebff; }
-.rail-card-body { display: grid; gap: .25rem; }
-.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
-.pill.ok { border-color: rgba(120,255,170,0.7); }
-.pill.warn { border-color: rgba(255,190,80,0.7); }
-.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
+/* Discipline editor tweaks */
+.flag-form { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .6rem; display: grid; gap: .6rem; background: rgba(0,10,30,0.25); }
+.flag-form .row { display: grid; grid-template-columns: 1.6fr 1fr; gap: .6rem; }
+.flag-form .row.end { grid-template-columns: 1fr auto auto; align-items: center; }
+.warn-grid { display: grid; grid-template-columns: repeat(3, auto); gap: .5rem; align-items: center; }
+.warnBox { display: inline-flex; align-items: center; gap: .35rem; }
 
-.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
-.login-error { color: #ffb080; margin: .2rem 0 0; }
-
-/* Buttons & controls */
-.btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
-
-/* Shared control styles */
-.control { display: grid; gap: .2rem; }
-.control span { font-size: .85rem; color: #9ec5e6; }
-.control input,
-.control select {
-  background: rgba(5,20,40,0.85);
-  border: 1px solid rgba(30,144,255,0.35);
-  border-radius: .35rem;
-  padding: .35rem .45rem;
-  color: #e6f3ff;
-}
-.control input::placeholder { color: #aac7e6; }
-.control input:focus,
-.control select:focus { outline: none; border-color: rgba(30,144,255,0.6); }
-/* Keep dropdown menu dark too */
-.control select option { background: rgba(5,20,40,0.98); color: #e6f3ff; }
-
-/* Checkbox row: inline + readable label */
-.control.chk { display: flex; align-items: center; gap: .45rem; padding-top: 1.25rem; }
-.control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
-.control.chk span { color: #e6f3ff; font-size: .9rem; }
-
-/* Filters / chips */
-.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
-.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
-.chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
-.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; font-size: .85rem; }
-.chip.ok { border-color: rgba(120,255,170,0.7); }
-.chip.warn { border-color: rgba(255,190,80,0.7); }
-
-/* Responsive tuning */
 @media (max-width: 1200px) {
   .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
   .promotions-panel { height: 68vh; max-height: 68vh; }
+  .flag-form .row { grid-template-columns: 1fr; }
 }
 @media (max-width: 980px) {
   .windows-grid { grid-template-columns: 1fr; }
   .right-window { order: 1; }
   .left-window { order: 2; }
   .promotions-panel { height: 64vh; max-height: 64vh; }
+  .flag-form .row { grid-template-columns: 1fr; }
 }
 </style>
