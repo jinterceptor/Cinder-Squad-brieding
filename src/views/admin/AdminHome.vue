@@ -88,9 +88,11 @@
                   <option value="name">Name (A→Z)</option>
                 </select>
               </label>
+
+              <!-- Improved checkbox: high-contrast label + tight spacing -->
               <label class="control chk">
                 <input type="checkbox" v-model="onlyPromotable" />
-                Promotable only
+                <span>Promotable only</span>
               </label>
             </div>
           </div>
@@ -430,7 +432,7 @@ export default {
   display: grid;
   grid-template-columns: 380px minmax(1080px, 1fr);
   column-gap: 2.4rem;
-  align-items: start; /* prevent equal-height stretch */
+  align-items: start;
   width: 100%;
 }
 
@@ -439,7 +441,7 @@ export default {
   position: relative !important;
   width: 100%;
   max-width: none;
-  align-self: start; /* do not stretch to tallest */
+  align-self: start;
 }
 
 /* Left window stays short */
@@ -449,15 +451,15 @@ export default {
 .right-window {
   display: flex;
   flex-direction: column;
-  max-height: 100vh;  /* cap to viewport */
-  overflow: hidden;   /* inner manages scroll */
+  max-height: 100vh;
+  overflow: hidden;
 }
 
 /* No outer scroll; keep padding minimal */
 .right-window .section-content-container.right-content {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;      /* IMPORTANT: prevent double-scroll; inner handles it */
+  overflow: hidden;
   padding: .6rem .6rem .2rem;
 }
 
@@ -466,20 +468,18 @@ export default {
   display: flex;
   flex-direction: column;
   gap: .6rem;
-  height: 72vh;      /* fixed majority height */
+  height: 72vh;
   max-height: 72vh;
   min-height: 50vh;
-  overflow: hidden;  /* table-scroll will scroll */
+  overflow: hidden;
 }
 
 /* Table area fills remaining space and scrolls */
 .table-scroll {
   flex: 1 1 auto;
-  min-height: 0;     /* required for flex children to shrink */
+  min-height: 0;
   overflow: auto;
 }
-
-/* ensure the visual list fills to bottom edge */
 .table { min-height: 100%; }
 
 /* Decoration */
@@ -525,12 +525,49 @@ export default {
 .login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
 .login-error { color: #ffb080; margin: .2rem 0 0; }
 
-/* Controls & chips */
+/* Buttons & controls */
 .btn-sm { font-size: .85rem; padding: .25rem .5rem; border-radius: .35rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0,10,30,0.25); color: #cfe6ff; cursor: pointer; }
+
+/* Shared control styles */
 .control { display: grid; gap: .2rem; }
 .control span { font-size: .85rem; color: #9ec5e6; }
-.control input, .control select { background: rgba(0,10,30,0.3); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #cfe6ff; }
-.control.chk { align-items: center; grid-auto-flow: column; gap: .35rem; }
+.control input,
+.control select {
+  background: rgba(5,20,40,0.85); /* darker field background */
+  border: 1px solid rgba(30,144,255,0.35);
+  border-radius: .35rem;
+  padding: .35rem .45rem;
+  color: #e6f3ff; /* light text */
+}
+.control input::placeholder { color: #aac7e6; }
+.control input:focus,
+.control select:focus { outline: none; border-color: rgba(30,144,255,0.6); }
+
+/* Keep dropdown menu dark too */
+.control select option {
+  background: rgba(5,20,40,0.98); /* dark dropdown list */
+  color: #e6f3ff;
+}
+
+/* Checkbox row: inline + readable label */
+.control.chk {
+  display: flex;
+  align-items: center;
+  gap: .45rem;        /* tighter spacing to checkbox */
+  padding-top: 1.25rem; /* align with other controls’ label line */
+}
+.control.chk input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: #78ffd0; /* reason: improve visibility on dark UI */
+}
+.control.chk span {
+  color: #e6f3ff;     /* high-contrast label */
+  font-size: .9rem;
+}
+
+/* Filters / chips */
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .6rem; align-items: end; }
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
 .chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,.45); color: #e6f3ff; font-size: .85rem; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
@@ -538,11 +575,7 @@ export default {
 .muted { color: #9ec5e6; }
 
 /* Table (6 columns) */
-.table {
-  border: 1px dashed rgba(30,144,255,0.35);
-  border-radius: .35rem;
-  overflow: hidden;
-}
+.table { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; overflow: hidden; }
 .tr { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
 .tr.head { background: rgba(0,10,30,0.35); font-weight: 600; }
 .th, .td { padding: .4rem .5rem; border-bottom: 1px dashed rgba(30,144,255,0.25); color: #e6f3ff; }
