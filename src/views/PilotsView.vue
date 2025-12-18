@@ -338,14 +338,13 @@
 export default {
   name: "PilotsView",
   props: {
-    animate: { type: Boolean, default: true }, // for parity with other views
+    animate: { type: Boolean, default: true },
     members: { type: Array, default: () => [] },
     orbat:   { type: Array, default: () => [] },
     attendance: { type: Array, default: () => [] },
   },
   data() {
     return {
-      // flicker control (root)
       animateView: false,
       animationDelay: "0ms",
 
@@ -366,7 +365,6 @@ export default {
     };
   },
   mounted() {
-    // flicker on view render; adjust delay if you want to stagger
     this.triggerFlicker();
   },
   computed: {
@@ -471,14 +469,15 @@ export default {
     },
   },
   methods: {
-    // --- view flicker ---
+    // view flicker
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => {
         requestAnimationFrame(() => {
           this.animateView = true;
-          setTimeout(() => (this.animateView = false), 220);
+          // keep the class; no need to remove immediately (prevents end-of-anim snap)
+          // it will re-run on re-mount or when this method is called again
         });
       });
     },
@@ -564,7 +563,6 @@ export default {
       return Math.max(0, rule.nextAt - ops);
     },
 
-    /* Medical role detection */
     isMedicalRank(rankOrRole) {
       const r = String(rankOrRole || "").toUpperCase();
       return ["HR","HA","HN","HM3","HM2","HM1","HMC"].includes(r);
@@ -574,7 +572,6 @@ export default {
       return /CORPSMAN|MEDIC|PJ/.test(s);
     },
 
-    /* UI */
     playOrbatClick() {
       const a = this.$refs.orbatClickAudio;
       if (!a || typeof a.play !== "function") return;
@@ -608,7 +605,6 @@ export default {
       return "UNSC ELEMENT";
     },
 
-    /* Certs & loadouts */
     hasCert(member, idx) {
       const certs = member?.certifications || [];
       return certs[idx] === "Y" || certs[idx] === true || certs[idx] === "1";
@@ -641,7 +637,6 @@ export default {
       return opts;
     },
 
-    /* Rank insignia */
     rankCode(rank) {
       if (!rank) return null;
       const key = rank.trim().toUpperCase();
@@ -665,8 +660,23 @@ export default {
 </script>
 
 <style scoped>
-/* Layout */
-.section-container { height: 100vh; overflow-y: auto; padding: 2.5rem 3rem; color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
+/* Reserve space for scrollbar to avoid width snap at the end of the fade */
+.section-container {
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-gutter: stable; /* <-- prevents post-anim layout shift when scrollbar appears */
+  padding: 2.5rem 3rem;
+  color: #dce6f1;
+  font-family: "Consolas","Courier New",monospace;
+  width: 100% !important;
+  max-width: 2200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Help the GPU plan the animation; avoids micro-jank on heavy DOM */
+.content-container { will-change: opacity, filter; contain: paint; }
+
 .section-content_container { width: 100% !important; }
 .orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
 .hierarchy-container { width: 100%; margin-top: 2rem; }
@@ -696,7 +706,6 @@ export default {
 
 /* Modal shell */
 .squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-/* widened to better fit 5-up grid */
 .squad-modal { background-color: #050811; color: #dce6f1; width: 95vw; max-width: 1860px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
 .squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
@@ -740,7 +749,7 @@ export default {
 .member-card { position: relative; background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
 .member-card.vacant, .member-card.closed { border-left-color: rgba(30,144,255,0.35); }
 
-/* VACANT: light stripes & dashed left border */
+/* VACANT */
 .member-card.vacant {
   background:
     repeating-linear-gradient(45deg, rgba(30,144,255,0.06) 0, rgba(30,144,255,0.06) 10px, transparent 10px, transparent 20px),
@@ -748,7 +757,7 @@ export default {
   border-left-style: dashed;
 }
 
-/* CLOSED: darker, grayscaled, subtle crosshatch, muted text */
+/* CLOSED */
 .member-card.closed {
   filter: grayscale(85%);
   opacity: 0.6;
