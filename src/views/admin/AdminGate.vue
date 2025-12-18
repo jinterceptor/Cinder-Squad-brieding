@@ -1,68 +1,66 @@
 <!-- src/views/admin/AdminGate.vue -->
 <template>
-  <section class="admin-gate">
-    <div class="card">
-      <h1>Admin Login</h1>
-      <p class="hint">Enter the admin password to continue.</p>
-      <form @submit.prevent="onSubmit">
-        <input
-          v-model="password"
-          :type="show ? 'text' : 'password'"
-          placeholder="Password"
-          autocomplete="current-password"
-          class="input"
-          @keydown.enter.prevent="onSubmit"
-        />
-        <div class="row">
-          <label class="checkbox">
-            <input type="checkbox" v-model="show" />
-            Show
-          </label>
-          <button class="btn" :disabled="loading">{{ loading ? "Checking..." : "Login" }}</button>
+  <div class="content-container">
+    <section class="section-container" style="max-width:720px;margin:auto">
+      <div class="section-header clipped-medium-backward">
+        <img src="/icons/orbital.svg" alt="">
+        <h1>UNSC Staff Access</h1>
+      </div>
+      <div class="section-content-container">
+        <div class="grid">
+          <div class="card">
+            <h2>Member Access</h2>
+            <p class="muted">View-only access to rosters and ops.</p>
+            <router-link class="btn" :to="{ path: '/status' }">Enter as Member</router-link>
+          </div>
+
+          <div class="card">
+            <h2>Staff Sign-in</h2>
+            <label class="control"><span>Username</span><input v-model="u" type="text" autocomplete="username" /></label>
+            <label class="control"><span>Password</span><input v-model="p" type="password" autocomplete="current-password" @keyup.enter="go" /></label>
+            <button class="btn" :disabled="loading" @click="go">{{ loading ? 'Authorizing…' : 'Sign in' }}</button>
+            <p v-if="err" class="err">{{ err }}</p>
+            <p v-if="ok" class="ok">Authorized.</p>
+          </div>
         </div>
-        <p v-if="error" class="error">Incorrect password.</p>
-      </form>
-    </div>
-  </section>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script>
-import { verifyPassword, setAdminSession, isAdmin } from "@/utils/adminAuth";
-
+import { adminLogin } from "@/utils/adminAuth";
 export default {
   name: "AdminGate",
-  data() {
-    return { password: "", loading: false, error: false, show: false };
-  },
-  created() {
-    if (isAdmin()) this.$router.replace({ path: "/admin" });
-  },
+  data: () => ({ u: "", p: "", loading: false, err: "", ok: false }),
   methods: {
-    async onSubmit() {
-      this.error = false;
+    async go() {
+      this.err = ""; this.ok = false;
+      if (!this.u || !this.p) { this.err = "Enter username and password."; return; }
       this.loading = true;
       try {
-        const ok = await verifyPassword(this.password);
-        if (!ok) { this.error = true; return; }
-        setAdminSession();
-        this.$router.replace({ path: "/admin" });
-      } finally {
-        this.loading = false;
-        this.password = "";
-      }
-    },
-  },
+        await adminLogin(this.u.trim(), this.p);
+        this.ok = true;
+        const target = (typeof this.$route.query.redirect === 'string' && this.$route.query.redirect.startsWith('/'))
+          ? this.$route.query.redirect : '/admin';
+        this.$router.replace(target);
+      } catch (e) {
+        this.err = String(e?.message || e);
+      } finally { this.loading = false; }
+    }
+  }
 };
 </script>
 
 <style scoped>
-.admin-gate{min-height:100vh;display:grid;place-items:center;background:#050811;color:#dce6f1;padding:2rem}
-.card{width:min(420px,92vw);background:rgba(0,10,30,.9);border:2px solid rgba(30,144,255,.7);border-radius:.8rem;box-shadow:0 10px 40px rgba(0,0,0,.5);padding:1.25rem}
-.hint{opacity:.85;margin:.25rem 0 1rem}
-.input{width:100%;background:rgba(0,0,0,.35);color:#dce6f1;border:1px solid rgba(122,167,199,.55);border-radius:.4rem;padding:.6rem .7rem}
-.row{margin-top:.5rem;display:flex;justify-content:space-between;align-items:center}
-.checkbox{display:inline-flex;gap:.4rem;align-items:center;color:#9ec5e6}
-.btn{background:transparent;border:1px solid rgba(30,144,255,.75);color:#e0f0ff;border-radius:.5rem;padding:.45rem .8rem;cursor:pointer}
-.btn[disabled]{opacity:.6;cursor:not-allowed}
-.error{color:rgba(255,160,160,.95);margin:.6rem 0 0}
+.grid { display:grid; grid-template-columns: 1fr 1fr; gap:1rem; }
+.card { border:1px dashed rgba(30,144,255,.35); background:rgba(0,10,30,.25); border-radius:.5rem; padding:.75rem; display:grid; gap:.6rem; }
+.control { display:grid; gap:.25rem; }
+.control span { color:#9ec5e6; font-size:.9rem; }
+.control input { background:rgba(5,20,40,.85); border:1px solid rgba(30,144,255,.35); border-radius:.35rem; padding:.45rem .55rem; color:#e6f3ff; }
+.btn { border:1px solid rgba(120,255,170,.7); background:rgba(0,30,20,.35); color:#e6fff5; border-radius:.4rem; padding:.45rem .75rem; cursor:pointer; display:inline-block; text-align:center; }
+.muted { color:#9ec5e6; }
+.err { color:#ffb080; }
+.ok { color:#79ffba; }
+@media (max-width:860px){ .grid{ grid-template-columns:1fr; } }
 </style>
