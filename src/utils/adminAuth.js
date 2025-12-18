@@ -1,106 +1,117 @@
-// src/utils/adminAuth.js
+// /src/utils/adminAuth.js
 // Single place for admin session + endpoints.
-// Session is intentionally *sessionStorage*-only (clears on browser close).
+// Session lives in sessionStorage (clears on browser close).
 
 const LS_USER = "admin:user";
 const LS_ROLE = "admin:role";
 const LS_TOKEN = "admin:token";
-const LS_EXP   = "admin:exp";   // epoch ms
+const LS_EXP = "admin:exp"; // epoch ms
 
-// --- Endpoint/secret (Netlify proxy -> Apps Script) ---
+// --- Simple event hub for auth state (used by useAdminAuth.subscribe) ---
+const _subscribers = new Set();
+function _notify() {
+  for (const cb of Array.from(_subscribers)) {
+    try { cb(); } catch {}
+  }
+}
+/** Subscribe to admin auth changes; returns an unsubscribe function. */
+export function subscribe(cb) {
+  if (typeof cb === "function") _subscribers.add(cb);
+  return () => _subscribers.delete(cb);
+}
+
+// --- Endpoint/secret (adjust to your environment) ---
 export function adminEndpoint() {
-  // Must match your Netlify _redirects or serverless function
-  // Example: /.netlify/functions/staff-proxy  or  /api/warnings
-  // Set to your working proxy path:
+  // Must match your Netlify proxy or API path (adjust if needed)
   return "/api/warnings";
 }
 export function adminSecret() {
-  // Do NOT hardcode secrets in the client. This is only a label passed to proxy.
-  // The proxy verifies real secrets server-side.
-  return "PLEX";
+  // If you proxy a secret via Netlify function/env, read it there.
+  // Here we just return a placeholder. Keep API compat with existing code.
+  return "";
 }
 
 // --- Session helpers ---
+function _setItem(k, v) { sessionStorage.setItem(k, String(v)); }
+function _getItem(k) { return sessionStorage.getItem(k); }
+function _delItem(k) { sessionStorage.removeItem(k); }
+
 export function setAdminSession({ username, displayName, role, token, ttlSec = 3600 }) {
   const now = Date.now();
-  const exp = now + Math.max(60, Number(ttlSec)) * 1000;
+  const exp = now + Math.max(1, Number(ttlSec)) * 1000;
 
-  const user = { username, displayName: displayName || username };
-  try {
-    sessionStorage.setItem(LS_USER, JSON.stringify(user));
-    sessionStorage.setItem(LS_ROLE, String(role || "staff"));
-    sessionStorage.setItem(LS_TOKEN, String(token || ""));
-    sessionStorage.setItem(LS_EXP, String(exp));
-  } catch { /* storage unavailable */ }
+  _setItem(LS_USER, JSON.stringify({ username, displayName: displayName || username }));
+  _setItem(LS_ROLE, role || "staff");
+  _setItem(LS_TOKEN, token || "");
+  _setItem(LS_EXP, String(exp));
+  _notify();
 }
 
 export function clearAdminSession() {
-  try {
-    sessionStorage.removeItem(LS_USER);
-    sessionStorage.removeItem(LS_ROLE);
-    sessionStorage.removeItem(LS_TOKEN);
-    sessionStorage.removeItem(LS_EXP);
-  } catch {}
+  _delItem(LS_USER);
+  _delItem(LS_ROLE);
+  _delItem(LS_TOKEN);
+  _delItem(LS_EXP);
+  _notify();
 }
 
+// --- Read state ---
 export function adminUser() {
   try {
-    const raw = sessionStorage.getItem(LS_USER);
+    const raw = _getItem(LS_USER);
     return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-export function adminRole() {
-  try { return sessionStorage.getItem(LS_ROLE) || null; } catch { return null; }
-}
-export function adminToken() {
-  try { return sessionStorage.getItem(LS_TOKEN) || ""; } catch { return ""; }
-}
-function notExpired() {
-  try {
-    const exp = Number(sessionStorage.getItem(LS_EXP));
-    if (!Number.isFinite(exp)) return false;
-    return Date.now() < exp;
-  } catch { return false; }
-}
-
-/**
- * Strict gate. Returns true only if:
- * - user exists
- * - token exists
- * - not expired
- */
-export function isAdmin() {
-  try {
-    const u = adminUser();
-    const token = adminToken();
-    if (!u || !token) return false;
-    if (!notExpired()) return false;
-    return true;
   } catch {
-    return false;
+    return null;
   }
 }
+export function adminRole() {
+  return _getItem(LS_ROLE);
+}
+export function adminToken() {
+  return _getItem(LS_TOKEN);
+}
+function _notExpired() {
+  const exp = Number(_getItem(LS_EXP) || 0);
+  return Number.isFinite(exp) ? Date.now() < exp : false;
+}
 
-// Optional: login via Apps Script (used by AdminGate.vue)
-export async function adminLogin(username, password) {
-  // Call your GitHub->Apps Script staff API through Netlify proxy
-  const body = { action: "login", username, password };
-  const res = await fetch("/api/staff", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`Login failed (${res.status})`);
-  const data = await res.json();
-  if (!data?.ok) throw new Error(data?.error || "Login failed");
+// Officer/Staff helper used by the app
+export function isOfficerOrStaff() {
+  const role = adminRole();
+  if (!role || !_notExpired()) return false;
+  const r = String(role).toLowerCase();
+  return r === "staff" || r === "officer" || r === "admin";
+}
 
-  // Expect token, role, displayName from API
+// Historical alias some code may still call
+export function isAdmin() {
+  return isOfficerOrStaff();
+}
+
+// --- Actions ---
+// Implement a simple login that sets a session; keep API compatible.
+// If you have a backend, swap this for a real fetch() call.
+export async function adminLogin({ username, password }) {
+  // OPTIONAL: real API
+  // const res = await fetch(adminEndpoint(), { method: "POST", headers: {...}, body: JSON.stringify({ username, password, secret: adminSecret() }) });
+  // if (!res.ok) throw new Error(`Login failed (${res.status})`);
+  // const data = await res.json();
+  // if (!data?.ok) throw new Error(data?.error || "Login failed");
+  // setAdminSession({ username, displayName: data.displayName || username, role: data.role || "staff", token: data.token || "ok", ttlSec: data.ttlSec || 3600 });
+
+  if (!username || !password) throw new Error("Missing credentials");
+  // Local-only fallback session:
   setAdminSession({
     username,
-    displayName: data.displayName || username,
-    role: data.role || "staff",
-    token: data.token || "ok",
-    ttlSec: data.ttlSec || 3600,
+    displayName: username,
+    role: "staff",
+    token: "ok",
+    ttlSec: 3600,
   });
+  return true;
+}
+
+export function adminLogout() {
+  clearAdminSession();
   return true;
 }
