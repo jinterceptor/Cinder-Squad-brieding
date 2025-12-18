@@ -142,7 +142,7 @@ export default {
 .auth-status{
   --auth-left: 750px;
   position: absolute;
-  top: 0px;                /* slightly higher */
+  top: 10px;                /* slightly higher */
   left: var(--auth-left);
   display: grid;
   gap: .4rem;
