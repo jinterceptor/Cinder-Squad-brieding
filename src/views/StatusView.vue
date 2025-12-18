@@ -6,7 +6,7 @@
     :style="{ 'animation-delay': animationDelay }"
     class="content-container"
   >
-    <!-- Mission Log (unchanged) -->
+    <!-- Mission Log -->
     <section id="missions" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/campaign.svg" />
@@ -25,7 +25,7 @@
       </div>
     </section>
 
-    <!-- Current Assignment (markdown preserved + heading-level handling) -->
+    <!-- Current Assignment -->
     <section id="assignment" class="section-container" :style="{ 'animation-delay': animationDelay }">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/deployable.svg" />
@@ -51,7 +51,7 @@
             <p><strong>Elements:</strong> <span class="stat-num">{{ stats.totalElements }}</span></p>
           </div>
 
-          <!-- Block 2: REPLACED with Fill % by Element -->
+          <!-- Block 2: Fill % by Element -->
           <div class="status-block">
             <p class="block-title"><strong>Fill % by Element</strong></p>
             <div v-if="elementFillStats.length" class="element-fill-list">
@@ -127,25 +127,90 @@ export default {
       animateView: this.animate,
       animationDelay: "1.75s",
       missionMarkdown: "",
+
+      // RefData CSV (STRICT: Troop List + Troop Status)
+      troopStatusCsvUrl:
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
+      csvStatusIndex: Object.create(null), // nameKey -> status
+      csvTroopIndex: Object.create(null),  // nameKey -> present in Troop List
     };
   },
   computed: {
+    /* ---- CSV-based membership / status helpers ---- */
+    nameKey() {
+      return (name) =>
+        String(name || "")
+          .replace(/["'.]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toUpperCase();
+    },
+    cleanMemberName() {
+      return (name) =>
+        String(name || "").replace(/\s*[\(\[].*?[\)\]]\s*$/g, "").trim();
+    },
+    normalizeStatus() {
+      const pretty = {
+        ACTIVE: "Active",
+        RESERVE: "Reserve",
+        ELOA: "ELOA",
+        OTHER: "Other",
+        INACTIVE: "Inactive",
+        DISCHARGED: "Discharged",
+        UNKNOWN: "Unknown",
+      };
+      return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
+    },
+    memberStatusOf() {
+      return (m) => {
+        const nk = this.nameKey(this.cleanMemberName(m?.name));
+        return this.csvStatusIndex[nk] || "Unknown";
+      };
+    },
+    isDischarged() {
+      return (status) => String(status || "").toLowerCase() === "discharged";
+    },
+    isInTroopList() {
+      return (m) => {
+        const nk = this.nameKey(this.cleanMemberName(m?.name));
+        const hasCsv = Object.keys(this.csvTroopIndex).length > 0; // only enforce after CSV loads
+        return hasCsv ? !!this.csvTroopIndex[nk] : true;
+      };
+    },
+
+    /* Filtered members: only Troop List & not Discharged */
+    filteredMembers() {
+      return (this.members || []).filter((m) => {
+        const inList = this.isInTroopList(m);
+        const status = this.memberStatusOf(m);
+        return inList && !this.isDischarged(status);
+      });
+    },
+
     currentAssignment() {
       const ms = (this.missions || []).slice();
-      const active = ms.find((m) => String(m.status || "").toUpperCase().includes("ACTIVE"));
+      const active = ms.find((m) =>
+        String(m.status || "").toUpperCase().includes("ACTIVE")
+      );
       return active || (ms.length ? ms[ms.length - 1] : null);
     },
+
     stats() {
-      const members = this.members || [];
+      const members = this.filteredMembers; // filtered
       const orbat = this.orbat || [];
 
-      const reservesMembers = Array.isArray(this.reserves) && this.reserves.length
-        ? this.reserves.length
-        : members.filter((m) => String(m.squad || "").toLowerCase() === "reserves").length;
+      // Only count by Troop Status (not squad name)
+      const activeMembers = members.filter(
+        (m) => this.memberStatusOf(m) === "Active"
+      ).length;
+      const reservesMembers = members.filter(
+        (m) => this.memberStatusOf(m) === "Reserve"
+      ).length;
 
-      const activeMembers = members.filter((m) => String(m.squad || "").toLowerCase() !== "reserves").length;
-
-      let totalFireteams = 0, filledSlots = 0, vacantSlots = 0;
+      // Slot accounting (treat CLOSED as VACANT)
+      let totalFireteams = 0,
+        filledSlots = 0,
+        vacantSlots = 0;
       orbat.forEach((sq) => {
         (sq.fireteams || []).forEach((ft) => {
           const slots = ft.slots || [];
@@ -153,13 +218,14 @@ export default {
           slots.forEach((s) => {
             const st = String(s.status || "").toUpperCase();
             if (st === "FILLED" && s.member) filledSlots += 1;
-            else if (st === "VACANT") vacantSlots += 1;
+            else if (st === "VACANT" || st === "CLOSED") vacantSlots += 1; // why: CLOSED counts as free
           });
         });
       });
 
       const totalSlots = filledSlots + vacantSlots;
-      const fillRate = totalSlots > 0 ? Math.round((filledSlots / totalSlots) * 100) : 100;
+      const fillRate =
+        totalSlots > 0 ? Math.round((filledSlots / totalSlots) * 100) : 100;
 
       return {
         totalMembers: members.length,
@@ -173,18 +239,20 @@ export default {
       };
     },
 
-    /* NEW: per-element fill stats */
+    /* Per-element fill (CLOSED = VACANT) */
     elementFillStats() {
       const out = [];
       (this.orbat || []).forEach((sq) => {
-        let filled = 0, vacant = 0, hasSlots = false;
+        let filled = 0,
+          vacant = 0,
+          hasSlots = false;
         (sq.fireteams || []).forEach((ft) => {
           const slots = ft.slots || [];
           if (slots.length) hasSlots = true;
           slots.forEach((s) => {
             const st = String(s.status || "").toUpperCase();
             if (st === "FILLED" && s.member) filled += 1;
-            else if (st === "VACANT") vacant += 1;
+            else if (st === "VACANT" || st === "CLOSED") vacant += 1; // why: CLOSED counts as free
           });
         });
         if (!hasSlots) return;
@@ -192,14 +260,14 @@ export default {
         const percent = total > 0 ? Math.round((filled / total) * 100) : 100;
         out.push({ name: sq.squad || "Element", filled, total, percent });
       });
-      // sort: lowest fill first (to highlight issues)
       out.sort((a, b) => a.percent - b.percent || a.name.localeCompare(b.name));
       return out;
     },
 
+    /* Promotions list filtered to active roster only */
     upcomingPromotions() {
       const list = [];
-      (this.members || []).forEach((m) => {
+      this.filteredMembers.forEach((m) => {
         const opsToNext = this.opsToNextPromotion(m);
         const nextRank = this.nextPromotionRank(m);
         if (opsToNext === null || nextRank === null) return;
@@ -215,7 +283,8 @@ export default {
       list.sort((a, b) => {
         if (a.opsToNext !== b.opsToNext) return a.opsToNext - b.opsToNext;
         if (Number.isFinite(b.opsAttended) && Number.isFinite(a.opsAttended)) {
-          if (b.opsAttended !== a.opsAttended) return b.opsAttended - a.opsAttended;
+          if (b.opsAttended !== a.opsAttended)
+            return b.opsAttended - a.opsAttended;
         }
         return String(a.name).localeCompare(String(b.name));
       });
@@ -224,6 +293,7 @@ export default {
   },
   created() {
     this.setAnimate();
+    this.fetchTroopStatusCsv(); // load CSV early
   },
   beforeUpdate() {
     this.selectMission(this.missionSlug);
@@ -258,7 +328,7 @@ export default {
       if (statusAnimated === null) window.sessionStorage.setItem("statusAnimated", true);
     },
 
-    /* Promotion helpers */
+    /* Promotion helpers (unchanged) */
     rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     promotionLadderFor(rank) {
       const r = this.rankKey(rank);
@@ -311,6 +381,63 @@ export default {
     nextPromotionRank(member) {
       const ladder = this.promotionLadderFor(member?.rank);
       return ladder?.nextRank || null;
+    },
+
+    /* CSV load & parse */
+    async fetchTroopStatusCsv() {
+      try {
+        const res = await fetch(this.troopStatusCsvUrl, { method: "GET" });
+        const csvText = await res.text();
+        const rows = this.parseCsv(csvText);
+        if (!rows.length) return;
+
+        const header = rows[0].map((h) => String(h || "").trim());
+        const hdrLower = header.map((h) =>
+          h.toLowerCase().replace(/\s+/g, " ").trim()
+        );
+        const nameIdx = hdrLower.findIndex((h) => h === "troop list");
+        const statusIdx = hdrLower.findIndex((h) => h === "troop status");
+        if (nameIdx === -1 || statusIdx === -1) return;
+
+        const statusMap = Object.create(null);
+        const troopMap = Object.create(null);
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          const rawName = String(r[nameIdx] || "").trim();
+          if (!rawName) continue;
+          const nk = this.nameKey(this.cleanMemberName(rawName));
+          troopMap[nk] = true;
+          statusMap[nk] = this.normalizeStatus(String(r[statusIdx] || "").trim());
+        }
+        this.csvStatusIndex = statusMap;
+        this.csvTroopIndex = troopMap;
+      } catch (e) {
+        console.warn("CSV status load failed:", e);
+      }
+    },
+    parseCsv(text) {
+      const rows = [];
+      let cur = [];
+      let val = "";
+      let inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQ) {
+          if (ch === '"') {
+            if (text[i + 1] === '"') { val += '"'; i++; } else { inQ = false; }
+          } else { val += ch; }
+        } else {
+          if (ch === '"') inQ = true;
+          else if (ch === ",") { cur.push(val); val = ""; }
+          else if (ch === "\n") { cur.push(val); rows.push(cur); cur = []; val = ""; }
+          else if (ch === "\r") { /* ignore */ }
+          else { val += ch; }
+        }
+      }
+      cur.push(val);
+      rows.push(cur);
+      if (rows.length && rows[rows.length - 1].every((x) => String(x).length === 0)) rows.pop();
+      return rows;
     },
   },
 };
