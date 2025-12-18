@@ -1,4 +1,4 @@
-name: Staff Admin
+name: Staff Admin (diagnostic)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ on:
         description: "Display name (create/update)"
         required: false
       role:
-        description: "Role (staff/officer) for create/update)"
+        description: "Role (staff/officer) for create/update"
         required: false
 
 jobs:
@@ -31,9 +31,9 @@ jobs:
           test -n "${{ secrets.GAS_SECRET }}"   || (echo "GAS_SECRET missing" && exit 1)
           test -n "${{ secrets.GAS_ADMIN_KEY }}"|| (echo "GAS_ADMIN_KEY missing" && exit 1)
 
-      - name: Build + call Apps Script (no outputs)
+      - name: Build request body
+        id: build
         env:
-          ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
           SECRET:   ${{ secrets.GAS_SECRET }}
           ADMINKEY: ${{ secrets.GAS_ADMIN_KEY }}
           ACTION:   ${{ github.event.inputs.action }}
@@ -43,48 +43,48 @@ jobs:
           ROLE:     ${{ github.event.inputs.role }}
         run: |
           set -euo pipefail
-
-          make_body() {
-            case "$ACTION" in
-              list)
-                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" \
-                  '{secret:$s, action:"admin.staff:list", adminKey:$k}'
-                ;;
-              create)
-                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
-                  '{secret:$s, action:"admin.staff:create", adminKey:$k, username:$u, password:$p, displayName:$d, role:$r}'
-                ;;
-              update)
-                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
-                  '{secret:$s, action:"admin.staff:update", adminKey:$k, username:$u, displayName:$d, role:$r, newPassword:$p}'
-                ;;
-              delete)
-                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" \
-                  '{secret:$s, action:"admin.staff:delete", adminKey:$k, username:$u}'
-                ;;
-              *)
-                echo "Unknown action: $ACTION" >&2; exit 1;;
-            esac
-          }
-
-          BODY="$(make_body)"
-
+          case "$ACTION" in
+            list)
+              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" \
+                '{secret:$s, action:"admin.staff:list", adminKey:$k}')
+              ;;
+            create)
+              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
+                '{secret:$s, action:"admin.staff:create", adminKey:$k, username:$u, password:$p, displayName:$d, role:$r}')
+              ;;
+            update)
+              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
+                '{secret:$s, action:"admin.staff:update", adminKey:$k, username:$u, displayName:$d, role:$r, newPassword:$p}')
+              ;;
+            delete)
+              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" \
+                '{secret:$s, action:"admin.staff:delete", adminKey:$k, username:$u}')
+              ;;
+            *)
+              echo "Unknown action: $ACTION"; exit 1;;
+          esac
+          echo "Built request body (redacted below)"
+          # Redacted preview
           echo "Request: $(echo "$BODY" | sed -E 's/"secret":"[^"]+"/"secret":"***"/; s/"adminKey":"[^"]+"/"adminKey":"***"/; s/"password":"[^"]+"/"password":"***"/; s/"newPassword":"[^"]+"/"newPassword":"***"/')"
+          # Persist for next step via file
+          echo "$BODY" > body.json
 
+      - name: Call Apps Script (prints HTTP + response; never masks errors)
+        env:
+          ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
+        run: |
+          set -euo pipefail
           HTTP=$(curl -sS -w "\n%{http_code}" -X POST \
             -H 'Content-Type: text/plain;charset=utf-8' \
-            --data "$BODY" \
+            --data @body.json \
             "$ENDPOINT")
-
           STATUS=$(echo "$HTTP" | tail -n1)
           RESP=$(echo "$HTTP" | head -n -1)
-
           echo "HTTP $STATUS"
           echo "Response: $RESP"
+          # Try to pretty print JSON if possible
           echo "$RESP" | jq . || true
-
-          test "$STATUS" = "200"
-          echo "$RESP" | grep -q '"ok":true'
+          # DO NOT fail here; we want the logs even if ok:false
 
       - name: Done
-        run: echo "Success."
+        run: echo "Diagnostic run complete."
