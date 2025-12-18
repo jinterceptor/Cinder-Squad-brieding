@@ -10,23 +10,8 @@
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container">
-        <!-- Inline login -->
-        <div v-if="!isAuthed" class="login-card">
-          <label class="control">
-            <span>Password</span>
-            <input
-              type="password"
-              v-model="passwordInput"
-              placeholder="Enter unit password"
-              @keyup.enter="tryLogin"
-            />
-          </label>
-          <button class="btn-sm" @click="tryLogin">Log in</button>
-          <p v-if="loginError" class="login-error">{{ loginError }}</p>
-        </div>
-
-        <!-- Tiles -->
-        <div v-else class="rail">
+        <!-- Tiles only (no password box). Route guard ensures auth. -->
+        <div v-if="isAuthed" class="rail">
           <button
             v-for="s in sections"
             :key="s.key"
@@ -47,6 +32,7 @@
             </div>
           </button>
         </div>
+        <div v-else class="muted">Staff only.</div>
       </div>
     </section>
 
@@ -60,7 +46,7 @@
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container right-content">
-        <div v-if="!isAuthed" class="muted">Enter the admin password in the left window to continue.</div>
+        <div v-if="!isAuthed" class="muted">Staff only.</div>
 
         <!-- Promotions -->
         <div v-else-if="activeKey === 'promotions'" class="promotions-panel">
@@ -239,6 +225,8 @@
 </template>
 
 <script>
+import { isAdmin, adminEndpoint, adminSecret } from "@/utils/adminAuth";
+
 export default {
   name: "AdminHome",
   props: {
@@ -248,12 +236,6 @@ export default {
   },
   data() {
     return {
-      // Auth
-      isAuthed: false,
-      passwordInput: "",
-      loginError: "",
-
-      // Nav
       activeKey: "promotions",
 
       // Promotions
@@ -262,9 +244,9 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API
-      discEndpoint: "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec",
-      discSecret: "PLEX",
+      // Discipline API (Netlify proxy)
+      discEndpoint: adminEndpoint(),
+      discSecret: adminSecret(),
       discLoading: false,
       discSaving: false,
       discError: "",
@@ -272,9 +254,10 @@ export default {
       disciplineRows: [],
 
       // RefData CSV (STRICT headers)
-      troopStatusCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
-      csvStatusIndex: Object.create(null), // nameKey -> status
-      csvTroopIndex: Object.create(null),  // nameKey -> present in Troop List
+      troopStatusCsvUrl:
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
+      csvStatusIndex: Object.create(null),
+      csvTroopIndex: Object.create(null),
 
       // Discipline filters + editor
       discSearch: "",
@@ -282,21 +265,14 @@ export default {
     };
   },
   created() {
-    try {
-      localStorage.removeItem("admin-auth");
-      sessionStorage.removeItem("admin-authed");
-    } catch {}
-  },
-  watch: {
-    isAuthed(v) {
-      if (v) {
-        this.loadDiscipline();
-        if (this.troopStatusCsvUrl) this.fetchTroopStatusCsv();
-      }
-    },
+    if (this.isAuthed) {
+      this.loadDiscipline();
+      this.fetchTroopStatusCsv();
+    }
   },
   computed: {
-    /* utils */
+    isAuthed() { return isAdmin(); },
+
     nameKey() {
       return (name) =>
         String(name || "")
@@ -310,7 +286,6 @@ export default {
     },
     rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
 
-    /* normalization */
     normalizeStatus() {
       const pretty = {
         ACTIVE: "Active", RESERVE: "Reserve", ELOA: "ELOA", OTHER: "Other",
@@ -319,7 +294,6 @@ export default {
       return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
     },
 
-    /* indices from API (fallback if CSV missing) */
     statusIndexFromApi() {
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => {
@@ -345,12 +319,11 @@ export default {
     isInTroopList() {
       return (m) => {
         const nk = this.nameKey(this.cleanMemberName(m?.name));
-        const hasCsv = Object.keys(this.csvTroopIndex).length > 0; // why: only enforce after CSV loaded
+        const hasCsv = Object.keys(this.csvTroopIndex).length > 0;
         return hasCsv ? !!this.csvTroopIndex[nk] : true;
       };
     },
 
-    /* attendance */
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach((m) => {
@@ -399,7 +372,6 @@ export default {
       return Array.from(set).sort((a, b) => a.localeCompare(b));
     },
 
-    /* filtered, sorted member lists */
     membersSorted() {
       return [...(this.members || [])]
         .filter(m => this.isInTroopList(m) && !this.isDischarged(this.memberStatusOf(m)))
@@ -407,14 +379,13 @@ export default {
     },
     membersSortedNonDischarged() { return this.membersSorted; },
 
-    /* window title / tiles */
     windowTitle() {
       if (!this.isAuthed) return "Locked";
       return {
-        promotions: "Promotions Overview",
-        discipline: "Discipline (Notes & Warnings)",
-        audits: "Roster Audits",
-      }[this.activeKey] || "Admin Tools";
+        promotions: "PROMOTIONS OVERVIEW",
+        discipline: "DISCIPLINE (NOTES & WARNINGS)",
+        audits: "ROSTER AUDITS",
+      }[this.activeKey] || "ADMIN TOOLS";
     },
     sections() {
       return [
@@ -440,7 +411,6 @@ export default {
       ];
     },
 
-    /* promotions logic */
     nextPromotion() {
       const alias = {
         PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
@@ -477,9 +447,9 @@ export default {
 
       const rows = [];
       for (const m of (this.members || [])) {
-        if (!this.isInTroopList(m)) continue;   // NEW: require in RefData Troop List
+        if (!this.isInTroopList(m)) continue;
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) continue; // hide discharged
+        if (this.isDischarged(status)) continue;
 
         if (term) {
           const hay = [m.name, m.rank, m.squad, status].map(x => String(x || "").toLowerCase()).join(" ");
@@ -537,7 +507,6 @@ export default {
       return (r) => { const idx = order.indexOf(this.rankKey(r)); return idx === -1 ? 999 : idx; };
     },
 
-    /* discipline computed */
     disciplineRowsIndexed() {
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => { idx[r.nameKey] = r; });
@@ -546,9 +515,9 @@ export default {
     discTable() {
       const rows = [];
       (this.members || []).forEach(m => {
-        if (!this.isInTroopList(m)) return;     // require in RefData Troop List
+        if (!this.isInTroopList(m)) return;
         const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) return;  // hide discharged
+        if (this.isDischarged(status)) return;
 
         const nk = this.nameKey(m?.name);
         const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
@@ -577,16 +546,15 @@ export default {
       });
     },
   },
-  methods: {
-    /* auth */
-    tryLogin() {
-      const code = String(this.passwordInput || "").trim().toLowerCase();
-      if (!code) { this.loginError = "Please enter the password."; return; }
-      if (code === "150th") { this.isAuthed = true; this.passwordInput = ""; this.loginError = ""; }
-      else { this.loginError = "Invalid password."; }
+  watch: {
+    isAuthed(v) {
+      if (v) {
+        this.loadDiscipline();
+        if (this.troopStatusCsvUrl) this.fetchTroopStatusCsv();
+      }
     },
-
-    /* helpers */
+  },
+  methods: {
     isFiniteNum(v) { return Number.isFinite(v); },
     getOps(member) {
       if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
@@ -608,7 +576,6 @@ export default {
       return 'unknown';
     },
 
-    /* CSV: fetch + parse (STRICT: Troop List + Troop Status) */
     async fetchTroopStatusCsv() {
       try {
         const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
@@ -618,8 +585,8 @@ export default {
 
         const header = rows[0].map(h => String(h || '').trim());
         const hdrLower = header.map(h => h.toLowerCase().replace(/\s+/g,' ').trim());
-        const nameIdx = hdrLower.findIndex(h => h === 'troop list');   // strict
-        const statusIdx = hdrLower.findIndex(h => h === 'troop status'); // strict
+        const nameIdx = hdrLower.findIndex(h => h === 'troop list');
+        const statusIdx = hdrLower.findIndex(h => h === 'troop status');
         if (nameIdx === -1 || statusIdx === -1) return;
 
         const statusMap = Object.create(null);
@@ -634,9 +601,7 @@ export default {
         }
         this.csvStatusIndex = statusMap;
         this.csvTroopIndex = troopMap;
-      } catch (e) {
-        console.warn('CSV status load failed:', e);
-      }
+      } catch {}
     },
     parseCsv(text) {
       const rows = [];
@@ -662,7 +627,6 @@ export default {
       return rows;
     },
 
-    /* discipline api */
     async loadDiscipline() {
       if (!this.discEndpoint || !this.discSecret) return;
       this.discLoading = true; this.discError = ""; this.discOK = false;
@@ -670,7 +634,6 @@ export default {
         const url = `${this.discEndpoint}?secret=${encodeURIComponent(this.discSecret)}&t=${Date.now()}`;
         const res = await fetch(url, { method: 'GET' });
         const data = await res.json();
-        if (data?.error) throw new Error(data.error);
         const arr = Array.isArray(data) ? data : [];
         this.disciplineRows = arr.map(r => ({
           name: r.name || '',
@@ -743,7 +706,7 @@ export default {
       try {
         const res = await fetch(this.discEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // why: simple request (no preflight)
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload),
           redirect: 'follow',
         });
@@ -766,17 +729,16 @@ export default {
 </script>
 
 <style scoped>
-/* Two-window layout; right dominates width */
+/* (unchanged layout + visuals, minus the old password card usage) */
+
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
 .right-window { display: flex; flex-direction: column; max-height: 100vh; overflow: hidden; }
 .right-window .section-content-container.right-content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: .6rem .6rem .2rem; }
 
-/* Panel sizing */
 .promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
 
-/* Shared controls */
 .control { display: grid; gap: .2rem; }
 .control span { font-size: .85rem; color: #9ec5e6; }
 .control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #e6f3ff; }
@@ -788,7 +750,6 @@ export default {
 .control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
 .control.chk span { color: #e6f3ff; font-size: .9rem; }
 
-/* Filters / chips */
 .filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
 .filters .row { display: grid; grid-template-columns: 1.2fr auto; gap: .6rem; align-items: end; }
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
@@ -799,9 +760,6 @@ export default {
 .ok-text { color: #79ffba; }
 .empty { color: #9ec5e6; padding: .8rem; text-align: center; }
 
-/* Login & tiles */
-.login-card { border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; display: grid; gap: .5rem; }
-.login-error { color: #ffb080; margin: .2rem 0 0; }
 .rail { display: grid; gap: .6rem; align-content: start; }
 .rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; cursor: pointer; }
 .rail-card.active { border-color: rgba(120,255,170,0.7); }
@@ -811,31 +769,21 @@ export default {
 .pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
 .rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
-/* Table containers */
 .table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
-/* +1 col for Status in discipline */
 .gridFlags { display: grid; grid-template-columns: 1.4fr .9fr .9fr 1fr 2.7fr; align-items: center; }
 .tr.head { font-weight: 600; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; }
 .rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .rows-scroll .tr:last-child .td { border-bottom: 0; }
 
-/* Progress bar */
 .bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
-/* ---- Discipline visuals ---- */
 .warn-row { position: relative; }
-.warn-row::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 4px;
-  background: transparent;
-}
+.warn-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: transparent; }
 .warn-0 { background: transparent; }
 .warn-1 { background: rgba(255, 200, 80, 0.06); }
 .warn-1::before { background: rgba(255, 200, 80, 0.8); }
@@ -844,49 +792,25 @@ export default {
 .warn-3 { background: rgba(255, 90, 90, 0.10); }
 .warn-3::before { background: rgba(255, 90, 90, 0.9); }
 
-/* Dots for warnings column */
 .warncells { display: flex; align-items: center; }
 .warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
-.warn-badges .dot {
-  width: 14px; height: 14px; border-radius: 3px;
-  border: 1px solid rgba(150,190,230,0.35);
-  background: rgba(0,10,30,0.25);
-  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2);
-}
+.warn-badges .dot { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
 .warn-badges .dot.on { border-color: rgba(150,190,230,0.6); }
 .warn-badges.w1 .dot.on { background: rgba(255, 200, 80, 0.75); }
 .warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
 .warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
 
-/* Status pill */
-.status-pill {
-  padding: .1rem .5rem;
-  border-radius: 999px;
-  border: 1px solid rgba(150,190,230,0.35);
-  background: rgba(0,10,30,0.25);
-  font-size: .82rem;
-}
+.status-pill { padding: .1rem .5rem; border-radius: 999px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); font-size: .82rem; }
 .status-pill.st-active { border-color: rgba(120,255,170,0.7); }
 .status-pill.st-reserve { border-color: rgba(120,200,255,0.7); }
 .status-pill.st-eloa { border-color: rgba(200,180,255,0.7); }
 .status-pill.st-inactive { border-color: rgba(200,200,200,0.4); }
 .status-pill.st-other { border-color: rgba(255,190,80,0.6); }
 .status-pill.st-unknown { border-color: rgba(150,190,230,0.35); }
-.status-pill.st-discharged { border-color: rgba(255,90,90,0.9); } /* hidden anyway */
+.status-pill.st-discharged { border-color: rgba(255,90,90,0.9); }
 
-/* Editor toggle pills */
 .warn-toggle { display: inline-flex; gap: .4rem; align-items: center; }
-.warn-pill {
-  min-width: 36px; height: 28px;
-  padding: 0 .5rem;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: .45rem;
-  border: 1px solid rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.35);
-  color: #e6f3ff;
-  font-weight: 600; font-size: .9rem;
-  transition: transform .05s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease;
-}
+.warn-pill { min-width: 36px; height: 28px; padding: 0 .5rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .45rem; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); color: #e6f3ff; font-weight: 600; font-size: .9rem; transition: transform .05s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease; }
 .warn-pill:hover { transform: translateY(-1px); }
 .warn-pill:focus { outline: none; box-shadow: 0 0 0 2px rgba(120,200,255,0.35); }
 .warn-pill.on { color: #0a0f16; border-color: transparent; }
@@ -894,7 +818,6 @@ export default {
 .warn-pill.lvl2.on { background: rgba(255, 140, 60, 0.95); }
 .warn-pill.lvl3.on { background: rgba(255, 90, 90, 0.98); }
 
-/* Header deco */
 .rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
 .clipped-medium-backward { clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%); background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5)); padding: .4rem .75rem; border: 1px solid rgba(30,144,255,.35); border-left-width: 0; border-radius: 0 .35rem .35rem 0; }
 .section-header { display: flex; align-items: center; gap: .6rem; }
