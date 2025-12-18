@@ -1,7 +1,7 @@
 // src/utils/adminAuth.js
-// Centralized staff auth for Admin pages (uses Google Apps Script backend)
+// Centralized staff auth for Admin pages (proxied via Netlify function)
 
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbx8UIMsF5BdhiSSyHjc2sn6jHe8yWZ7S996_ILEIXhNLrCm1QWgLjNOl6q_Jp_acPOJ/exec";
+const ENDPOINT = "/.netlify/functions/gas"; // why: same-origin, no CORS
 const SECRET = "PLEX";
 
 const STORAGE_KEY = "staff-auth";
@@ -25,7 +25,7 @@ function persist() {
 export async function adminLogin(username, password) {
   const res = await fetch(ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" }, // simple request (no CORS preflight)
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // simple request
     body: JSON.stringify({ secret: SECRET, action: "login", username, password }),
   });
   const data = await res.json();
