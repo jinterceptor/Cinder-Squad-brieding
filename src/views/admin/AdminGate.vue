@@ -6,6 +6,7 @@
         <img src="/icons/orbital.svg" alt="">
         <h1>UNSC Staff Access</h1>
       </div>
+
       <div class="section-content-container">
         <div class="grid">
           <div class="card">
@@ -30,6 +31,7 @@
 
 <script>
 import { adminLogin } from "@/utils/adminAuth";
+
 export default {
   name: "AdminGate",
   data: () => ({ u: "", p: "", loading: false, err: "", ok: false }),
@@ -41,14 +43,18 @@ export default {
       try {
         await adminLogin(this.u.trim(), this.p);
         this.ok = true;
-        const target = (typeof this.$route.query.redirect === 'string' && this.$route.query.redirect.startsWith('/'))
-          ? this.$route.query.redirect : '/admin';
+        const target =
+          typeof this.$route.query.redirect === "string" && this.$route.query.redirect.startsWith("/")
+            ? this.$route.query.redirect
+            : "/admin";
         this.$router.replace(target);
       } catch (e) {
         this.err = String(e?.message || e);
-      } finally { this.loading = false; }
-    }
-  }
+      } finally {
+        this.loading = false;
+      }
+    },
+  },
 };
 </script>
 
@@ -58,7 +64,7 @@ export default {
 .control { display:grid; gap:.25rem; }
 .control span { color:#9ec5e6; font-size:.9rem; }
 .control input { background:rgba(5,20,40,.85); border:1px solid rgba(30,144,255,.35); border-radius:.35rem; padding:.45rem .55rem; color:#e6f3ff; }
-.btn { border:1px solid rgba(120,255,170,.7); background:rgba(0,30,20,.35); color:#e6fff5; border-radius:.4rem; padding:.45rem .75rem; cursor:pointer; display:inline-block; text-align:center; }
+.btn { border:1px solid rgba(120,255,170,.7); background:rgba(0,30,20,.35); color:#e6fff5; border-radius:.4rem; padding:.45rem .75rem; cursor:pointer; text-align:center; }
 .muted { color:#9ec5e6; }
 .err { color:#ffb080; }
 .ok { color:#79ffba; }
