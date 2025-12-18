@@ -1,6 +1,10 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
-  <div class="windows-grid">
+  <div
+    class="windows-grid content-container"
+    :class="{ animate: animateView }"
+    :style="{ 'animation-delay': animationDelay }"
+  >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
       <div class="section-header clipped-medium-backward">
@@ -236,6 +240,10 @@ export default {
   },
   data() {
     return {
+      // view flicker
+      animateView: false,
+      animationDelay: "0ms",
+
       activeKey: "promotions",
 
       // Promotions
@@ -269,6 +277,10 @@ export default {
       this.loadDiscipline();
       this.fetchTroopStatusCsv();
     }
+  },
+  mounted() {
+    // why: trigger panel "power-on" flicker on mount
+    this.triggerFlicker();
   },
   computed: {
     isAuthed() { return isAdmin(); },
@@ -555,6 +567,17 @@ export default {
     },
   },
   methods: {
+    // view flicker
+    triggerFlicker(delayMs = 0) {
+      this.animateView = false;
+      this.animationDelay = `${delayMs}ms`;
+      this.$nextTick(() => {
+        requestAnimationFrame(() => {
+          this.animateView = true; // keep set; avoids post-anim snap
+        });
+      });
+    },
+
     isFiniteNum(v) { return Number.isFinite(v); },
     getOps(member) {
       if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
@@ -729,6 +752,15 @@ export default {
 </script>
 
 <style scoped>
+/* Reserve space for scrollbars to avoid end-of-fade width snap */
+.right-window .section-content-container.right-content { scrollbar-gutter: stable; }
+
+/* Also ensure inner scrolling tables don't shift at the end */
+.rows-scroll { scrollbar-gutter: stable; }
+
+/* Help compositor; avoids micro-jank on heavy DOM during fade */
+.content-container { will-change: opacity, filter; contain: paint; }
+
 /* (unchanged layout + visuals, minus the old password card usage) */
 
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
@@ -740,7 +772,7 @@ export default {
 .promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
 
 .control { display: grid; gap: .2rem; }
-.control span { font-size: .85rem; color: #9ec5e6; }
+.control span { font-size: .85rem; color: .#9ec5e6; }
 .control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #e6f3ff; }
 .control textarea { resize: vertical; }
 .control input::placeholder, .control textarea::placeholder { color: #aac7e6; }
