@@ -235,19 +235,13 @@ export default {
   },
   data() {
     return {
-      // view flicker
       animateView: false,
       animationDelay: "0ms",
-
       activeKey: "promotions",
-
-      // Promotions
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
-
-      // Discipline API (Netlify proxy)
       discEndpoint: adminEndpoint(),
       discSecret: adminSecret(),
       discLoading: false,
@@ -255,14 +249,10 @@ export default {
       discError: "",
       discOK: false,
       disciplineRows: [],
-
-      // RefData CSV
       troopStatusCsvUrl:
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
       csvStatusIndex: Object.create(null),
       csvTroopIndex: Object.create(null),
-
-      // Discipline filters + editor
       discSearch: "",
       edit: { memberId: null, notes: "", warn: [false, false, false] },
     };
@@ -278,7 +268,6 @@ export default {
   },
   computed: {
     isAuthed() { return isAdmin(); },
-    /* ... (unchanged computed/methods from your last working version) ... */
     nameKey() {
       return (name) =>
         String(name || "")
@@ -680,13 +669,17 @@ export default {
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 .rows-scroll { scrollbar-gutter: stable; }
 
-/* Header alignment shell (matches other views) */
+/* Header alignment (matches other views) */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* Narrow only the LEFT “Admin” plate */
-.header-admin .section-header { width: 50%; min-width: 320px; } /* why: ~half width */
+/* Narrow only the LEFT “Admin” plate — ~half width */
+.header-admin .section-header {
+  width: 45%;
+  display: inline-block; /* why: allow true width shrink */
+  /* removed min-width so it can actually shrink */
+}
 @media (max-width: 980px) {
-  .header-admin .section-header { width: 70%; min-width: 260px; }
+  .header-admin .section-header { width: 70%; }
 }
 
 /* Help compositor */
