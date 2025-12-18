@@ -28,14 +28,10 @@
 
     <div class="title clipped-x-large-forward">
       <img class="logo" src="/faction-logos/Broadsword111.png" />
-
       <div class="title-container">
-        <!-- PRIMARY TITLE (FIXED) -->
         <div id="title-first-line" class="title-row">
           <span id="title-header">UNSC TACNET</span>
         </div>
-
-        <!-- SECONDARY LINE (CONFIG-DRIVEN) -->
         <div class="title-row">
           <span id="subtitle-header">{{ header.subheaderTitle }}</span>
           <span id="subtitle-subheader">// {{ header.subheaderSubtitle }}</span>
@@ -51,31 +47,26 @@
       </video>
 
       <div class="location-info">
-        <!-- ROW 1 -->
         <div class="location-row grid">
           <div id="year">
             <h4>Year</h4>
             <span class="subtitle">{{ header.year }}</span>
           </div>
-
           <div id="status" class="span-2">
             <h4>Status</h4>
             <span class="subtitle">{{ header.status }}</span>
           </div>
         </div>
 
-        <!-- ROW 2 -->
         <div class="location-row grid">
           <div id="AO">
             <h4>AO</h4>
             <span class="subtitle">{{ header.AO }}</span>
           </div>
-
           <div id="planet">
             <h4>Planet</h4>
             <span class="subtitle">{{ header.planet }}</span>
           </div>
-
           <div id="system">
             <h4>System</h4>
             <span class="subtitle">{{ header.system }}</span>
@@ -87,23 +78,14 @@
 </template>
 
 <script>
-import {
-  subscribe,
-  adminUser,
-  adminRole,
-  isAdmin,
-  adminLogout,
-} from "@/utils/adminAuth";
+import { subscribe, adminUser, adminRole, isAdmin, adminLogout } from "@/utils/adminAuth";
 
-/**
- * RefData CSV (published) – we use CSV to avoid Sheets API auth.
- * You shared the pubhtml link earlier; the CSV form is below.
- * gid=107253735 corresponds to "RefData" sheet in your doc.
- */
+/* Published CSV for RefData sheet (gid must point to RefData) */
 const REF_CSV =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
 
 let _refCache = null;
+
 async function fetchRefDataOnce() {
   if (_refCache) return _refCache;
   const res = await fetch(REF_CSV, { mode: "cors" });
@@ -112,22 +94,21 @@ async function fetchRefDataOnce() {
   return _refCache;
 }
 
+/* Minimal CSV parser (handles quotes, commas, CRLF) */
 function parseCsv(text) {
-  // minimal CSV parser: handles commas, quotes, and newlines.
   const rows = [];
   let cur = [], val = "", inQ = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i], n = text[i + 1];
     if (inQ) {
       if (c === '"' && n === '"') { val += '"'; i++; }
-      else if (c === '"') { inQ = false; }
+      else if (c === '"') inQ = false;
       else { val += c; }
     } else {
       if (c === '"') inQ = true;
       else if (c === ',') { cur.push(val); val = ""; }
       else if (c === '\n' || c === '\r') {
         if (val !== "" || cur.length) { cur.push(val); rows.push(cur); cur = []; val = ""; }
-        // swallow CRLF pairs
         if (c === '\r' && n === '\n') i++;
       } else { val += c; }
     }
@@ -137,6 +118,15 @@ function parseCsv(text) {
   const headers = rows[0].map(h => (h || "").trim());
   const dataRows = rows.slice(1).filter(r => r.some(x => (x || "").trim().length));
   return { headers, rows: dataRows };
+}
+
+/* Same normalization approach the roster uses: strip punctuation, collapse spaces, uppercase */
+function nameKey(name) {
+  return String(name || "")
+    .replace(/["'.]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
 }
 
 function findCol(headers, names) {
@@ -156,7 +146,6 @@ export default {
       displayName: "",
       role: "staff",
       rankShort: "",
-
       unsub: null,
     };
   },
@@ -185,37 +174,23 @@ export default {
     this.unsub = subscribe(push);
     push();
   },
-  beforeUnmount() {
-    if (typeof this.unsub === "function") this.unsub();
-  },
+  beforeUnmount() { if (typeof this.unsub === "function") this.unsub(); },
   methods: {
-    async resolveRank(troopName) {
+    async resolveRank(displayName) {
       const { headers, rows } = await fetchRefDataOnce();
 
-      // find columns
-      const colTroop = findCol(headers, ["Troop List", "Troop", "Name", "TroopList"]);
-      const colRank  = findCol(headers, ["Rank", "Current Rank", "Rank (abbr)", "Rank Abbr"]);
+      const colTroop = findCol(headers, ["Troop List","Troop","Name","TroopList"]);
+      const colRank  = findCol(headers, ["Rank","Current Rank","Rank (abbr)","Rank Abbr"]);
       if (colTroop === -1 || colRank === -1) return;
 
-      // exact match first
-      let hit = rows.find(r => (r[colTroop] || "").trim() === troopName.trim());
+      const target = nameKey(displayName);
+      const hit = rows.find(r => nameKey(r[colTroop] || "") === target);
+      if (!hit) return;
 
-      // if not exact, try case-insensitive & collapsed spaces
-      if (!hit) {
-        const norm = (s) => s.replace(/\s+/g, " ").trim().toLowerCase();
-        const target = norm(troopName);
-        hit = rows.find(r => norm(r[colTroop] || "") === target);
-      }
-
-      if (hit) {
-        const rk = String(hit[colRank] || "").trim();
-        if (rk) this.rankShort = rk;
-      }
+      const rk = String(hit[colRank] || "").trim();
+      if (rk) this.rankShort = rk;
     },
-    doLogout() {
-      adminLogout();
-      this.$router.replace("/status");
-    },
+    doLogout() { adminLogout(); this.$router.replace("/status"); },
   },
 };
 </script>
@@ -236,7 +211,7 @@ export default {
 
 /* --------- Auth status (LEFT, no background tile) --------- */
 .auth-status{
-  --auth-left: 750px; /* your sweet spot */
+  --auth-left: 750px;
   position: absolute;
   top: 4px;
   left: var(--auth-left);
@@ -331,7 +306,7 @@ export default {
   color: #ffe9e6;
 }
 
-/* Mobile: stack under the title */
+/* Mobile */
 @media (max-width: 1100px){
   .auth-status{ position: static; margin: .5rem 0 .25rem auto; }
 }
