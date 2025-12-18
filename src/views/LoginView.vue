@@ -6,26 +6,34 @@
         <img src="/icons/orbital.svg" alt="">
         <h1>UNSC Access Portal</h1>
       </div>
+
       <div class="section-content-container login-grid">
         <!-- Member lane -->
         <div class="card">
           <h2 class="title">Member Access</h2>
           <p class="muted">View rosters, missions, and status without editing privileges.</p>
-          <button class="btn" @click="$router.push({ name: 'status' })">Enter as Member</button>
+          <button class="btn" @click="$router.push({ path: '/status' })">Enter as Member</button>
         </div>
 
         <!-- Staff lane -->
         <div class="card">
-          <h2 class="title">Staff Sign-in</h2>
+          <h2 class="title">Officer / Staff</h2>
           <label class="control">
             <span>Username</span>
             <input v-model="username" type="text" autocomplete="username" />
           </label>
           <label class="control">
             <span>Password</span>
-            <input v-model="password" type="password" autocomplete="current-password" @keyup.enter="doLogin" />
+            <input
+              v-model="password"
+              type="password"
+              autocomplete="current-password"
+              @keyup.enter="doLogin"
+            />
           </label>
-          <button class="btn" :disabled="loading" @click="doLogin">{{ loading ? 'Authorizing…' : 'Sign in' }}</button>
+          <button class="btn" :disabled="loading" @click="doLogin">
+            {{ loading ? 'Authorizing…' : 'Sign in' }}
+          </button>
           <p v-if="error" class="err">{{ error }}</p>
           <p v-if="ok" class="ok">Authorized. Redirecting…</p>
         </div>
@@ -35,12 +43,16 @@
 </template>
 
 <script>
-import { loginStaff } from "@/stores/auth";
+import { adminLogin, isAdmin } from "@/utils/adminAuth";
 
 export default {
   name: "LoginView",
   data() {
     return { username: "", password: "", loading: false, error: "", ok: false };
+  },
+  mounted() {
+    // If already authed, bounce to admin
+    if (isAdmin()) this.$router.replace("/admin");
   },
   methods: {
     async doLogin() {
@@ -49,10 +61,13 @@ export default {
       if (!u || !p) { this.error = "Enter username and password."; return; }
       this.loading = true;
       try {
-        await loginStaff(u, p);
+        await adminLogin(u, p);
         this.ok = true;
-        const to = this.$route.query.to || { name: "admin" };
-        setTimeout(() => this.$router.replace(to), 300);
+        const target =
+          typeof this.$route.query.redirect === "string" && this.$route.query.redirect.startsWith("/")
+            ? this.$route.query.redirect
+            : "/admin";
+        setTimeout(() => this.$router.replace(target), 250);
       } catch (e) {
         this.error = String(e?.message || e);
       } finally {
@@ -70,7 +85,7 @@ export default {
 .control { display:grid; gap:.25rem; }
 .control span { color:#9ec5e6; font-size:.9rem; }
 .control input { background:rgba(5,20,40,.85); border:1px solid rgba(30,144,255,.35); border-radius:.35rem; padding:.45rem .55rem; color:#e6f3ff; }
-.btn { border:1px solid rgba(120,255,170,.7); background:rgba(0,30,20,.35); color:#e6fff5; border-radius:.4rem; padding:.45rem .75rem; cursor:pointer; }
+.btn { border:1px solid rgba(120,255,170,.7); background:rgba(0,30,20,.35); color:#e6fff5; border-radius:.4rem; padding:.45rem .75rem; cursor:pointer; text-align:center; }
 .muted { color:#9ec5e6; }
 .err { color:#ffb080; }
 .ok { color:#79ffba; }
