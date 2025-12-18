@@ -1,7 +1,7 @@
 <!-- src/components/layout/Header.vue -->
 <template>
   <header class="hdr-root">
-    <!-- Auth status (left of planet block, matching header style) -->
+    <!-- Auth status (LEFT side of header, matching style) -->
     <div class="auth-status">
       <div class="auth-top">
         <span class="auth-badge" :class="roleClass">
@@ -118,7 +118,6 @@ export default {
     },
   },
   mounted() {
-    // Keep UI in sync with auth changes.
     const push = () => {
       this.authed = !!isAdmin();
       const u = adminUser();
@@ -133,7 +132,6 @@ export default {
   },
   methods: {
     doLogout() {
-      // Critical: immediately hide admin via guards after logout.
       adminLogout();
       this.$router.replace("/status");
     },
@@ -142,9 +140,7 @@ export default {
 </script>
 
 <style scoped>
-.hdr-root {
-  position: relative; /* anchor for auth panel */
-}
+.hdr-root { position: relative; }
 
 /* Align both rows to the same 3-column grid */
 .location-row.grid {
@@ -168,14 +164,14 @@ export default {
   letter-spacing: 0.08em;
 }
 
-/* ---------- Auth status block ---------- */
-/* Positioned into the empty space to the left of planet block.
-   Adjust --auth-right to fine-tune horizontal position if needed. */
+/* ---------- Auth status block (LEFT side) ---------- */
+/* Place it in the blank space left of the planet block, to the right of the title area.
+   Tweak --auth-left to slide horizontally without overlapping anything. */
 .auth-status {
-  --auth-right: 1200px; /* move further left by increasing this; ~planet block width */
+  --auth-left: 540px; /* increase/decrease to nudge; ~width of title cluster */
   position: absolute;
   top: 8px;
-  right: var(--auth-right);
+  left: var(--auth-left);
   display: grid;
   gap: 0.35rem;
   padding: 0.45rem 0.55rem;
@@ -191,7 +187,7 @@ export default {
   grid-template-columns: auto 1fr;
   gap: 0.45rem;
   align-items: center;
-  min-width: 240px; /* tidy text wrapping */
+  min-width: 240px;
 }
 
 .auth-badge {
@@ -220,10 +216,7 @@ export default {
 }
 .muted { color: #9ec5e6; }
 
-.auth-actions {
-  display: flex;
-  gap: 0.4rem;
-}
+.auth-actions { display: flex; gap: 0.4rem; }
 .auth-btn {
   flex: 1 1 auto;
   text-align: center;
