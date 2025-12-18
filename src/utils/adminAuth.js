@@ -1,112 +1,117 @@
 // src/utils/adminAuth.js
-// Centralized staff auth (proxied via Netlify function) + change events
+// Staff auth via Netlify proxy → GAS; session-based (no persistence across full browser restarts)
 
 const ENDPOINT = "/.netlify/functions/gas"; // same-origin → no CORS
 const SECRET = "PLEX";
-const STORAGE_KEY = "staff-auth";
 
-let auth = { token: null, user: null, role: null };
+const STORAGE_KEY = "staff-auth"; // previous localStorage key (we'll purge)
+const SESSION_KEY = "staff-auth-session"; // new sessionStorage key
 
-// --- tiny event bus so Vue can react without importing Vue here ---
+let auth = { token: null, user: null, role: null, exp: 0 };
+
+// --- tiny event bus for reactive consumers (Sidebar etc.)
 const listeners = new Set();
-function notify() {
-  for (const cb of listeners) {
-    try { cb(getSnapshot()); } catch {}
-  }
-}
-export function subscribe(cb) {
-  listeners.add(cb);
-  // immediate fire with current state
-  try { cb(getSnapshot()); } catch {}
-  return () => listeners.delete(cb);
-}
-// ------------------------------------------------------------------
+function notify() { for (const cb of listeners) try { cb(getSnapshot()); } catch {} }
+export function subscribe(cb) { listeners.add(cb); try { cb(getSnapshot()); } catch {}; return () => listeners.delete(cb); }
 
+// snapshot
 function getSnapshot() {
-  // why: return a safe, readonly-ish snapshot for subscribers
-  return {
-    token: auth.token || null,
-    user: auth.user ? { ...auth.user } : null,
-    role: auth.role || null,
-  };
+  return { token: auth.token || null, user: auth.user ? { ...auth.user } : null, role: auth.role || null, exp: auth.exp || 0 };
 }
 
-function loadFromStorage() {
+// migrate: nuke any old localStorage token (persisted across restarts)
+try { localStorage.removeItem(STORAGE_KEY); } catch {}
+
+function loadFromSession() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (isValidAuth(parsed)) auth = parsed;
-    else localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
-  }
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch { try { sessionStorage.removeItem(SESSION_KEY); } catch {} }
 }
-function saveToStorage() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(auth)); } catch {}
+function saveToSession() {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(auth)); } catch {}
 }
 
 function isValidAuth(a) {
-  // why: harden against bogus state making the UI think we're logged in
   if (!a || typeof a !== "object") return false;
-  const t = a.token;
-  const r = (a.role || "").toLowerCase();
-  // our token is HMAC "<data>.<sig>" (has a dot)
-  const tokenLooksRight = typeof t === "string" && t.includes(".");
-  const roleOk = r === "officer" || r === "staff";
-  return tokenLooksRight && roleOk && a.user && typeof a.user.username === "string";
+  const r = String(a.role || "").toLowerCase();
+  if (!(r === "officer" || r === "staff")) return false;
+  if (!a.user || typeof a.user.username !== "string") return false;
+  const t = a.token; if (typeof t !== "string" || !t.includes(".")) return false; // signed "<data>.<sig>"
+  const now = Date.now();
+  // exp required & in future
+  return Number.isFinite(a.exp) && a.exp > now;
 }
 
-loadFromStorage();
-
-// keep tabs in sync
+// keep tabs in sync (multiple tabs)
 try {
   window.addEventListener("storage", (ev) => {
-    if (ev.key !== STORAGE_KEY) return;
-    loadFromStorage();
+    if (ev.key !== SESSION_KEY) return;
+    loadFromSession();
     notify();
   });
 } catch {}
 
+// initial load
+loadFromSession();
+
+// public API
 export async function adminLogin(username, password) {
   const res = await fetch(ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" }, // simple request
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ secret: SECRET, action: "login", username, password }),
   });
   const data = await res.json();
   if (!data?.ok) throw new Error(data?.error || "Login failed");
 
-  const next = {
+  // session-only + TTL (8h)
+  const now = Date.now();
+  const ttlMs = 8 * 60 * 60 * 1000;
+
+  auth = {
     token: data.token,
     user: { username: data.username, displayName: data.displayName },
-    role: (data.role || "staff").toLowerCase(),
+    role: String(data.role || "staff").toLowerCase(),
+    exp: now + ttlMs,
   };
-  auth = next;
-  saveToStorage();
-  notify(); // why: wake up any listeners (sidebar, headers)
+  saveToSession();
+  notify();
   return true;
 }
 
 export function adminLogout() {
-  auth = { token: null, user: null, role: null };
-  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  auth = { token: null, user: null, role: null, exp: 0 };
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
   notify();
 }
 
-// Officer/Staff only (strict)
+// Officer/Staff only
 export function isOfficerOrStaff() {
+  // auto-expire on access
+  if (!isFresh()) { adminLogout(); return false; }
   const r = (auth.role || "").toLowerCase();
   return !!auth.token && (r === "officer" || r === "staff");
 }
+export function isAdmin() { return isOfficerOrStaff(); }
 
-// Router guard uses the same
-export function isAdmin() {
-  return isOfficerOrStaff();
+function isFresh() {
+  return Number.isFinite(auth.exp) && auth.exp > Date.now() && auth.token && String(auth.token).includes(".");
 }
 
-export function adminToken()     { return auth.token || ""; }
-export function adminUser()      { return auth.user; }
-export function adminRole()      { return auth.role || "staff"; }
-export function adminEndpoint()  { return ENDPOINT; }
-export function adminSecret()    { return SECRET; }
+// getters
+export function adminToken()    { return isFresh() ? (auth.token || "") : ""; }
+export function adminUser()     { return isFresh() ? auth.user : null; }
+export function adminRole()     { return isFresh() ? (auth.role || "staff") : "staff"; }
+export function adminEndpoint() { return ENDPOINT; }
+export function adminSecret()   { return SECRET; }
+
+// utility: hard reset (optional usage from console)
+export function __purgeAuth__() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+  adminLogout();
+}
