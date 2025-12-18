@@ -80,15 +80,13 @@ export default {
   props: {
     planetPath: { type: String, required: true },
     header: { type: Object, required: true },
-    /** Horizontal offset (px) for the auth pill; increase to shift right */
-    authOffsetX: { type: Number, default: 315 },
-    /** Vertical offset (px) for the auth pill */
-    authOffsetY: { type: Number, default: 10 },
+    authOffsetX: { type: Number, default: 12 }, // shift right
+    authOffsetY: { type: Number, default: 10 }, // shift down
   },
   data() {
     return {
-      role: null,          // 'member' | 'staff' | null
-      staffUser: null,     // { name?, displayName?, username? } | null
+      role: null,          // 'member' | 'staff' | null (overlay)
+      staffUser: null,     // { username, displayName, name } from admin session
       unsub: null,
     };
   },
@@ -107,8 +105,12 @@ export default {
     },
     displayName() {
       if (!this.isStaff) return "";
-      // prefer real name, then displayName, then username
-      return this.staffUser?.name || this.staffUser?.displayName || this.staffUser?.username || "";
+      // Prefer displayName; then name; then username
+      return (
+        (this.staffUser && (this.staffUser.displayName || this.staffUser.name)) ||
+        (this.staffUser && this.staffUser.username) ||
+        ""
+      );
     },
   },
   created() {
@@ -144,10 +146,9 @@ export default {
 </script>
 
 <style scoped>
-/* Ensure absolute children can anchor inside header */
 header { position: relative; }
 
-/* Auth indicator pill (position via CSS variables for easy shifting) */
+/* Auth indicator pill (position via CSS variables) */
 .auth-indicator {
   position: absolute;
   left: var(--auth-x, 12px);
@@ -164,7 +165,7 @@ header { position: relative; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1;
-  z-index: 2; /* keep above header art */
+  z-index: 2;
 }
 
 .auth-line { display: inline-flex; align-items: center; gap: 6px; }
@@ -193,7 +194,7 @@ header { position: relative; }
 }
 .auth-logout:hover { border-color: rgba(170,255,210,.9); }
 
-/* Existing layout styles you provided */
+/* Existing layout styles */
 .location-row.grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
