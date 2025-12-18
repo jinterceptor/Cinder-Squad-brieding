@@ -1,7 +1,7 @@
 <!-- src/components/layout/Header.vue -->
 <template>
   <header class="hdr-root">
-    <!-- Auth status (top-right, non-intrusive) -->
+    <!-- Auth status (left of planet block, matching header style) -->
     <div class="auth-status">
       <div class="auth-top">
         <span class="auth-badge" :class="roleClass">
@@ -16,7 +16,9 @@
           v-if="!authed"
           class="auth-btn"
           :to="{ path: '/admin/login', query: { redirect: '/admin' } }"
-        >Sign in</router-link>
+        >
+          Sign in
+        </router-link>
         <button v-else class="auth-btn danger" @click="doLogout">Logout</button>
       </div>
     </div>
@@ -30,7 +32,7 @@
           <span id="title-header">UNSC TACNET</span>
         </div>
 
-        <!-- SECONDARY LINE (STILL CONFIG-DRIVEN) -->
+        <!-- SECONDARY LINE (CONFIG-DRIVEN) -->
         <div class="title-row">
           <span id="subtitle-header">{{ header.subheaderTitle }}</span>
           <span id="subtitle-subheader">// {{ header.subheaderSubtitle }}</span>
@@ -41,7 +43,7 @@
     <div class="rhombus"></div>
 
     <div class="planet-location-container">
-      <video autoplay muted loop width="90px" height="90px">
+      <video autoplay muted loop width="90" height="90">
         <source :src="`${planetPath}`" type="video/webm" />
       </video>
 
@@ -116,7 +118,7 @@ export default {
     },
   },
   mounted() {
-    // keep UI in sync with auth changes
+    // Keep UI in sync with auth changes.
     const push = () => {
       this.authed = !!isAdmin();
       const u = adminUser();
@@ -131,7 +133,7 @@ export default {
   },
   methods: {
     doLogout() {
-      // why: ensure route guards hide /admin immediately on log out
+      // Critical: immediately hide admin via guards after logout.
       adminLogout();
       this.$router.replace("/status");
     },
@@ -140,9 +142,8 @@ export default {
 </script>
 
 <style scoped>
-/* Root header container stays as-is; we only add a positioned auth block */
 .hdr-root {
-  position: relative; /* needed for absolute auth panel */
+  position: relative; /* anchor for auth panel */
 }
 
 /* Align both rows to the same 3-column grid */
@@ -167,16 +168,19 @@ export default {
   letter-spacing: 0.08em;
 }
 
-/* --------- Auth status (top-right) --------- */
+/* ---------- Auth status block ---------- */
+/* Positioned into the empty space to the left of planet block.
+   Adjust --auth-right to fine-tune horizontal position if needed. */
 .auth-status {
+  --auth-right: 300px; /* move further left by increasing this; ~planet block width */
   position: absolute;
   top: 8px;
-  right: 12px;
+  right: var(--auth-right);
   display: grid;
   gap: 0.35rem;
   padding: 0.45rem 0.55rem;
   border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.25);
+  background: rgba(0,10,30,0.22);
   border-radius: 0.5rem;
   z-index: 2;
   backdrop-filter: blur(2px);
@@ -187,11 +191,11 @@ export default {
   grid-template-columns: auto 1fr;
   gap: 0.45rem;
   align-items: center;
-  min-width: 220px;
+  min-width: 240px; /* tidy text wrapping */
 }
 
 .auth-badge {
-  min-width: 80px;
+  min-width: 86px;
   text-align: center;
   font-size: 0.78rem;
   padding: 0.12rem 0.5rem;
@@ -199,6 +203,8 @@ export default {
   border: 1px solid rgba(150,190,230,0.35);
   background: rgba(0,10,30,0.25);
   color: #e6f3ff;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 .badge-officer { border-color: rgba(120,255,170,0.7); }
 .badge-staff   { border-color: rgba(120,200,255,0.7); }
@@ -235,8 +241,8 @@ export default {
   color: #ffe9e6;
 }
 
-/* Mobile: tuck badge below title to avoid overlap */
-@media (max-width: 920px) {
+/* Mobile: dock under title to avoid overlap */
+@media (max-width: 1100px) {
   .auth-status {
     position: static;
     margin: 0.5rem 0 0.25rem auto;
