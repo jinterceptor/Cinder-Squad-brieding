@@ -11,39 +11,23 @@
         :reduce="reduce"
         open
       >
-        <!-- STATUS -->
-        <router-link
-          class="clipped-bottom-right"
-          to="/status"
-          @click.native="playBrowse"
-        >
+        <router-link class="clipped-bottom-right" to="/status" @click.native="playBrowse">
           <img src="/icons/orbital.svg" />
           <span>Status</span>
         </router-link>
 
-        <!-- UNIT ROSTER -->
-        <router-link
-          class="clipped-bottom-right"
-          to="/pilots"
-          @click.native="playBrowse"
-        >
+        <router-link class="clipped-bottom-right" to="/pilots" @click.native="playBrowse">
           <img src="/icons/license.svg" />
           <span>Roster</span>
         </router-link>
 
-        <!-- LOGS / EVENTS -->
-        <router-link
-          class="clipped-bottom-right"
-          to="/events"
-          @click.native="playBrowse"
-        >
+        <router-link class="clipped-bottom-right" to="/events" @click.native="playBrowse">
           <img src="/icons/events.svg" />
           <span>Logs</span>
         </router-link>
 
-        <!-- ADMIN (Officer/Staff only) -->
         <router-link
-          v-if="isOfficerOrStaff"
+          v-if="isAuthed"
           class="clipped-bottom-right"
           to="/admin"
           @click.native="playBrowse"
@@ -57,38 +41,25 @@
 </template>
 
 <script>
-import { useAdminAuth } from "@/composables/useAdminAuth";
-
+import { subscribe, isAdmin } from "@/utils/adminAuth";
 let browseAudio;
 
 export default {
   name: "Sidebar",
-  props: {
-    animate: { type: Boolean, required: true },
-  },
-  setup() {
-    const { isOfficerOrStaff } = useAdminAuth(); // why: reactive auth gate
-    return { isOfficerOrStaff };
-  },
+  props: { animate: { type: Boolean, required: true } },
   data() {
-    return {
-      expandOnHover: false,
-      mobile: "reduced",
-      reduce: false,
-    };
+    return { expandOnHover: false, mobile: "reduced", reduce: false, isAuthed: false, unsub: null };
   },
   mounted() {
     browseAudio = new Audio("/sound/Orbat Main Menu Browse.ogg");
     browseAudio.volume = 0.6;
+    const push = () => { this.isAuthed = !!isAdmin(); };
+    this.unsub = subscribe(push);
+    push();
   },
+  beforeUnmount() { if (typeof this.unsub === "function") this.unsub(); },
   methods: {
-    playBrowse() {
-      if (!browseAudio) return;
-      try {
-        browseAudio.currentTime = 0;
-        browseAudio.play().catch(() => {});
-      } catch {}
-    },
+    playBrowse() { if (!browseAudio) return; try { browseAudio.currentTime = 0; browseAudio.play().catch(()=>{}); } catch {} },
   },
 };
 </script>
