@@ -7,6 +7,7 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
+      <!-- Shrink the wrapper to clip the full green plate correctly -->
       <div class="header-shell header-admin">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
@@ -235,13 +236,19 @@ export default {
   },
   data() {
     return {
+      // view flicker
       animateView: false,
       animationDelay: "0ms",
+
       activeKey: "promotions",
+
+      // Promotions
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
+
+      // Discipline API (Netlify proxy)
       discEndpoint: adminEndpoint(),
       discSecret: adminSecret(),
       discLoading: false,
@@ -249,10 +256,14 @@ export default {
       discError: "",
       discOK: false,
       disciplineRows: [],
+
+      // RefData CSV
       troopStatusCsvUrl:
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
       csvStatusIndex: Object.create(null),
       csvTroopIndex: Object.create(null),
+
+      // Discipline filters + editor
       discSearch: "",
       edit: { memberId: null, notes: "", warn: [false, false, false] },
     };
@@ -627,7 +638,7 @@ export default {
     toggleWarn(i) { const next = [...this.edit.warn]; next[i] = !next[i]; this.edit.warn = next; },
     async saveDiscipline() {
       this.discError = ""; this.discOK = false;
-      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
+      const m = (this.members || []).find x => String(x.id || '') === String(this.edit.memberId);
       if (!m) { this.discError = "Select a member."; return; }
       if (!this.isInTroopList(m)) { this.discError = "Member not in Troop List."; return; }
       if (this.isDischarged(this.memberStatusOf(m))) { this.discError = "Cannot edit a discharged member."; return; }
@@ -669,18 +680,19 @@ export default {
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 .rows-scroll { scrollbar-gutter: stable; }
 
-/* Header alignment (matches other views) */
+/* Header alignment shell (matches other views) */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* Narrow only the LEFT “Admin” plate — ~half width */
-.header-admin .section-header {
-  width: 45%;
-  display: inline-block; /* why: allow true width shrink */
-  /* removed min-width so it can actually shrink */
+/* ✅ Shrink only the wrapper to keep chamfer/connector intact */
+.header-admin {
+  width: 38%;          /* tweak as needed */
+  min-width: 220px;
+  display: inline-block;
 }
-@media (max-width: 980px) {
-  .header-admin .section-header { width: 70%; }
-}
+
+/* Prevent wrap & vertical drop of the title */
+.header-admin .section-header { white-space: nowrap; }
+.header-admin .section-header h1 { line-height: 52px; }
 
 /* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
