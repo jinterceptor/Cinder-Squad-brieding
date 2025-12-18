@@ -1,4 +1,4 @@
-name: Staff Admin (diagnostic)
+name: Staff Admin
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
         description: "Username (create/update/delete)"
         required: false
       password:
-        description: "Password (create/update)"
+        description: "Password (create/update; optional for update)"
         required: false
       displayName:
         description: "Display name (create/update)"
@@ -32,6 +32,7 @@ jobs:
           test -n "${{ secrets.GAS_ADMIN_KEY }}"|| (echo "GAS_ADMIN_KEY missing" && exit 1)
 
       - name: Build request body
+        id: build
         env:
           SECRET:   ${{ secrets.GAS_SECRET }}
           ADMINKEY: ${{ secrets.GAS_ADMIN_KEY }}
@@ -62,30 +63,34 @@ jobs:
             *)
               echo "Unknown action: $ACTION"; exit 1;;
           esac
-          echo "$BODY" > body.json
-          echo "Request: $(cat body.json | sed -E 's/\"secret\":\"[^\"]+\"/\"secret\":\"***\"/; s/\"adminKey\":\"[^\"]+\"/\"adminKey\":\"***\"/; s/\"password\":\"[^\"]+\"/\"password\":\"***\"/; s/\"newPassword\":\"[^\"]+\"/\"newPassword\":\"***\"/')"
 
-      - name: Call Apps Script (follows redirects)
+          # Save & print redacted preview
+          echo "$BODY" > body.json
+          echo "Request: $(sed -E 's/"secret":"[^"]+"/"secret":"***"/; s/"adminKey":"[^"]+"/"adminKey":"***"/; s/"password":"[^"]+"/"password":"***"/; s/"newPassword":"[^"]+"/"newPassword":"***"/' body.json)"
+
+      - name: Call Apps Script (follow redirects)
         env:
           ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
         run: |
           set -euo pipefail
-          # Follow redirects (-L); capture response and final HTTP code
           CODE=$(curl -sS -L -o resp.txt -w "%{http_code}" \
             -H 'Content-Type: text/plain;charset=utf-8' \
             --data @body.json \
             "$ENDPOINT")
+
           echo "HTTP $CODE"
           echo "Response:"
           cat resp.txt
           echo
 
-          # Pretty print only if the response looks like JSON
-          if head -c 1 resp.txt | grep -q '{'; then
-            cat resp.txt | jq . || true
-          fi
-
+          # Must be 200
           test "$CODE" = "200"
 
+          # Must be JSON with ok:true
+          jq -e '.ok == true' resp.txt > /dev/null
+
+          # Pretty-print for convenience
+          jq . resp.txt || true
+
       - name: Done
-        run: echo "Diagnostic run complete."
+        run: echo "Success."
