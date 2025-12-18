@@ -1,34 +1,44 @@
 <template>
   <header class="hdr-root">
-    <!-- Auth status (LEFT side, styled to match header) -->
+    <!-- Auth status (LEFT side, styled like header widgets) -->
     <div class="auth-status">
+      <!-- clipped corner accent -->
+      <span class="auth-corner" aria-hidden="true"></span>
+
       <div class="auth-top">
         <span class="auth-badge" :class="roleClass">
           <span v-if="authed">{{ roleLabel }}</span>
-          <span v-else>Guest</span>
+          <span v-else>GUEST</span>
         </span>
+
         <span class="auth-name" v-if="authed">{{ displayName }}</span>
-        <span class="auth-name muted" v-else>Not signed in</span>
+        <span class="auth-name muted" v-else>NOT SIGNED IN</span>
       </div>
 
-      <div class="auth-divider"></div>
+      <div class="auth-accent" aria-hidden="true"></div>
 
       <div class="auth-actions">
         <router-link
           v-if="!authed"
           class="auth-btn"
           :to="{ path: '/admin/login', query: { redirect: '/admin' } }"
-        >Sign in</router-link>
+        >
+          Sign in
+        </router-link>
         <button v-else class="auth-btn danger" @click="doLogout">Logout</button>
       </div>
     </div>
 
     <div class="title clipped-x-large-forward">
       <img class="logo" src="/faction-logos/Broadsword111.png" />
+
       <div class="title-container">
+        <!-- PRIMARY TITLE (FIXED) -->
         <div id="title-first-line" class="title-row">
           <span id="title-header">UNSC TACNET</span>
         </div>
+
+        <!-- SECONDARY LINE (CONFIG-DRIVEN) -->
         <div class="title-row">
           <span id="subtitle-header">{{ header.subheaderTitle }}</span>
           <span id="subtitle-subheader">// {{ header.subheaderSubtitle }}</span>
@@ -44,26 +54,31 @@
       </video>
 
       <div class="location-info">
+        <!-- ROW 1 -->
         <div class="location-row grid">
           <div id="year">
             <h4>Year</h4>
             <span class="subtitle">{{ header.year }}</span>
           </div>
+
           <div id="status" class="span-2">
             <h4>Status</h4>
             <span class="subtitle">{{ header.status }}</span>
           </div>
         </div>
 
+        <!-- ROW 2 -->
         <div class="location-row grid">
           <div id="AO">
             <h4>AO</h4>
             <span class="subtitle">{{ header.AO }}</span>
           </div>
+
           <div id="planet">
             <h4>Planet</h4>
             <span class="subtitle">{{ header.planet }}</span>
           </div>
+
           <div id="system">
             <h4>System</h4>
             <span class="subtitle">{{ header.system }}</span>
@@ -75,7 +90,13 @@
 </template>
 
 <script>
-import { subscribe, adminUser, adminRole, isAdmin, adminLogout } from "@/utils/adminAuth";
+import {
+  subscribe,
+  adminUser,
+  adminRole,
+  isAdmin,
+  adminLogout,
+} from "@/utils/adminAuth";
 
 export default {
   name: "Header",
@@ -84,7 +105,12 @@ export default {
     header: { type: Object, required: true },
   },
   data() {
-    return { authed: false, displayName: "", role: "staff", unsub: null };
+    return {
+      authed: false,
+      displayName: "",
+      role: "staff",
+      unsub: null,
+    };
   },
   computed: {
     roleLabel() {
@@ -107,9 +133,15 @@ export default {
     this.unsub = subscribe(push);
     push();
   },
-  beforeUnmount() { if (typeof this.unsub === "function") this.unsub(); },
+  beforeUnmount() {
+    if (typeof this.unsub === "function") this.unsub();
+  },
   methods: {
-    doLogout() { adminLogout(); this.$router.replace("/status"); },
+    doLogout() {
+      // keep guards snappy
+      adminLogout();
+      this.$router.replace("/status");
+    },
   },
 };
 </script>
@@ -117,7 +149,7 @@ export default {
 <style scoped>
 .hdr-root { position: relative; }
 
-/* Grid tweaks kept from your original */
+/* ==== existing header layout rules kept as-is ==== */
 .location-row.grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -132,54 +164,82 @@ export default {
 }
 .subtitle { font-size: 0.85rem; letter-spacing: 0.08em; }
 
-/* ---------- Auth status (LEFT), tuned to 750px ---------- */
+/* ==== AUTH TILE (LEFT) – styled to match header widgets ==== */
 .auth-status{
-  --auth-left: 750px;  /* <- requested position */
+  /* place in the gap to the right of the title cluster */
+  --auth-left: 750px; /* you found this sweet spot */
   position: absolute;
   top: 8px;
   left: var(--auth-left);
-  display: grid;
-  gap: .45rem;
-  min-width: 260px;
 
-  /* match header styling */
-  padding: .5rem .65rem;
-  background:
-    linear-gradient(180deg, rgba(6,20,36,.78), rgba(6,20,36,.55));
-  border: 1px solid rgba(30,144,255,.45);
-  border-radius: .5rem;
-  box-shadow: 0 0 0 1px rgba(0,0,0,.35) inset;
-  backdrop-filter: blur(2px);
+  display: grid;
+  gap: .5rem;
+  min-width: 280px;
+
+  /* glassy header panel look */
+  padding: .55rem .7rem;
+  background: linear-gradient(180deg, rgba(6,20,36,.86), rgba(6,20,36,.62));
+  border: 1px solid rgba(23,118,178,.55);              /* cyan-ish like other header outlines */
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.45) inset,
+    0 1px 0 rgba(120,200,255,.10);
 }
 
+/* clipped corner marker (mirrors header's clipped styles) */
+.auth-corner{
+  position: absolute;
+  top: -1px; left: -1px;
+  width: 12px; height: 12px;
+  background: linear-gradient(135deg, rgba(32,106,86,.9), rgba(32,106,86,.35));
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  border-right: 1px solid rgba(23,118,178,.55);
+  border-bottom: 1px solid rgba(23,118,178,.55);
+}
+
+/* top row */
 .auth-top{
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: .5rem;
+  gap: .55rem;
   align-items: center;
 }
 
+/* slim accent bar (echoes header separators) */
+.auth-accent{
+  height: 6px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(30,144,255,.25) 0px,
+      rgba(30,144,255,.25) 12px,
+      transparent 12px,
+      transparent 24px
+    );
+  box-shadow: 0 1px 0 rgba(0,0,0,.35) inset;
+}
+
+/* badge = small pill matching header labels */
 .auth-badge{
-  min-width: 92px;
+  min-width: 96px;
   text-align: center;
   font-size: .78rem;
-  padding: .14rem .55rem;
+  padding: .14rem .6rem;
   border-radius: 999px;
-
-  /* pill look consistent with header labels */
-  border: 1px solid rgba(150,190,230,.45);
-  background: rgba(0,18,36,.5);
-  color: #e6f3ff;
+  border: 1px solid rgba(150,190,230,.55);
+  background: rgba(0,18,36,.55);
+  color: #E6F3FF;
   text-transform: uppercase;
-  letter-spacing: .1em;
+  letter-spacing: .12em;
 }
-.badge-officer{ border-color: rgba(120,255,170,.75); }
-.badge-staff  { border-color: rgba(120,200,255,.75); }
-.badge-guest  { border-color: rgba(150,190,230,.45); }
+.badge-officer{ border-color: rgba(120,255,170,.8); }
+.badge-staff  { border-color: rgba(120,200,255,.8); }
+.badge-guest  { border-color: rgba(150,190,230,.55); }
 
 .auth-name{
   min-width: 0;
-  color: #e6f3ff;
+  color: #E6F3FF;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -188,41 +248,28 @@ export default {
 }
 .muted{ color:#9ec5e6; }
 
-/* thin divider echoing header accents */
-.auth-divider{
-  height: 6px;
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(30,144,255,.22) 0px,
-    rgba(30,144,255,.22) 10px,
-    transparent 10px,
-    transparent 20px
-  );
-  border-radius: 2px;
-}
-
-/* Buttons align with your UI tone */
-.auth-actions{ display: flex; gap: .45rem; }
+/* actions */
+.auth-actions{ display: flex; gap: .5rem; }
 .auth-btn{
   flex: 1 1 auto;
   text-align: center;
   border: 1px solid rgba(120,255,170,.7);
-  background: rgba(0,30,20,.35);
-  color: #e6fff5;
-  border-radius: .4rem;
+  background: rgba(0,30,20,.38);
+  color: #E6FFF5;
+  border-radius: 6px;
   padding: .34rem .55rem;
   cursor: pointer;
   font-size: .88rem;
   letter-spacing: .04em;
 }
-.auth-btn:hover{ filter: brightness(1.05); }
+.auth-btn:hover{ filter: brightness(1.06); }
 .auth-btn.danger{
-  border-color: rgba(255,130,120,.75);
-  background: rgba(30,0,0,.35);
-  color: #ffe9e6;
+  border-color: rgba(255,130,120,.8);
+  background: rgba(30,0,0,.38);
+  color: #FFE9E6;
 }
 
-/* Mobile: dock below title */
+/* mobile: dock under title */
 @media (max-width: 1100px){
   .auth-status{ position: static; margin: .5rem 0 .25rem auto; }
 }
