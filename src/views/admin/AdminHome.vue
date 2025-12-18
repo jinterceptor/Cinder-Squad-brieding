@@ -384,3 +384,102 @@ export default {
           status: this.normalizeStatus(r.status || r.troopStatus),
           warnCount: (String(r.warnings||'N, N, N').split(',').filter(s=>s.trim().toUpperCase()==='Y')).length,
         }));
+      } catch (e) { this.discError=String(e?.message||e); } finally { this.discLoading=false; }
+    },
+    focusMemberByNameKey(nk){
+      const m=(this.members||[]).find(x=>this.nameKey(this.cleanMemberName(x?.name))===nk); if(!m) return;
+      if(!this.isInTroopList(m)) return; if(this.isDischarged(this.memberStatusOf(m))) return;
+      this.edit.memberId=m.id||null; this.populateEditFromMember();
+    },
+    populateEditFromMember(){
+      const m=(this.members||[]).find(x=>String(x.id||'')===String(this.edit.memberId));
+      if(!m){ this.edit.notes=''; this.edit.warn=[false,false,false]; return; }
+      const nk=this.nameKey(this.cleanMemberName(m.name)); const api=(this.disciplineRows||[]).find(r=>(r.nameKey)===nk);
+      const warnings=(api?.warnings||'N, N, N').split(',').map(s=>s.trim().toUpperCase()); this.edit.notes=api?.notes||''; this.edit.warn=[0,1,2].map(i=>warnings[i]==='Y');
+    },
+    toggleWarn(i){ if(this.role==='officer') return; const next=[...this.edit.warn]; next[i]=!next[i]; this.edit.warn=next; },
+    warnArrayToString(arr){ const a=Array.isArray(arr)?arr:[false,false,false]; const out=a.slice(0,3).map(x=>(x?'Y':'N')); while(out.length<3) out.push('N'); return out.join(', '); },
+
+    async saveDiscipline(){
+      this.discError=""; this.discOK=false;
+      const m=(this.members||[]).find(x=>String(x.id||'')===String(this.edit.memberId)); if(!m){ this.discError="Select a member."; return; }
+      if(!this.isInTroopList(m)){ this.discError="Member not in Troop List."; return; }
+      if(this.isDischarged(this.memberStatusOf(m))){ this.discError="Cannot edit a discharged member."; return; }
+
+      const user = adminUser();
+      const payload = {
+        secret: this.discSecret, action: "saveDiscipline", token: adminToken(),
+        editor: user?.displayName || user?.username || "unknown",
+        name: m.name || '', nameKey: this.nameKey(this.cleanMemberName(m.name || '')),
+        notes: (this.edit.notes || '').trim(),
+        warnings: this.warnArrayToString(this.edit.warn),
+      };
+
+      this.discSaving = true;
+      try {
+        const res = await fetch(this.discEndpoint, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+        const data = await res.json(); if(!data?.ok) throw new Error(data?.error || 'Save failed');
+        this.discOK = true; await this.loadDiscipline();
+      } catch (e) { this.discError=String(e?.message||e); }
+      finally { this.discSaving=false; setTimeout(()=> (this.discOK=false), 1500); }
+    },
+
+    /* Staff management calls (staff only) */
+    async listStaff(){ this.staffBusy=true; this.staffError=""; this.staffOK=false;
+      try {
+        const res = await fetch(this.discEndpoint, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ secret:this.discSecret, action:'staff:list', token: adminToken() }) });
+        const data = await res.json(); if(!data?.ok) throw new Error(data?.error||'Failed to list');
+        this.staffUsers = data.users || [];
+      } catch (e) { this.staffError=String(e?.message||e); }
+      finally { this.staffBusy=false; }
+    },
+    async createStaff(){ if(!this.canManageStaff) return; this.staffBusy=true; this.staffError=""; this.staffOK=false;
+      try {
+        const f=this.staffForm;
+        if(!f.username || !f.password) throw new Error('Username and password required');
+        const res = await fetch(this.discEndpoint, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ secret:this.discSecret, action:'staff:create', token: adminToken(), username:f.username.trim(), password:f.password, displayName:f.displayName||f.username.trim(), role:f.role }) });
+        const data = await res.json(); if(!data?.ok) throw new Error(data?.error||'Failed to create');
+        this.staffOK=true; await this.listStaff();
+      } catch(e){ this.staffError=String(e?.message||e); }
+      finally { this.staffBusy=false; setTimeout(()=>this.staffOK=false,1200); }
+    },
+    async updateStaff(){ if(!this.canManageStaff) return; this.staffBusy=true; this.staffError=""; this.staffOK=false;
+      try {
+        const f=this.staffForm; if(!f.username) throw new Error('Username required');
+        const res = await fetch(this.discEndpoint, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ secret:this.discSecret, action:'staff:update', token: adminToken(), username:f.username.trim(), displayName:f.displayName, role:f.role, newPassword: f.password || undefined }) });
+        const data = await res.json(); if(!data?.ok) throw new Error(data?.error||'Failed to update');
+        this.staffOK=true; this.staffForm.password=''; await this.listStaff();
+      } catch(e){ this.staffError=String(e?.message||e); }
+      finally { this.staffBusy=false; setTimeout(()=>this.staffOK=false,1200); }
+    },
+    async deleteStaff(){ if(!this.canManageStaff) return; if(!this.staffForm.username) { this.staffError='Username required'; return; }
+      if(!confirm(`Delete user "${this.staffForm.username}"?`)) return;
+      this.staffBusy=true; this.staffError=""; this.staffOK=false;
+      try {
+        const res = await fetch(this.discEndpoint, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ secret:this.discSecret, action:'staff:delete', token: adminToken(), username:this.staffForm.username.trim() }) });
+        const data = await res.json(); if(!data?.ok) throw new Error(data?.error||'Failed to delete');
+        this.staffOK=true; this.staffForm={ username:"", password:"", displayName:"", role:"officer" }; await this.listStaff();
+      } catch(e){ this.staffError=String(e?.message||e); }
+      finally { this.staffBusy=false; setTimeout(()=>this.staffOK=false,1200); }
+    },
+    prefill(u){ this.staffForm.username=u.username; this.staffForm.displayName=u.displayName; this.staffForm.role=u.role; this.staffForm.password=""; },
+    resetPwdPrompt(u){ const p=prompt(`New password for ${u.username}`); if(!p) return; this.staffForm.username=u.username; this.staffForm.password=p; this.updateStaff(); },
+    confirmDelete(u){ this.staffForm.username=u.username; this.deleteStaff(); },
+  },
+  watch: {
+    activeKey(n) { if (n==='staff' && this.canManageStaff) this.listStaff(); }
+  }
+};
+</script>
+
+<style scoped>
+/* Keep your existing styles; additions below */
+.user-pill { font-size:.85rem; color:#9ec5e6; }
+.btn-xs { font-size:.8rem; padding:.15rem .4rem; border:1px solid rgba(30,144,255,.35); background:rgba(0,10,30,.35); border-radius:.35rem; margin-right:.25rem; }
+.btn-xs.danger { border-color: rgba(255,90,90,.7); }
+.gridStaff { display:grid; grid-template-columns: 1fr 1.2fr .8fr 1fr 1fr 1fr; align-items:center; }
+</style>
