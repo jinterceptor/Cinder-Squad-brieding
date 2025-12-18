@@ -81,7 +81,7 @@ export default {
     planetPath: { type: String, required: true },
     header: { type: Object, required: true },
     /** Horizontal offset (px) for the auth pill; increase to shift right */
-    authOffsetX: { type: Number, default: 300 },
+    authOffsetX: { type: Number, default: 350 },
     /** Vertical offset (px) for the auth pill */
     authOffsetY: { type: Number, default: 10 },
   },
