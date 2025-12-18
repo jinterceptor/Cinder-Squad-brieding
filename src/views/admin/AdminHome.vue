@@ -1,7 +1,7 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
   <div class="windows-grid">
-    <!-- LEFT WINDOW: Admin nav -->
+    <!-- LEFT: compact nav window (no password box) -->
     <section class="section-container left-window">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/protocol.svg" alt="" />
@@ -10,8 +10,9 @@
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container">
-        <!-- Tiles only (no password box). Route guard ensures auth. -->
-        <div v-if="isAuthed" class="rail">
+        <div v-if="!isAuthed" class="muted">Staff only.</div>
+
+        <div v-else class="rail">
           <button
             v-for="s in sections"
             :key="s.key"
@@ -23,7 +24,7 @@
               <img :src="s.icon" class="rail-icon" alt="" />
               <div class="rail-title">{{ s.title }}</div>
             </div>
-            <div v-if="s.preview && s.preview.length" class="rail-card-body">
+            <div v-if="s.preview?.length" class="rail-card-body">
               <div v-for="line in s.preview" :key="line.label" class="rail-line">
                 <span class="label">{{ line.label }}</span>
                 <span class="pill" :class="line.kind">{{ line.value }}</span>
@@ -32,11 +33,10 @@
             </div>
           </button>
         </div>
-        <div v-else class="muted">Staff only.</div>
       </div>
     </section>
 
-    <!-- RIGHT WINDOW -->
+    <!-- RIGHT: main window -->
     <section class="section-container right-window">
       <div class="section-header clipped-medium-backward right-header">
         <img src="/icons/protocol.svg" alt="" />
@@ -85,7 +85,7 @@
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table: fixed header, scroll body -->
+          <!-- Sticky head + scroll body -->
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head grid6">
@@ -96,14 +96,20 @@
                 <span class="th next">Next Rank</span>
                 <span class="th prog">Progress</span>
               </div>
+
               <div class="rows-scroll">
                 <div v-for="row in promotionsTable" :key="row.id || row.name" class="tr grid6">
                   <span class="td name">{{ row.name }}</span>
                   <span class="td rank">{{ row.rank }}</span>
-                  <span class="td squad">{{ row.squad || '—' }}</span>
-                  <span class="td ops"><span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span><span v-else class="muted">N/A</span></span>
+                  <span class="td squad">{{ row.squad || "—" }}</span>
+                  <span class="td ops">
+                    <span v-if="Number.isFinite(row.ops)">{{ row.ops }}</span>
+                    <span v-else class="muted">N/A</span>
+                  </span>
                   <span class="td next">
-                    <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
+                    <span v-if="row.nextRank">
+                      {{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small>
+                    </span>
                     <span v-else class="muted">—</span>
                   </span>
                   <span class="td prog">
@@ -112,12 +118,14 @@
                     </div>
                   </span>
                 </div>
+
+                <div v-if="!promotionsTable.length" class="empty">No results.</div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Discipline (notes + warnings) -->
+        <!-- Discipline -->
         <div v-else-if="activeKey === 'discipline'" class="promotions-panel">
           <div class="filters">
             <div class="row">
@@ -127,23 +135,20 @@
               </label>
               <div class="control" style="align-self:end">
                 <span>&nbsp;</span>
-                <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">{{ discLoading ? 'Refreshing…' : 'Refresh' }}</button>
+                <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">
+                  {{ discLoading ? "Refreshing…" : "Refresh" }}
+                </button>
               </div>
             </div>
           </div>
 
-          <!-- Editor -->
           <div class="flag-form">
             <div class="row">
               <label class="control">
                 <span>Member</span>
                 <select v-model="edit.memberId" @change="populateEditFromMember">
                   <option :value="null">Select member…</option>
-                  <option
-                    v-for="m in membersSortedNonDischarged"
-                    :key="m.id || m.name"
-                    :value="m.id || null"
-                  >
+                  <option v-for="m in membersSortedNonDischarged" :key="m.id || m.name" :value="m.id || null">
                     {{ m.name }} <span v-if="m.squad">— {{ m.squad }}</span>
                   </option>
                 </select>
@@ -152,9 +157,9 @@
               <label class="control">
                 <span>Warnings (3 slots)</span>
                 <div class="warn-toggle">
-                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" :aria-pressed="!!edit.warn[0]" aria-label="Toggle warning 1" title="Warning 1">1</button>
-                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" :aria-pressed="!!edit.warn[1]" aria-label="Toggle warning 2" title="Warning 2">2</button>
-                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" :aria-pressed="!!edit.warn[2]" aria-label="Toggle warning 3" title="Warning 3">3</button>
+                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)">1</button>
+                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)">2</button>
+                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)">3</button>
                 </div>
               </label>
             </div>
@@ -166,14 +171,13 @@
 
             <div class="row end">
               <button class="btn-sm" @click="saveDiscipline" :disabled="discSaving || !edit.memberId">
-                {{ discSaving ? 'Saving…' : 'Save' }}
+                {{ discSaving ? "Saving…" : "Save" }}
               </button>
               <p v-if="discError" class="login-error" style="margin:0">{{ discError }}</p>
               <p v-if="discOK" class="ok-text" style="margin:0">Saved.</p>
             </div>
           </div>
 
-          <!-- List -->
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head gridFlags">
@@ -183,6 +187,7 @@
                 <span class="th">Warnings</span>
                 <span class="th">Notes</span>
               </div>
+
               <div class="rows-scroll">
                 <div
                   v-for="r in discFiltered"
@@ -191,33 +196,29 @@
                   :class="['warn-row', 'warn-'+r.warnCount]"
                   @click="focusMemberByNameKey(r.nameKey)"
                   style="cursor:pointer"
-                  :title="'Click to edit '+r.name"
                 >
                   <span class="td">{{ r.name }}</span>
-                  <span class="td">{{ r.squad || '—' }}</span>
+                  <span class="td">{{ r.squad || "—" }}</span>
                   <span class="td">
-                    <span class="status-pill" :class="'st-' + statusClass(r.status)">{{ r.status || 'Unknown' }}</span>
+                    <span class="status-pill" :class="'st-' + statusClass(r.status)">{{ r.status || "Unknown" }}</span>
                   </span>
                   <span class="td warncells">
                     <div class="warn-badges" :class="'w'+r.warnCount" aria-label="Warnings">
-                      <span class="dot" :class="{ on: r.warnBits[0] }" title="Warning 1"></span>
-                      <span class="dot" :class="{ on: r.warnBits[1] }" title="Warning 2"></span>
-                      <span class="dot" :class="{ on: r.warnBits[2] }" title="Warning 3"></span>
+                      <span class="dot" :class="{ on: r.warnBits[0] }"></span>
+                      <span class="dot" :class="{ on: r.warnBits[1] }"></span>
+                      <span class="dot" :class="{ on: r.warnBits[2] }"></span>
                     </div>
                   </span>
-                  <span class="td">{{ r.notes || '—' }}</span>
+                  <span class="td">{{ r.notes || "—" }}</span>
                 </div>
+
                 <div v-if="!discFiltered.length && !discLoading" class="empty">No entries.</div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Future pages -->
-        <div v-else-if="activeKey === 'audits'">
-          <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
-        </div>
-
+        <!-- Placeholder for future tools -->
         <div v-else class="muted">Select a tool from the left.</div>
       </div>
     </section>
@@ -238,13 +239,13 @@ export default {
     return {
       activeKey: "promotions",
 
-      // Promotions
+      // Promotions UI
       search: "",
       selectedSquad: "__ALL__",
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API (Netlify proxy)
+      // Discipline API (unchanged endpoints)
       discEndpoint: adminEndpoint(),
       discSecret: adminSecret(),
       discLoading: false,
@@ -259,7 +260,6 @@ export default {
       csvStatusIndex: Object.create(null),
       csvTroopIndex: Object.create(null),
 
-      // Discipline filters + editor
       discSearch: "",
       edit: { memberId: null, notes: "", warn: [false, false, false] },
     };
@@ -273,46 +273,46 @@ export default {
   computed: {
     isAuthed() { return isAdmin(); },
 
-    nameKey() {
-      return (name) =>
-        String(name || "")
-          .replace(/["'.]/g, "")
-          .replace(/\s+/g, " ")
-          .trim()
-          .toUpperCase();
+    windowTitle() {
+      if (!this.isAuthed) return "Locked";
+      return { promotions: "PROMOTIONS OVERVIEW", discipline: "DISCIPLINE (NOTES & WARNINGS)" }[this.activeKey] || "ADMIN TOOLS";
     },
-    cleanMemberName() {
-      return (name) => String(name || "").replace(/\s*[\(\[].*?[\)\]]\s*$/g, "").trim();
-    },
-    rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
 
+    sections() {
+      return [
+        {
+          key: "promotions",
+          title: "Promotions Overview",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
+            { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
+          ],
+        },
+        {
+          key: "discipline",
+          title: "Discipline",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Members w/ notes", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
+            { label: "Any warnings", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
+          ],
+        },
+      ];
+    },
+
+    nameKey() { return (n) => String(n || "").replace(/["'.]/g, "").replace(/\s+/g, " ").trim().toUpperCase(); },
+    cleanMemberName() { return (name) => String(name || "").replace(/\s*[\(\[].*?[\)\]]\s*$/g, "").trim(); },
+    rankKey() { return (r) => String(r || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
     normalizeStatus() {
-      const pretty = {
-        ACTIVE: "Active", RESERVE: "Reserve", ELOA: "ELOA", OTHER: "Other",
-        INACTIVE: "Inactive", UNKNOWN: "Unknown", DISCHARGED: "Discharged",
-      };
+      const pretty = { ACTIVE:"Active", RESERVE:"Reserve", ELOA:"ELOA", OTHER:"Other", INACTIVE:"Inactive", DISCHARGED:"Discharged", UNKNOWN:"Unknown" };
       return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
     },
 
-    statusIndexFromApi() {
-      const idx = Object.create(null);
-      (this.disciplineRows || []).forEach(r => {
-        const nk = r.nameKey || this.nameKey(r.name || "");
-        const s = this.normalizeStatus(r.status || r.troopStatus);
-        if (nk) idx[nk] = s;
-      });
-      return idx;
-    },
-    statusIndex() {
-      return new Proxy({}, {
-        get: (_, k) => this.csvStatusIndex[k] ?? this.statusIndexFromApi[k],
-        has: (_, k) => (k in this.csvStatusIndex) || (k in this.statusIndexFromApi)
-      });
-    },
     memberStatusOf() {
       return (m) => {
         const nk = this.nameKey(this.cleanMemberName(m?.name));
-        return this.statusIndex[nk] || "Unknown";
+        return this.csvStatusIndex[nk] || "Unknown";
       };
     },
     isDischarged() { return (status) => String(status || "").toLowerCase() === "discharged"; },
@@ -343,237 +343,74 @@ export default {
     },
 
     membershipIndex() {
-      const idx = Object.create(null);
-      const nk = this.nameKey;
-      const addMember = (squadName, m) => {
-        if (!m) return;
-        if (m.id != null) idx[`ID:${m.id}`] = squadName;
-        if (m.name) idx[`NM:${nk(m.name)}`] = squadName;
-      };
-      (this.orbat || []).forEach((sq) => {
-        const squadName = String(sq?.squad || "").trim();
-        if (!squadName) return;
-        (sq?.fireteams || []).forEach((ft) => (ft?.slots || []).forEach((slot) => addMember(squadName, slot?.member)));
-        (sq?.members || []).forEach((m) => addMember(squadName, m));
+      const idx = Object.create(null), nk = this.nameKey;
+      const add = (squadName, m) => { if (!m) return; if (m.id != null) idx[`ID:${m.id}`]=squadName; if (m.name) idx[`NM:${nk(m.name)}`]=squadName; };
+      (this.orbat || []).forEach((sq)=>{ const s=String(sq?.squad||"").trim(); if(!s) return;
+        (sq.fireteams||[]).forEach(ft=>(ft.slots||[]).forEach(sl=>add(s, sl?.member)));
+        (sq.members||[]).forEach(add.bind(null,s));
       });
       return idx;
     },
 
     squads() {
       const set = new Set();
-      (this.orbat || []).forEach((sq) => {
-        const s = String(sq?.squad || "").trim();
-        if (s) set.add(s);
-      });
-      (this.members || []).forEach((m) => {
-        const s = String(m?.squad || "").trim();
-        if (s) set.add(s);
-      });
-      return Array.from(set).sort((a, b) => a.localeCompare(b));
-    },
-
-    membersSorted() {
-      return [...(this.members || [])]
-        .filter(m => this.isInTroopList(m) && !this.isDischarged(this.memberStatusOf(m)))
-        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
-    },
-    membersSortedNonDischarged() { return this.membersSorted; },
-
-    windowTitle() {
-      if (!this.isAuthed) return "Locked";
-      return {
-        promotions: "PROMOTIONS OVERVIEW",
-        discipline: "DISCIPLINE (NOTES & WARNINGS)",
-        audits: "ROSTER AUDITS",
-      }[this.activeKey] || "ADMIN TOOLS";
-    },
-    sections() {
-      return [
-        {
-          key: "promotions",
-          title: "Promotions Overview",
-          icon: "/icons/protocol.svg",
-          preview: [
-            { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
-            { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
-          ],
-        },
-        {
-          key: "discipline",
-          title: "Discipline",
-          icon: "/icons/protocol.svg",
-          preview: [
-            { label: "Members w/ notes", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
-            { label: "Any warnings", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
-          ],
-        },
-        { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
-      ];
+      (this.orbat || []).forEach((sq)=>{ const s=String(sq?.squad||"").trim(); if(s) set.add(s); });
+      (this.members || []).forEach((m)=>{ const s=String(m?.squad||"").trim(); if(s) set.add(s); });
+      return Array.from(set).sort((a,b)=>a.localeCompare(b));
     },
 
     nextPromotion() {
-      const alias = {
-        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
-        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
-        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
-        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
-        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
-        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3", HOSPITALCORPSMANSECONDCLASS: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1", CHIEFHOSPITALCORPSMAN: "HMC",
-        WARRANTOFFICER: "WO", CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
-      };
-      const rules = {
-        PVT:{nextRank:"PFC",nextAt:10}, PFC:{nextRank:"SPC",nextAt:20}, SPC:{nextRank:"SPC2",nextAt:30},
-        SPC2:{nextRank:"SPC3",nextAt:40}, SPC3:{nextRank:"SPC4",nextAt:50}, SPC4:{nextRank:"LCpl",nextAt:null},
-        LCPL:{nextRank:"Cpl",nextAt:null}, CPL:{nextRank:"Sgt",nextAt:null}, SGT:{nextRank:"SSgt",nextAt:null},
-        SSGT:{nextRank:"GySgt",nextAt:null}, GYSGT:{nextRank:"2ndLt",nextAt:null}, "2NDLT":{nextRank:"1stLt",nextAt:null},
-        "1STLT":{nextRank:"Capt",nextAt:null}, CAPT:{nextRank:null,nextAt:null},
-        HA:{nextRank:"HN",nextAt:10}, HN:{nextRank:"HM3",nextAt:20}, HM3:{nextRank:"HM2",nextAt:30},
-        HM2:{nextRank:"HM1",nextAt:null}, HM1:{nextRank:"HMC",nextAt:null}, HMC:{nextRank:null,nextAt:null},
-        WO:{nextRank:"CWO2",nextAt:10}, CWO2:{nextRank:"CWO3",nextAt:20}, CWO3:{nextRank:"CWO4",nextAt:30},
-        CWO4:{nextRank:"CWO5",nextAt:null}, CWO5:{nextRank:null,nextAt:null},
-      };
-      return (member) => {
-        const rk = alias[this.rankKey(member?.rank)] || this.rankKey(member?.rank);
-        return rules[rk] || { nextRank: null, nextAt: null };
-      };
+      const alias = { PRIVATE:"PVT",PRIVATEFIRSTCLASS:"PFC",SPECIALIST:"SPC",SPECIALIST2:"SPC2",SPECIALIST3:"SPC3",SPECIALIST4:"SPC4",LANCECORPORAL:"LCPL",CORPORAL:"CPL",SERGEANT:"SGT",STAFFSERGEANT:"SSGT",GUNNYSERGEANT:"GYSGT",SECONDLIEUTENANT:"2NDLT",FIRSTLIEUTENANT:"1STLT",CAPTAIN:"CAPT",HOSPITALMANAPPRENTICE:"HA",HOSPITALMAN:"HN",HOSPITALCORPSMANTHIRDCLASS:"HM3",HOSPITALCORPSMANSECONDCLASS:"HM2",HOSPITALCORPSMANFIRSTCLASS:"HM1",CHIEFHOSPITALCORPSMAN:"HMC",WARRANTOFFICER:"WO",CHIEFWARRANTOFFICER2:"CWO2",CHIEFWARRANTOFFICER3:"CWO3",CHIEFWARRANTOFFICER4:"CWO4",CHIEFWARRANTOFFICER5:"CWO5" };
+      const rules = { PVT:{nextRank:"PFC",nextAt:10}, PFC:{nextRank:"SPC",nextAt:20}, SPC:{nextRank:"SPC2",nextAt:30}, SPC2:{nextRank:"SPC3",nextAt:40}, SPC3:{nextRank:"SPC4",nextAt:50}, SPC4:{nextRank:"LCpl",nextAt:null}, LCPL:{nextRank:"Cpl",nextAt:null}, CPL:{nextRank:"Sgt",nextAt:null}, SGT:{nextRank:"SSgt",nextAt:null}, SSGT:{nextRank:"GySgt",nextAt:null}, GYSGT:{nextRank:"2ndLt",nextAt:null}, "2NDLT":{nextRank:"1stLt",nextAt:null}, "1STLT":{nextRank:"Capt",nextAt:null}, CAPT:{nextRank:null,nextAt:null}, HA:{nextRank:"HN",nextAt:10}, HN:{nextRank:"HM3",nextAt:20}, HM3:{nextRank:"HM2",nextAt:30}, HM2:{nextRank:"HM1",nextAt:null}, HM1:{nextRank:"HMC",nextAt:null}, HMC:{nextRank:null,nextAt:null}, WO:{nextRank:"CWO2",nextAt:10}, CWO2:{nextRank:"CWO3",nextAt:20}, CWO3:{nextRank:"CWO4",nextAt:30}, CWO4:{nextRank:"CWO5",nextAt:null}, CWO5:{nextRank:null,nextAt:null} };
+      return (m)=>{ const rk = alias[this.rankKey(m?.rank)] || this.rankKey(m?.rank); return rules[rk] || { nextRank:null, nextAt:null }; };
     },
+    rankScore(){ const order=["MAJ","CAPT","1STLT","2NDLT","CWO5","CWO4","CWO3","CWO2","WO","GYSGT","SSGT","SGT","CPL","LCPL","SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT","HMC","HM1","HM2","HM3","HN","HA","HR"]; return (r)=>{ const idx=order.indexOf(this.rankKey(r)); return idx===-1?999:idx; }; },
+
     promotionsTable() {
-      const term = (this.search || "").trim().toLowerCase();
-      const squadFilter = this.selectedSquad;
-      const onlyProm = !!this.onlyPromotable;
-
-      const rows = [];
-      for (const m of (this.members || [])) {
-        if (!this.isInTroopList(m)) continue;
-        const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) continue;
-
-        if (term) {
-          const hay = [m.name, m.rank, m.squad, status].map(x => String(x || "").toLowerCase()).join(" ");
-          if (!hay.includes(term)) continue;
-        }
-        const squad = String(
-          m?.squad ||
-          this.membershipIndex[`ID:${m?.id}`] ||
-          this.membershipIndex[`NM:${this.nameKey(m?.name)}`] ||
-          ""
-        ).trim();
-        if (squadFilter && squadFilter !== "__ALL__" && squad !== squadFilter) continue;
-
-        const rule = this.nextPromotion(m);
-        const ops = this.getOps(m);
-        const nextRank = rule?.nextRank ?? null;
-        const nextAt = rule?.nextAt ?? null;
-
-        let progress = 0;
-        let opsToNext = null;
-        if (Number.isFinite(nextAt) && Number.isFinite(ops)) {
-          progress = Math.min(100, Math.max(0, Math.round((ops / nextAt) * 100)));
-          opsToNext = Math.max(0, nextAt - ops);
-        }
-
-        rows.push({
-          id: m.id,
-          name: m.name || "Unknown",
-          rank: m.rank || "N/A",
-          squad,
-          status,
-          ops: Number.isFinite(ops) ? ops : null,
-          nextRank,
-          nextAt,
-          progress,
-          opsToNext,
-          rankScore: this.rankScore(m?.rank),
-        });
+      const term=(this.search||"").trim().toLowerCase(), squadFilter=this.selectedSquad, onlyProm=!!this.onlyPromotable;
+      const rows=[];
+      for(const m of (this.members||[])){
+        if(!this.isInTroopList(m)) continue;
+        const status=this.memberStatusOf(m); if(this.isDischarged(status)) continue;
+        if(term){ const hay=[m.name,m.rank,m.squad,status].map(x=>String(x||"").toLowerCase()).join(" "); if(!hay.includes(term)) continue; }
+        const squad=String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${this.nameKey(m?.name)}`] || "").trim();
+        if(squadFilter && squadFilter!=="__ALL__" && squad!==squadFilter) continue;
+        const rule=this.nextPromotion(m), ops=this.getOps(m); const nextRank=rule?.nextRank ?? null, nextAt=rule?.nextAt ?? null;
+        let progress=0, opsToNext=null; if(Number.isFinite(nextAt) && Number.isFinite(ops)){ progress=Math.min(100, Math.max(0, Math.round((ops/nextAt)*100))); opsToNext=Math.max(0, nextAt-ops); }
+        rows.push({ id:m.id, name:m.name||"Unknown", rank:m.rank||"N/A", squad, status, ops:Number.isFinite(ops)?ops:null, nextRank, nextAt, progress, opsToNext, rankScore:this.rankScore(m?.rank) });
       }
-
-      const filtered = onlyProm ? rows.filter((r) => r.opsToNext === 0 && !!r.nextRank) : rows;
-      const sorter = {
-        rank: (a, b) => a.rankScore - b.rankScore,
-        ops: (a, b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
-        progress: (a, b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
-        name: (a, b) => a.name.localeCompare(b.name),
-      }[this.sortKey] || ((a, b) => 0);
-
+      const filtered = onlyProm ? rows.filter(r=>r.opsToNext===0 && !!r.nextRank) : rows;
+      const sorter = { rank:(a,b)=>a.rankScore-b.rankScore, ops:(a,b)=>(b.ops??-Infinity)-(a.ops??-Infinity), progress:(a,b)=>(b.progress??-Infinity)-(a.progress??-Infinity), name:(a,b)=>a.name.localeCompare(b.name) }[this.sortKey] || ((a,b)=>0);
       return filtered.sort(sorter);
     },
-    eligibleNowCount() { return this.promotionsTable.filter((r) => r.opsToNext === 0 && !!r.nextRank).length; },
-    imminentCount()     { return this.promotionsTable.filter((r) => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length; },
-    rankScore() {
-      const order = ["MAJ","CAPT","1STLT","2NDLT","CWO5","CWO4","CWO3","CWO2","WO","GYSGT","SSGT","SGT","CPL","LCPL","SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT","HMC","HM1","HM2","HM3","HN","HA","HR"];
-      return (r) => { const idx = order.indexOf(this.rankKey(r)); return idx === -1 ? 999 : idx; };
-    },
+    eligibleNowCount(){ return this.promotionsTable.filter(r=>r.opsToNext===0 && !!r.nextRank).length; },
+    imminentCount(){ return this.promotionsTable.filter(r=>Number.isFinite(r.opsToNext) && r.opsToNext>0 && r.opsToNext<=3).length; },
 
-    disciplineRowsIndexed() {
-      const idx = Object.create(null);
-      (this.disciplineRows || []).forEach(r => { idx[r.nameKey] = r; });
-      return idx;
-    },
+    disciplineRowsIndexed(){ const idx=Object.create(null); (this.disciplineRows||[]).forEach(r=>{ idx[r.nameKey]=r; }); return idx; },
     discTable() {
-      const rows = [];
-      (this.members || []).forEach(m => {
-        if (!this.isInTroopList(m)) return;
-        const status = this.memberStatusOf(m);
-        if (this.isDischarged(status)) return;
-
-        const nk = this.nameKey(m?.name);
-        const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
-        const api = this.disciplineRowsIndexed[nk] || { notes: '', warnings: 'N, N, N' };
-        const bits = (api.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase() === 'Y');
-        const warnCount = bits.filter(Boolean).length;
-        rows.push({
-          name: m?.name || 'Unknown',
-          nameKey: this.nameKey(this.cleanMemberName(m?.name)),
-          squad,
-          status,
-          notes: api.notes || '',
-          warnings: api.warnings || 'N, N, N',
-          warnBits: [!!bits[0], !!bits[1], !!bits[2]],
-          warnCount,
-        });
+      const rows=[];
+      (this.members||[]).forEach(m=>{
+        if(!this.isInTroopList(m)) return;
+        const status=this.memberStatusOf(m); if(this.isDischarged(status)) return;
+        const nk=this.nameKey(this.cleanMemberName(m?.name));
+        const squad=String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || "").trim();
+        const api=this.disciplineRowsIndexed[nk] || {notes:'', warnings:'N, N, N'};
+        const bits=(api.warnings || 'N, N, N').split(',').map(s=>s.trim().toUpperCase()==='Y'); const warnCount=bits.filter(Boolean).length;
+        rows.push({ name:m?.name||'Unknown', nameKey:nk, squad, status, notes:api.notes||'', warnings:api.warnings||'N, N, N', warnBits:[!!bits[0],!!bits[1],!!bits[2]], warnCount });
       });
-      return rows.sort((a,b) => a.name.localeCompare(b.name));
+      return rows.sort((a,b)=>a.name.localeCompare(b.name));
     },
-    discFiltered() {
-      const term = (this.discSearch || '').trim().toLowerCase();
-      if (!term) return this.discTable;
-      return this.discTable.filter(r => {
-        const hay = [r.name, r.squad, r.notes, r.status].map(x => String(x||'').toLowerCase()).join(' ');
-        return hay.includes(term);
-      });
-    },
+    discFiltered(){ const term=(this.discSearch||'').trim().toLowerCase(); if(!term) return this.discTable;
+      return this.discTable.filter(r=>[r.name,r.squad,r.notes,r.status].map(x=>String(x||'').toLowerCase()).join(' ').includes(term)); },
   },
   watch: {
-    isAuthed(v) {
-      if (v) {
-        this.loadDiscipline();
-        if (this.troopStatusCsvUrl) this.fetchTroopStatusCsv();
-      }
-    },
+    isAuthed(v) { if (v) { this.loadDiscipline(); this.fetchTroopStatusCsv(); } },
   },
   methods: {
-    isFiniteNum(v) { return Number.isFinite(v); },
-    getOps(member) {
-      if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
-      if (member?.name) {
-        const nk = this.nameKey(member.name);
-        if (this.attendanceMap[`NM:${nk}`] !== undefined) return this.attendanceMap[`NM:${nk}`];
-      }
-      const direct = Number(member?.opsAttended);
-      return Number.isFinite(direct) ? direct : null;
-    },
-    statusClass(status) {
-      const s = String(status || 'Unknown').toLowerCase();
-      if (s === 'active') return 'active';
-      if (s === 'reserve') return 'reserve';
-      if (s === 'eloa') return 'eloa';
-      if (s === 'inactive') return 'inactive';
-      if (s === 'other') return 'other';
-      if (s === 'discharged') return 'discharged';
-      return 'unknown';
+    getOps(member){
+      if(member?.id!=null && this.attendanceMap[`ID:${member.id}`]!==undefined) return this.attendanceMap[`ID:${member.id}`];
+      if(member?.name){ const nk=this.nameKey(member.name); if(this.attendanceMap[`NM:${nk}`]!==undefined) return this.attendanceMap[`NM:${nk}`]; }
+      const direct=Number(member?.opsAttended); return Number.isFinite(direct)?direct:null;
     },
 
     async fetchTroopStatusCsv() {
@@ -583,53 +420,39 @@ export default {
         const rows = this.parseCsv(csvText);
         if (!rows.length) return;
 
-        const header = rows[0].map(h => String(h || '').trim());
-        const hdrLower = header.map(h => h.toLowerCase().replace(/\s+/g,' ').trim());
-        const nameIdx = hdrLower.findIndex(h => h === 'troop list');
-        const statusIdx = hdrLower.findIndex(h => h === 'troop status');
-        if (nameIdx === -1 || statusIdx === -1) return;
+        const header = rows[0].map(h=>String(h||'').trim());
+        const hdrLower = header.map(h=>h.toLowerCase().replace(/\s+/g,' ').trim());
+        const nameIdx = hdrLower.findIndex(h=>'troop list'===h);
+        const statusIdx = hdrLower.findIndex(h=>'troop status'===h);
+        if(nameIdx===-1||statusIdx===-1) return;
 
-        const statusMap = Object.create(null);
-        const troopMap = Object.create(null);
-        for (let i = 1; i < rows.length; i++) {
-          const r = rows[i];
-          const rawName = String(r[nameIdx] || '').trim();
-          if (!rawName) continue;
-          const nk = this.nameKey(this.cleanMemberName(rawName));
-          troopMap[nk] = true;
-          statusMap[nk] = this.normalizeStatus(String(r[statusIdx] || '').trim());
+        const statusMap=Object.create(null), troopMap=Object.create(null);
+        for(let i=1;i<rows.length;i++){
+          const r=rows[i];
+          const raw=String(r[nameIdx]||'').trim(); if(!raw) continue;
+          const nk=this.nameKey(this.cleanMemberName(raw));
+          troopMap[nk]=true;
+          statusMap[nk]=this.normalizeStatus(String(r[statusIdx]||'').trim());
         }
-        this.csvStatusIndex = statusMap;
-        this.csvTroopIndex = troopMap;
+        this.csvStatusIndex=statusMap;
+        this.csvTroopIndex=troopMap;
       } catch {}
     },
-    parseCsv(text) {
-      const rows = [];
-      let cur = [];
-      let val = '';
-      let inQ = false;
-      for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-        if (inQ) {
-          if (ch === '"') {
-            if (text[i + 1] === '"') { val += '"'; i++; } else { inQ = false; }
-          } else { val += ch; }
-        } else {
-          if (ch === '"') inQ = true;
-          else if (ch === ',') { cur.push(val); val = ''; }
-          else if (ch === '\n') { cur.push(val); rows.push(cur); cur = []; val = ''; }
-          else if (ch === '\r') { /* ignore */ }
-          else { val += ch; }
-        }
+    parseCsv(text){
+      const rows=[]; let cur=[], val='', inQ=false;
+      for(let i=0;i<text.length;i++){
+        const ch=text[i];
+        if(inQ){ if(ch==='"'){ if(text[i+1]==='"'){ val+='"'; i++; } else inQ=false; } else val+=ch; }
+        else { if(ch==='"') inQ=true; else if(ch===','){ cur.push(val); val=''; } else if(ch==='\n'){ cur.push(val); rows.push(cur); cur=[]; val=''; } else if(ch!=='\r'){ val+=ch; } }
       }
       cur.push(val); rows.push(cur);
-      if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
+      if(rows.length && rows[rows.length-1].every(x=>String(x).length===0)) rows.pop();
       return rows;
     },
 
     async loadDiscipline() {
       if (!this.discEndpoint || !this.discSecret) return;
-      this.discLoading = true; this.discError = ""; this.discOK = false;
+      this.discLoading=true; this.discError=""; this.discOK=false;
       try {
         const url = `${this.discEndpoint}?secret=${encodeURIComponent(this.discSecret)}&t=${Date.now()}`;
         const res = await fetch(url, { method: 'GET' });
@@ -642,57 +465,35 @@ export default {
           warnings: r.warnings || 'N, N, N',
           status: this.normalizeStatus(r.status || r.troopStatus),
         }));
-      } catch (e) {
-        this.discError = String(e?.message || e);
-      } finally {
-        this.discLoading = false;
-      }
+      } catch (e) { this.discError = String(e?.message || e); }
+      finally { this.discLoading=false; }
     },
-    async refreshDiscipline() {
-      await this.loadDiscipline();
-      if (this.troopStatusCsvUrl) await this.fetchTroopStatusCsv();
-    },
+    async refreshDiscipline() { await this.loadDiscipline(); if (this.troopStatusCsvUrl) await this.fetchTroopStatusCsv(); },
 
-    focusMemberByNameKey(nk) {
-      const m = (this.members || []).find(x => this.nameKey(this.cleanMemberName(x?.name)) === nk);
-      if (!m) return;
-      if (!this.isInTroopList(m)) return;
-      if (this.isDischarged(this.memberStatusOf(m))) return;
-      this.edit.memberId = m.id || null;
-      this.populateEditFromMember();
-      this.$nextTick(() => {
-        const ta = this.$el.querySelector('textarea');
-        if (ta) ta.focus();
-      });
+    focusMemberByNameKey(nk){
+      const m=(this.members||[]).find(x=>this.nameKey(this.cleanMemberName(x?.name))===nk);
+      if(!m) return; if(!this.isInTroopList(m)) return; if(this.isDischarged(this.memberStatusOf(m))) return;
+      this.edit.memberId=m.id||null; this.populateEditFromMember();
+      this.$nextTick(()=>{ const ta=this.$el.querySelector('textarea'); if(ta) ta.focus(); });
     },
-    populateEditFromMember() {
-      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
-      if (!m) { this.edit.notes = ''; this.edit.warn = [false,false,false]; return; }
-      const nk = this.nameKey(this.cleanMemberName(m.name));
-      const api = (this.disciplineRows || []).find(r => (r.nameKey) === nk);
-      const warnings = (api?.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase());
-      this.edit.notes = api?.notes || '';
-      this.edit.warn = [0,1,2].map(i => warnings[i] === 'Y');
+    populateEditFromMember(){
+      const m=(this.members||[]).find(x=>String(x.id||'')===String(this.edit.memberId));
+      if(!m){ this.edit.notes=''; this.edit.warn=[false,false,false]; return; }
+      const nk=this.nameKey(this.cleanMemberName(m.name));
+      const api=(this.disciplineRows||[]).find(r=>r.nameKey===nk);
+      const warnings=(api?.warnings||'N, N, N').split(',').map(s=>s.trim().toUpperCase());
+      this.edit.notes=api?.notes||'';
+      this.edit.warn=[0,1,2].map(i=>warnings[i]==='Y');
     },
+    warnArrayToString(arr){ const a=Array.isArray(arr)?arr:[false,false,false]; const out=a.slice(0,3).map(x=>(x?'Y':'N')); while(out.length<3) out.push('N'); return out.join(', '); },
+    toggleWarn(i){ const n=[...this.edit.warn]; n[i]=!n[i]; this.edit.warn=n; },
 
-    warnArrayToString(arr) {
-      const a = Array.isArray(arr) ? arr : [false, false, false];
-      const out = a.slice(0,3).map(x => (x ? 'Y' : 'N'));
-      while (out.length < 3) out.push('N');
-      return out.join(', ');
-    },
-    toggleWarn(i) {
-      const next = [...this.edit.warn];
-      next[i] = !next[i];
-      this.edit.warn = next;
-    },
-
-    async saveDiscipline() {
-      this.discError = ""; this.discOK = false;
-      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
-      if (!m) { this.discError = "Select a member."; return; }
-      if (!this.isInTroopList(m)) { this.discError = "Member not in Troop List."; return; }
-      if (this.isDischarged(this.memberStatusOf(m))) { this.discError = "Cannot edit a discharged member."; return; }
+    async saveDiscipline(){
+      this.discError=""; this.discOK=false;
+      const m=(this.members||[]).find(x=>String(x.id||'')===String(this.edit.memberId));
+      if(!m){ this.discError="Select a member."; return; }
+      if(!this.isInTroopList(m)){ this.discError="Member not in Troop List."; return; }
+      if(this.isDischarged(this.memberStatusOf(m))){ this.discError="Cannot edit a discharged member."; return; }
 
       const payload = {
         secret: this.discSecret,
@@ -705,32 +506,22 @@ export default {
       this.discSaving = true;
       try {
         const res = await fetch(this.discEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload),
-          redirect: 'follow',
+          method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload),
         });
-        const text = await res.text();
-        let data;
-        try { data = JSON.parse(text); } catch { data = { ok: false, error: 'Bad JSON from server' }; }
-        if (!data?.ok) throw new Error(data?.error || 'Save failed');
+        const data = await res.json();
+        if(!data?.ok) throw new Error(data?.error || 'Save failed');
 
         this.discOK = true;
         await this.refreshDiscipline();
-      } catch (e) {
-        this.discError = String(e?.message || e);
-      } finally {
-        this.discSaving = false;
-        setTimeout(() => (this.discOK = false), 1500);
-      }
+      } catch (e) { this.discError=String(e?.message||e); }
+      finally { this.discSaving=false; setTimeout(()=> (this.discOK=false), 1500); }
     },
   },
 };
 </script>
 
 <style scoped>
-/* (unchanged layout + visuals, minus the old password card usage) */
-
+/* Same “old” two-window look */
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
@@ -739,17 +530,16 @@ export default {
 
 .promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
 
+/* Controls */
 .control { display: grid; gap: .2rem; }
 .control span { font-size: .85rem; color: #9ec5e6; }
 .control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #e6f3ff; }
-.control textarea { resize: vertical; }
-.control input::placeholder, .control textarea::placeholder { color: #aac7e6; }
-.control input:focus, .control select:focus, .control textarea:focus { outline: none; border-color: rgba(30,144,255,0.6); }
 .control select option { background: rgba(5,20,40,0.98); color: #e6f3ff; }
 .control.chk { display: flex; align-items: center; gap: .45rem; padding-top: 1.25rem; }
 .control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
 .control.chk span { color: #e6f3ff; font-size: .9rem; }
 
+/* Filters / chips */
 .filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
 .filters .row { display: grid; grid-template-columns: 1.2fr auto; gap: .6rem; align-items: end; }
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
@@ -760,6 +550,7 @@ export default {
 .ok-text { color: #79ffba; }
 .empty { color: #9ec5e6; padding: .8rem; text-align: center; }
 
+/* Tiles */
 .rail { display: grid; gap: .6rem; align-content: start; }
 .rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; cursor: pointer; }
 .rail-card.active { border-color: rgba(120,255,170,0.7); }
@@ -769,6 +560,7 @@ export default {
 .pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
 .rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
 
+/* Table */
 .table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
@@ -778,19 +570,17 @@ export default {
 .tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .rows-scroll .tr:last-child .td { border-bottom: 0; }
 
+/* Progress */
 .bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
+/* Discipline */
 .warn-row { position: relative; }
 .warn-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: transparent; }
-.warn-0 { background: transparent; }
-.warn-1 { background: rgba(255, 200, 80, 0.06); }
-.warn-1::before { background: rgba(255, 200, 80, 0.8); }
-.warn-2 { background: rgba(255, 140, 60, 0.08); }
-.warn-2::before { background: rgba(255, 140, 60, 0.85); }
-.warn-3 { background: rgba(255, 90, 90, 0.10); }
-.warn-3::before { background: rgba(255, 90, 90, 0.9); }
+.warn-1 { background: rgba(255, 200, 80, 0.06); } .warn-1::before { background: rgba(255,200,80,0.8); }
+.warn-2 { background: rgba(255, 140, 60, 0.08); } .warn-2::before { background: rgba(255,140,60,0.85); }
+.warn-3 { background: rgba(255, 90, 90, 0.10); } .warn-3::before { background: rgba(255,90,90,0.9); }
 
 .warncells { display: flex; align-items: center; }
 .warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
@@ -807,17 +597,8 @@ export default {
 .status-pill.st-inactive { border-color: rgba(200,200,200,0.4); }
 .status-pill.st-other { border-color: rgba(255,190,80,0.6); }
 .status-pill.st-unknown { border-color: rgba(150,190,230,0.35); }
-.status-pill.st-discharged { border-color: rgba(255,90,90,0.9); }
 
-.warn-toggle { display: inline-flex; gap: .4rem; align-items: center; }
-.warn-pill { min-width: 36px; height: 28px; padding: 0 .5rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .45rem; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); color: #e6f3ff; font-weight: 600; font-size: .9rem; transition: transform .05s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease; }
-.warn-pill:hover { transform: translateY(-1px); }
-.warn-pill:focus { outline: none; box-shadow: 0 0 0 2px rgba(120,200,255,0.35); }
-.warn-pill.on { color: #0a0f16; border-color: transparent; }
-.warn-pill.lvl1.on { background: rgba(255, 200, 80, 0.9); }
-.warn-pill.lvl2.on { background: rgba(255, 140, 60, 0.95); }
-.warn-pill.lvl3.on { background: rgba(255, 90, 90, 0.98); }
-
+/* Header deco */
 .rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
 .clipped-medium-backward { clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%); background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5)); padding: .4rem .75rem; border: 1px solid rgba(30,144,255,.35); border-left-width: 0; border-radius: 0 .35rem .35rem 0; }
 .section-header { display: flex; align-items: center; gap: .6rem; }
