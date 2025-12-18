@@ -1,133 +1,117 @@
 // src/utils/adminAuth.js
-// Direct-to-Apps Script (no Netlify proxy). Ensures login body includes the shared secret.
-//
-// Apps Script must CORS-allow your site and handle:
-//  - POST { action:"admin.staff:login", username, password, secret } -> { ok, displayName, role, token, ttlSec }
-//  - GET   (discipline list) -> array
-//  - POST  (discipline save) { secret, name, nameKey, notes, warnings } -> { ok:true }
+// Staff auth via Netlify proxy → GAS; session-based (no persistence across full browser restarts)
 
-const LS_USER = "admin:user";
-const LS_ROLE = "admin:role";
-const LS_TOKEN = "admin:token";
-const LS_EXP   = "admin:exp"; // epoch ms
+const ENDPOINT = "/.netlify/functions/gas"; // same-origin → no CORS
+const SECRET = "PLEX";
 
-// Your direct /exec URL (from your env)
-const GAS_URL = "https://script.google.com/macros/s/AKfycbyT8iabGBhx5H5LoKbNzZ55OIxsUv_Zw6BjtGWdu2SMg-sMOiJL5QDjXHwBweSvjh3S/exec";
+const STORAGE_KEY = "staff-auth"; // previous localStorage key (we'll purge)
+const SESSION_KEY = "staff-auth-session"; // new sessionStorage key
 
-// Label only; real validation happens in Apps Script
-export function adminSecret() { return "PLEX"; }
+let auth = { token: null, user: null, role: null, exp: 0 };
 
-// Use same endpoint for all admin ops
-export function adminEndpoint() { return GAS_URL; }
-
-/* ---------------- Session ---------------- */
-export function setAdminSession({ username, displayName, role, token, ttlSec = 3600 }) {
-  const exp = Date.now() + Math.max(60, Number(ttlSec)) * 1000;
-  const user = { username, displayName: displayName || username };
-  try {
-    sessionStorage.setItem(LS_USER, JSON.stringify(user));
-    sessionStorage.setItem(LS_ROLE, String(role || "staff"));
-    sessionStorage.setItem(LS_TOKEN, String(token || ""));
-    sessionStorage.setItem(LS_EXP, String(exp));
-  } catch {}
-  notify();
-}
-export function clearAdminSession() {
-  try {
-    sessionStorage.removeItem(LS_USER);
-    sessionStorage.removeItem(LS_ROLE);
-    sessionStorage.removeItem(LS_TOKEN);
-    sessionStorage.removeItem(LS_EXP);
-  } catch {}
-  notify();
-}
-export function adminLogout() { clearAdminSession(); }
-
-export function adminUser() {
-  try { const raw = sessionStorage.getItem(LS_USER); return raw ? JSON.parse(raw) : null; }
-  catch { return null; }
-}
-export function adminRole() {
-  try { return sessionStorage.getItem(LS_ROLE) || null; } catch { return null; }
-}
-export function adminToken() {
-  try { return sessionStorage.getItem(LS_TOKEN) || ""; } catch { return ""; }
-}
-function getExp() {
-  try { return Number(sessionStorage.getItem(LS_EXP)); } catch { return NaN; }
-}
-function notExpired() { const exp = getExp(); return Number.isFinite(exp) && Date.now() < exp; }
-
-export function isAdmin() {
-  try {
-    const u = adminUser();
-    const t = adminToken();
-    if (!u || !t) return false;
-    if (!notExpired()) return false;
-    return true;
-  } catch { return false; }
-}
-
-/* ---------------- Roles ---------------- */
-export function isOfficer() { return (adminRole() || "").toLowerCase() === "officer"; }
-export function isStaff()   { return (adminRole() || "").toLowerCase() === "staff"; }
-export function isOfficerOrStaff() { return isAdmin() && (isOfficer() || isStaff()); }
-
-/* ---------------- Pub/Sub ---------------- */
+// --- tiny event bus for reactive consumers (Sidebar etc.)
 const listeners = new Set();
-export function subscribe(fn) {
-  if (typeof fn === "function") {
-    listeners.add(fn);
-    try { fn(sessionSnapshot()); } catch {}
-  }
-  return () => listeners.delete(fn);
-}
-export const onChange = subscribe;
+function notify() { for (const cb of listeners) try { cb(getSnapshot()); } catch {} }
+export function subscribe(cb) { listeners.add(cb); try { cb(getSnapshot()); } catch {}; return () => listeners.delete(cb); }
 
-function notify() {
-  const snap = sessionSnapshot();
-  listeners.forEach((fn) => { try { fn(snap); } catch {} });
+// snapshot
+function getSnapshot() {
+  return { token: auth.token || null, user: auth.user ? { ...auth.user } : null, role: auth.role || null, exp: auth.exp || 0 };
 }
-if (typeof window !== "undefined" && window.addEventListener) {
-  window.addEventListener("storage", (e) => {
-    if ([LS_USER, LS_ROLE, LS_TOKEN, LS_EXP].includes(e.key)) notify();
+
+// migrate: nuke any old localStorage token (persisted across restarts)
+try { localStorage.removeItem(STORAGE_KEY); } catch {}
+
+function loadFromSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (isValidAuth(parsed)) auth = parsed;
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch { try { sessionStorage.removeItem(SESSION_KEY); } catch {} }
+}
+function saveToSession() {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(auth)); } catch {}
+}
+
+function isValidAuth(a) {
+  if (!a || typeof a !== "object") return false;
+  const r = String(a.role || "").toLowerCase();
+  if (!(r === "officer" || r === "staff")) return false;
+  if (!a.user || typeof a.user.username !== "string") return false;
+  const t = a.token; if (typeof t !== "string" || !t.includes(".")) return false; // signed "<data>.<sig>"
+  const now = Date.now();
+  // exp required & in future
+  return Number.isFinite(a.exp) && a.exp > now;
+}
+
+// keep tabs in sync (multiple tabs)
+try {
+  window.addEventListener("storage", (ev) => {
+    if (ev.key !== SESSION_KEY) return;
+    loadFromSession();
+    notify();
   });
-}
-function sessionSnapshot() {
-  return { user: adminUser(), role: adminRole(), token: adminToken(), exp: getExp(), isAdmin: isAdmin() };
-}
+} catch {}
 
-/* ---------------- Login (direct to GAS + secret) ---------------- */
+// initial load
+loadFromSession();
+
+// public API
 export async function adminLogin(username, password) {
-  const body = {
-    action: "admin.staff:login",
-    username,
-    password,
-    secret: adminSecret(), // <-- include shared secret to satisfy Apps Script auth
-  };
-
-  const res = await fetch(GAS_URL, {
+  const res = await fetch(ENDPOINT, {
     method: "POST",
-    // text/plain avoids preflight; Apps Script reads raw body via e.postData.contents
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ secret: SECRET, action: "login", username, password }),
   });
-
-  // Apps Script may respond 401/403 with text "Unauthorized"
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Login failed (${res.status})`);
-  }
-
-  const data = await res.json().catch(() => ({}));
+  const data = await res.json();
   if (!data?.ok) throw new Error(data?.error || "Login failed");
 
-  setAdminSession({
-    username,
-    displayName: data.displayName || username,
-    role: data.role || "staff",
-    token: data.token || "ok",
-    ttlSec: data.ttlSec || 3600,
-  });
+  // session-only + TTL (8h)
+  const now = Date.now();
+  const ttlMs = 8 * 60 * 60 * 1000;
+
+  auth = {
+    token: data.token,
+    user: { username: data.username, displayName: data.displayName },
+    role: String(data.role || "staff").toLowerCase(),
+    exp: now + ttlMs,
+  };
+  saveToSession();
+  notify();
   return true;
+}
+
+export function adminLogout() {
+  auth = { token: null, user: null, role: null, exp: 0 };
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+  notify();
+}
+
+// Officer/Staff only
+export function isOfficerOrStaff() {
+  // auto-expire on access
+  if (!isFresh()) { adminLogout(); return false; }
+  const r = (auth.role || "").toLowerCase();
+  return !!auth.token && (r === "officer" || r === "staff");
+}
+export function isAdmin() { return isOfficerOrStaff(); }
+
+function isFresh() {
+  return Number.isFinite(auth.exp) && auth.exp > Date.now() && auth.token && String(auth.token).includes(".");
+}
+
+// getters
+export function adminToken()    { return isFresh() ? (auth.token || "") : ""; }
+export function adminUser()     { return isFresh() ? auth.user : null; }
+export function adminRole()     { return isFresh() ? (auth.role || "staff") : "staff"; }
+export function adminEndpoint() { return ENDPOINT; }
+export function adminSecret()   { return SECRET; }
+
+// utility: hard reset (optional usage from console)
+export function __purgeAuth__() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+  adminLogout();
 }
