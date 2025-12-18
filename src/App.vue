@@ -1,18 +1,11 @@
 <!-- /src/App.vue -->
 <template>
-  <div
-    v-if="showLogin"
-    class="login-overlay"
-    :class="{ fading: isFading }"
-    @click="authorize"
-  >
-    <button class="admin-login-btn" @click.stop="openAdminLogin">Admin Login</button>
-
+  <div v-if="showLogin" class="login-overlay" :class="{ fading: isFading }">
     <div class="login-bg">
       <img class="login-logo" src="/faction-logos/FUD_UNSC_Logo.png" alt="UNSC Logo" />
     </div>
 
-    <div class="login-text">
+    <div class="login-text" @click.stop>
       <div class="login-lore">
         UNITED NATIONS SPACE COMMAND<br />
         SECURE MILITARY NETWORK
@@ -21,7 +14,19 @@
         UNAUTHORIZED ACCESS IS PUNISHABLE UNDER THE<br />
         UNIFIED MILITARY CODE
       </div>
-      <div class="login-prompt">CLICK TO LOGIN</div>
+
+      <!-- Two explicit login options -->
+      <div class="login-options">
+        <button class="login-option" @click="memberLogin">
+          <div class="opt-title">Member Login</div>
+          <div class="opt-desc">Continue to Mission Status</div>
+        </button>
+
+        <button class="login-option" @click="openAdminLogin">
+          <div class="opt-title">Officer / Staff</div>
+          <div class="opt-desc">Authenticate to Admin Panel</div>
+        </button>
+      </div>
     </div>
 
     <AdminLoginModal
@@ -31,14 +36,14 @@
     />
   </div>
 
-  <template v-if="!showLogin">
+  <template v-else>
     <div class="page-wrapper">
       <Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
       <Sidebar :animate="animate" :class="{ animate: animate }" />
     </div>
 
     <div id="router-view-container">
-      <!-- transition removed to avoid route/animation race -->
+      <!-- transition intentionally removed -->
       <router-view
         :key="$route.fullPath"
         :animate="animate"
@@ -86,10 +91,13 @@ export default {
     };
   },
   created() {
-    this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
+    this.setTitleFavicon(`${Config.defaultTitle} UNSC BRIEFING`, Config.icon);
+
+    // preload markdown
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
+    // async CSVs
     const membersUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv";
     const refDataUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
     const opsUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
@@ -97,30 +105,51 @@ export default {
     this.loadMembersCSV(membersUrl)
       .then(() => this.loadRefDataCSV(refDataUrl))
       .then(() => this.loadOpsCSV(opsUrl).catch((err) => console.warn("Ops CSV failed; continuing.", err)));
+
+    // if already authenticated earlier, skip overlay
+    const role = sessionStorage.getItem("authRole");
+    if (role === "member" || role === "staff") {
+      this.showLogin = false;
+    }
   },
   methods: {
-    authorize() {
-      if (this.showAdminModal) return; // keep overlay until modal is closed
+    // MEMBER → straight to /status
+    memberLogin() {
       if (this.isFading) return;
+      sessionStorage.setItem("authRole", "member");
+      this.fadeAndEnter("/status");
+    },
+
+    // OFFICER/STAFF → open modal (AdminLoginModal handles credentials)
+    openAdminLogin() {
+      if (this.isFading) return;
+      this.showAdminModal = true;
+    },
+    closeAdminLogin() {
+      this.showAdminModal = false;
+    },
+    onAdminLoginSuccess() {
+      // why: ensure guards see staff role immediately
+      sessionStorage.setItem("authRole", "staff");
+      this.showAdminModal = false;
+      this.fadeAndEnter("/admin");
+    },
+
+    fadeAndEnter(targetPath) {
       this.isFading = true;
 
       const a = this.$refs.startupAudio;
-      if (a && typeof a.play === "function") { a.currentTime = 0; a.play().catch(() => {}); }
+      if (a && typeof a.play === "function") {
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      }
 
       setTimeout(() => {
         this.showLogin = false;
         this.isFading = false;
-        if (this.$router?.currentRoute?.value?.path !== "/status") this.$router.push("/status");
+        const curr = this.$router?.currentRoute?.value?.path;
+        if (curr !== targetPath) this.$router.push(targetPath);
       }, 800);
-    },
-
-    openAdminLogin() { this.showAdminModal = true; },
-    closeAdminLogin() { this.showAdminModal = false; },
-    onAdminLoginSuccess() {
-      this.showAdminModal = false;
-      this.showLogin = false;
-      this.isFading = false;
-      if (this.$router?.currentRoute?.value?.path !== "/admin") this.$router.push("/admin");
     },
 
     normalize(str) {
@@ -128,7 +157,6 @@ export default {
     },
     setTitleFavicon(title, favicon) {
       document.title = title;
-      // ensure single favicon; avoid duplicate <link rel="icon">
       let link = document.querySelector('link[rel="icon"]');
       if (!link) {
         link = document.createElement("link");
@@ -141,7 +169,9 @@ export default {
     loadOpsCSV(opsUrl) {
       return new Promise((resolve) => {
         Papa.parse(opsUrl, {
-          download: true, skipEmptyLines: true, header: false,
+          download: true,
+          skipEmptyLines: true,
+          header: false,
           complete: (results) => {
             const rows = (results.data || []).slice(1);
             const opsMap = {};
@@ -149,7 +179,8 @@ export default {
               const rawName = String(row[0] || "").trim();
               const rawOps = String(row[2] || "").trim();
               if (!rawName) return;
-              const ops = Number(rawOps); if (Number.isNaN(ops)) return;
+              const ops = Number(rawOps);
+              if (Number.isNaN(ops)) return;
               const quoted = rawName.match(/"([^"]+)"/);
               const nameCore = quoted ? quoted[1] : rawName;
               const key = String(nameCore).replace(/"/g, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -170,12 +201,18 @@ export default {
     promotionLadderFor(rank) {
       const r = this.rankKey(rank);
       return ({
-        PVT: { nextAt: 2, nextRank: "PFC" }, PFC: { nextAt: 10, nextRank: "SPC" },
-        SPC: { nextAt: 20, nextRank: "SPC2" }, SPC2: { nextAt: 30, nextRank: "SPC3" },
-        SPC3: { nextAt: 40, nextRank: "SPC4" }, SPC4: { nextAt: 50, nextRank: null },
-        HA: { nextAt: 2, nextRank: "HN" }, HN: { nextAt: 10, nextRank: "HM3" },
-        HM3: { nextAt: 20, nextRank: "HM2" }, HM2: { nextAt: 30, nextRank: null },
-        CWO2: { nextAt: 10, nextRank: "CWO3" }, CWO3: { nextAt: 20, nextRank: "CWO4" },
+        PVT:  { nextAt: 2,  nextRank: "PFC" },
+        PFC:  { nextAt: 10, nextRank: "SPC" },
+        SPC:  { nextAt: 20, nextRank: "SPC2" },
+        SPC2: { nextAt: 30, nextRank: "SPC3" },
+        SPC3: { nextAt: 40, nextRank: "SPC4" },
+        SPC4: { nextAt: 50, nextRank: null },
+        HA:   { nextAt: 2,  nextRank: "HN" },
+        HN:   { nextAt: 10, nextRank: "HM3" },
+        HM3:  { nextAt: 20, nextRank: "HM2" },
+        HM2:  { nextAt: 30, nextRank: null },
+        CWO2: { nextAt: 10, nextRank: "CWO3" },
+        CWO3: { nextAt: 20, nextRank: "CWO4" },
         CWO4: { nextAt: 30, nextRank: null },
       })[r] || null;
     },
@@ -186,28 +223,41 @@ export default {
       if (!ladder || !ladder.nextAt) return null;
       return Math.max(0, ladder.nextAt - ops);
     },
-    nextPromotionRank(member) { const ladder = this.promotionLadderFor(member?.rank); return ladder?.nextRank || null; },
+    nextPromotionRank(member) {
+      const ladder = this.promotionLadderFor(member?.rank);
+      return ladder?.nextRank || null;
+    },
 
     loadMembersCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
-          download: true, skipEmptyLines: true, header: false,
+          download: true,
+          skipEmptyLines: true,
+          header: false,
           complete: (results) => {
             const rows = (results.data || []).slice(2);
             const CERT_COLUMNS = 13;
             const usedUNSCIds = new Set();
-            this.members = rows.map((row) => {
-              const name = String(row[1] || "").trim(); if (!name) return null;
-              const oldId = String(row[4] || "").trim();
-              return {
-                rank: String(row[0] || "").trim(),
-                name,
-                joinDate: String(row[3] || "").trim(),
-                id: this.makeUNSCId(oldId, name, usedUNSCIds),
-                certifications: row.slice(5, 5 + CERT_COLUMNS).map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
-                squad: "", fireteam: "", slot: "", opsAttended: 0,
-              };
-            }).filter(Boolean);
+            this.members = rows
+              .map((row) => {
+                const name = String(row[1] || "").trim();
+                if (!name) return null;
+                const oldId = String(row[4] || "").trim();
+                return {
+                  rank: String(row[0] || "").trim(),
+                  name,
+                  joinDate: String(row[3] || "").trim(),
+                  id: this.makeUNSCId(oldId, name, usedUNSCIds),
+                  certifications: row
+                    .slice(5, 5 + CERT_COLUMNS)
+                    .map((c) => (String(c || "").trim().toUpperCase() === "Y" ? "Y" : "N")),
+                  squad: "",
+                  fireteam: "",
+                  slot: "",
+                  opsAttended: 0,
+                };
+              })
+              .filter(Boolean);
             resolve(this.members);
           },
           error: reject,
@@ -218,13 +268,16 @@ export default {
     loadRefDataCSV(csvUrl) {
       return new Promise((resolve, reject) => {
         Papa.parse(csvUrl, {
-          download: true, skipEmptyLines: false, header: false,
+          download: true,
+          skipEmptyLines: false,
+          header: false,
           complete: (results) => {
             const rows = results.data || [];
             const findCol = (row, names) => {
               const wanted = names.map((n) => this.normalize(n));
               return row.findIndex((c) => wanted.includes(this.normalize(c)));
             };
+
             let membershipHeaderRowIndex = -1, memberCol = -1, squadCol = -1;
             for (let i = 0; i < 2; i++) {
               const r = rows[i] || [];
@@ -321,7 +374,7 @@ export default {
                 if (!currentSquad || !roleTxt) continue;
 
                 const slotNorm = this.normalize(slotTxt);
-                if (slotNorm === "vacant" || "closed" === slotNorm) {
+                if (slotNorm === "vacant" || slotNorm === "closed") {
                   slotEntries.push({ squad: currentSquad, fireteam: currentFireteam, role: roleTxt, status: slotNorm.toUpperCase(), member: null });
                   continue;
                 }
@@ -344,9 +397,7 @@ export default {
               const ft = (m.fireteam || "").trim();
               const role = (m.slot || "").trim();
               if (ft && role) {
-                if (!orbatMap[m.squad].fireteams[ft]) {
-                  orbatMap[m.squad].fireteams[ft] = { name: ft, slots: [] };
-                }
+                orbatMap[m.squad].fireteams[ft] ??= { name: ft, slots: [] };
                 const exists = orbatMap[m.squad].fireteams[ft].slots.some(
                   (s) => s.status === "FILLED" && s.member?.id && s.member.id === m.id && s.role === role
                 );
@@ -359,9 +410,7 @@ export default {
             slotEntries.forEach((e) => {
               if (!orbatMap[e.squad]) { orbatMap[e.squad] = { squad: e.squad, members: [], fireteams: {} }; }
               const ftName = e.fireteam || "Element";
-              if (!orbatMap[e.squad].fireteams[ftName]) {
-                orbatMap[e.squad].fireteams[ftName] = { name: ftName, slots: [] };
-              }
+              orbatMap[e.squad].fireteams[ftName] ??= { name: ftName, slots: [] };
               if (e.status === "FILLED" && e.member?.id) {
                 const exists = orbatMap[e.squad].fireteams[ftName].slots.some(
                   (s) => s.status === "FILLED" && s.member?.id === e.member.id && s.role === e.role
@@ -432,19 +481,48 @@ export default {
 
 <style>
 #app { min-height: 100vh; overflow: hidden !important; }
-.login-overlay { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background: #000; cursor: pointer; opacity: 1; transition: opacity 0.8s ease; }
+
+.login-overlay {
+  position: fixed; inset: 0; z-index: 99999;
+  display: grid; place-items: center;
+  background: #000;
+  cursor: default;
+  opacity: 1; transition: opacity 0.8s ease;
+}
 .login-overlay.fading { opacity: 0; pointer-events: none; }
-.admin-login-btn { position: absolute; right: 16px; bottom: 16px; z-index: 1; background: rgba(0, 0, 0, 0.35); color: #e0f0ff; border: 1px solid rgba(30, 144, 255, 0.85); border-radius: 999px; padding: 0.4rem 0.8rem; cursor: pointer; font-family: "Titillium Web", sans-serif; letter-spacing: 0.1em; text-transform: uppercase; }
-.admin-login-btn:hover { border-color: #5ab3ff; }
-.login-bg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+
+.login-bg { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .login-logo { width: min(520px, 70vw); height: auto; opacity: 0.18; filter: drop-shadow(0 0 24px rgba(0, 0, 0, 0.9)); }
+
 .login-text { position: relative; z-index: 1; text-align: center; color: rgba(170, 255, 210, 0.92); font-family: "Titillium Web", sans-serif; letter-spacing: 0.18em; text-transform: uppercase; }
-.login-lore { font-size: 14px; margin-bottom: 2.2em; opacity: 0.9; }
-.login-warning { font-size: 11px; line-height: 1.8em; opacity: 0.75; margin-bottom: 3em; }
-.login-prompt { font-size: 18px; font-weight: 800; letter-spacing: 0.22em; animation: pulse 1.8s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.login-lore { font-size: 14px; margin-bottom: 1.2em; opacity: 0.9; }
+.login-warning { font-size: 11px; line-height: 1.8em; opacity: 0.75; margin-bottom: 2em; }
+
+.login-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  width: min(720px, 92vw);
+  margin: 0 auto;
+}
+.login-option {
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(170,255,210,.35);
+  border-radius: 14px;
+  padding: 18px 20px;
+  cursor: pointer;
+  color: rgba(170, 255, 210, 0.92);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.login-option:hover { border-color: rgba(170,255,210,.9); }
+.opt-title { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+.opt-desc { font-size: 12px; opacity: .8; letter-spacing: .08em; }
+
+/* Router transitions kept off intentionally to avoid route/animation race
 .hud-enter-active { animation: hud-in 420ms ease-out both; }
 .hud-leave-active { animation: hud-out 220ms ease-in both; }
-@keyframes hud-in { 0%{opacity:0;transform:translate3d(0,0,0);filter:blur(2px);} 35%{opacity:.75;transform:translate3d(1px,-1px,0);filter:blur(1px);} 55%{transform:translate3d(-1px,1px,0);} 70%{transform:translate3d(1px,0,0);} 100%{opacity:1;transform:translate3d(0,0,0);filter:blur(0);} }
-@keyframes hud-out { 0%{opacity:1;transform:translate3d(0,0,0);filter:blur(0);} 100%{opacity:0;transform:translate3d(0,2px,0);filter:blur(2px);} }
+@keyframes hud-in { 0%{opacity:0;filter:blur(2px);} 100%{opacity:1;filter:blur(0);} }
+@keyframes hud-out { 0%{opacity:1;filter:blur(0);} 100%{opacity:0;filter:blur(2px);} }
+*/
 </style>
