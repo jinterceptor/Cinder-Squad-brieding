@@ -9,16 +9,16 @@ const LS_EXP   = "admin:exp"; // epoch ms
 const isBrowser = typeof window !== "undefined";
 
 /* ---------- Endpoint + label (client-safe) ---------- */
+// Used by Discipline/Warnings API (Apps Script via Netlify proxy)
 export function adminEndpoint() {
-  // Proxy used by Discipline/Warnings (Apps Script behind Netlify function)
+  return "/api/warnings"; // existing, already working
+}
+// Use the *same* proxy for staff login to avoid adding a new redirect
+export function staffEndpoint() {
   return "/api/warnings";
 }
-export function staffEndpoint() {
-  // Proxy used by staff login / management
-  return "/api/staff";
-}
+// Client-visible label; real secret is enforced server-side in the proxy
 export function adminSecret() {
-  // Client-visible label; real secret enforced server-side in the proxy
   return "PLEX";
 }
 
@@ -132,12 +132,13 @@ function sessionSnapshot() {
   };
 }
 
-/* ---------- Login via staff API proxy ---------- */
+/* ---------- Login via staff API proxy (reuses /api/warnings) ---------- */
 export async function adminLogin(username, password) {
   const res = await fetch(staffEndpoint(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "login", username, password }),
+    // The Apps Script should route by "action"
+    body: JSON.stringify({ action: "admin.staff:login", username, password }),
   });
   if (!res.ok) throw new Error(`Login failed (${res.status})`);
   const data = await res.json();
