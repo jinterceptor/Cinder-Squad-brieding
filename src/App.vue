@@ -1,3 +1,4 @@
+<!-- /src/App.vue -->
 <template>
   <div
     v-if="showLogin"
@@ -37,18 +38,17 @@
     </div>
 
     <div id="router-view-container">
-      <transition name="hud" mode="out-in">
-        <router-view
-          :key="$route.fullPath"
-          :animate="animate"
-          :initial-slug="initialSlug"
-          :missions="missions"
-          :events="events"
-          :members="members"
-          :orbat="orbat"
-          :reserves="reserves"
-        />
-      </transition>
+      <!-- transition removed to avoid route/animation race -->
+      <router-view
+        :key="$route.fullPath"
+        :animate="animate"
+        :initial-slug="initialSlug"
+        :missions="missions"
+        :events="events"
+        :members="members"
+        :orbat="orbat"
+        :reserves="reserves"
+      />
     </div>
   </template>
 
@@ -128,7 +128,14 @@ export default {
     },
     setTitleFavicon(title, favicon) {
       document.title = title;
-      const link = document.createElement("link"); link.rel = "icon"; link.href = favicon; document.head.appendChild(link);
+      // ensure single favicon; avoid duplicate <link rel="icon">
+      let link = document.querySelector('link[rel="icon"]');
+      if (!link) {
+        link = document.createElement("link");
+        link.rel = "icon";
+        document.head.appendChild(link);
+      }
+      link.href = favicon;
     },
 
     loadOpsCSV(opsUrl) {
