@@ -1,19 +1,22 @@
 // /src/utils/adminAuth.js
-// Centralized admin auth with pub/sub, session storage, and real displayName from backend.
+// Centralized admin auth with pub/sub, session storage, real displayName, and legacy adminSecret().
 
 const LS_USER = "admin:user";
 const LS_ROLE = "admin:role";
 const LS_TOKEN = "admin:token";
 const LS_EXP  = "admin:exp";
 
+// --- simple pub/sub ---
 const _subs = new Set();
 function _notify(){ for (const cb of Array.from(_subs)) { try { cb(); } catch {} } }
 export function subscribe(cb){ if (typeof cb === "function") _subs.add(cb); return () => _subs.delete(cb); }
 
-// --- API endpoints (adjust if needed) ---
-export function adminEndpoint() { return "/api/admin"; } // Netlify Function that talks to GAS
+// --- API endpoints (adjust to your setup) ---
+export function adminEndpoint() { return "/api/admin"; }
+/** Legacy export used by AdminHome.vue; keep for compatibility. */
+export function adminSecret() { return ""; }
 
-// --- session helpers ---
+// --- storage helpers ---
 function _set(k,v){ sessionStorage.setItem(k, String(v)); }
 function _get(k){ return sessionStorage.getItem(k); }
 function _del(k){ sessionStorage.removeItem(k); }
@@ -62,30 +65,17 @@ export async function adminLogin(arg1, arg2) {
     const res = await fetch(adminEndpoint(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "admin.login",
-        username,
-        password,
-      }),
+      body: JSON.stringify({ action: "admin.login", username, password }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-
     if (data?.ok !== true || !data?.user) throw new Error(data?.error || "Login failed");
-    const { displayName, role = "staff", token = "ok", ttlSec = 3600 } = data.user;
 
-    // Store real name for the header (no username fallback shown)
-    setAdminSession({
-      username,
-      displayName,   // e.g., "M. Jinter"
-      name: displayName,
-      role,
-      token,
-      ttlSec,
-    });
+    const { displayName, role = "staff", token = "ok", ttlSec = 3600 } = data.user;
+    setAdminSession({ username, displayName, name: displayName, role, token, ttlSec });
     return true;
-  } catch (e) {
-    // As a fallback, still login but will show username until server is wired.
+  } catch {
+    // Fallback keeps you logged in but shows username if server not wired
     setAdminSession({ username, displayName: username, name: "", role: "staff", token: "ok", ttlSec: 3600 });
     return true;
   }
