@@ -7,14 +7,15 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
-      <div class="section-header clipped-medium-backward-pilot">
-        <img src="/icons/protocol.svg" alt="" />
-        <h1>Admin</h1>
+      <div class="header-shell">
+        <div class="section-header clipped-medium-backward-pilot">
+          <img src="/icons/protocol.svg" alt="" />
+          <h1>Admin</h1>
+        </div>
+        <div class="rhombus-back">&nbsp;</div>
       </div>
-      <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container">
-        <!-- Tiles only (no password box). Route guard ensures auth. -->
         <div v-if="isAuthed" class="rail">
           <button
             v-for="s in sections"
@@ -42,12 +43,14 @@
 
     <!-- RIGHT WINDOW -->
     <section class="section-container right-window">
-      <div class="section-header clipped-medium-backward-pilot right-header">
-        <img src="/icons/protocol.svg" alt="" />
-        <h1>{{ windowTitle }}</h1>
-        <div class="right-actions"></div>
+      <div class="header-shell">
+        <div class="section-header clipped-medium-backward-pilot right-header">
+          <img src="/icons/protocol.svg" alt="" />
+          <h1>{{ windowTitle }}</h1>
+          <div class="right-actions"></div>
+        </div>
+        <div class="rhombus-back">&nbsp;</div>
       </div>
-      <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container right-content">
         <div v-if="!isAuthed" class="muted">Staff only.</div>
@@ -89,7 +92,6 @@
             <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table: fixed header, scroll body -->
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head grid6">
@@ -136,7 +138,6 @@
             </div>
           </div>
 
-          <!-- Editor -->
           <div class="flag-form">
             <div class="row">
               <label class="control">
@@ -156,9 +157,9 @@
               <label class="control">
                 <span>Warnings (3 slots)</span>
                 <div class="warn-toggle">
-                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" :aria-pressed="!!edit.warn[0]" aria-label="Toggle warning 1" title="Warning 1">1</button>
-                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" :aria-pressed="!!edit.warn[1]" aria-label="Toggle warning 2" title="Warning 2">2</button>
-                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" :aria-pressed="!!edit.warn[2]" aria-label="Toggle warning 3" title="Warning 3">3</button>
+                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" title="Warning 1">1</button>
+                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" title="Warning 2">2</button>
+                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" title="Warning 3">3</button>
                 </div>
               </label>
             </div>
@@ -177,7 +178,6 @@
             </div>
           </div>
 
-          <!-- List -->
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head gridFlags">
@@ -261,7 +261,7 @@ export default {
       discOK: false,
       disciplineRows: [],
 
-      // RefData CSV (STRICT headers)
+      // RefData CSV
       troopStatusCsvUrl:
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
       csvStatusIndex: Object.create(null),
@@ -279,8 +279,7 @@ export default {
     }
   },
   mounted() {
-    // why: trigger panel "power-on" flicker on mount
-    this.triggerFlicker();
+    this.triggerFlicker(); // why: consistent with other views
   },
   computed: {
     isAuthed() { return isAdmin(); },
@@ -567,13 +566,12 @@ export default {
     },
   },
   methods: {
-    // view flicker
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => {
         requestAnimationFrame(() => {
-          this.animateView = true; // keep set; avoids post-anim snap
+          this.animateView = true; // why: avoid post-anim snap
         });
       });
     },
@@ -754,15 +752,15 @@ export default {
 <style scoped>
 /* Reserve space for scrollbars to avoid end-of-fade width snap */
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
-
-/* Also ensure inner scrolling tables don't shift at the end */
 .rows-scroll { scrollbar-gutter: stable; }
 
-/* Help compositor; avoids micro-jank on heavy DOM during fade */
+/* Header alignment shell (matches other views) */
+.header-shell { height: 52px; overflow: hidden; } /* why: seats rhombus flush with plate */
+
+/* Help compositor; avoids micro-jank on heavy DOM */
 .content-container { will-change: opacity, filter; contain: paint; }
 
 /* (unchanged layout + visuals) */
-
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
