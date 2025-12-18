@@ -1,10 +1,13 @@
+<!-- src/App.vue -->
 <template>
+  <!-- Intro overlay: now ONLY on /status, and only until dismissed -->
   <div
-    v-if="showLogin"
+    v-if="isOverlayRoute && showLogin"
     class="login-overlay"
     :class="{ fading: isFading }"
     @click="authorize"
   >
+    <!-- (Optional) Admin modal from the splash; harmless to keep -->
     <button class="admin-login-btn" @click.stop="openAdminLogin">Admin Login</button>
 
     <div class="login-bg">
@@ -30,6 +33,7 @@
     />
   </div>
 
+  <!-- App shell -->
   <template v-if="!showLogin">
     <div class="page-wrapper">
       <Header :planet-path="planetPath" :class="{ animate: animate }" :header="header" />
@@ -64,12 +68,15 @@ import AdminLoginModal from "@/components/modals/AdminLoginModal.vue";
 import Config from "@/assets/info/general-config.json";
 import Papa from "papaparse";
 
+const OVERLAY_KEY = "intro-overlay-dismissed"; // session flag
+
 export default {
   name: "App",
   components: { Header, Sidebar, AdminLoginModal },
   data() {
     return {
-      showLogin: true,
+      // overlay state
+      showLogin: false, // set in created() based on route + session flag
       isFading: false,
       showAdminModal: false,
 
@@ -85,8 +92,23 @@ export default {
       reserves: [],
     };
   },
+  computed: {
+    // Only show the black overlay on the Status screen
+    isOverlayRoute() {
+      return this.$route?.path === "/status";
+    },
+    overlayDismissed() {
+      try { return sessionStorage.getItem(OVERLAY_KEY) === "1"; } catch { return false; }
+    },
+  },
   created() {
+    // Title & assets
     this.setTitleFavicon(Config.defaultTitle + " UNSC BRIEFING", Config.icon);
+
+    // Splash overlay: ONLY if we're on /status AND not yet dismissed this session
+    this.showLogin = this.isOverlayRoute && !this.overlayDismissed;
+
+    // CSV loads
     this.importMissions(import.meta.glob("@/assets/missions/*.md", { query: "?raw", import: "default" }));
     this.importEvents(import.meta.glob("@/assets/events/*.md", { query: "?raw", import: "default" }));
 
@@ -98,34 +120,37 @@ export default {
       .then(() => this.loadRefDataCSV(refDataUrl))
       .then(() => this.loadOpsCSV(opsUrl).catch((err) => console.warn("Ops CSV failed; continuing.", err)));
   },
+  watch: {
+    // If the route changes, only show overlay on /status and only if not dismissed this session
+    $route() {
+      this.showLogin = this.isOverlayRoute && !this.overlayDismissed;
+    },
+  },
   methods: {
+    // ---- overlay controls
     authorize() {
-      if (this.showAdminModal) return; // keep overlay until modal is closed
-      if (this.isFading) return;
+      if (this.showAdminModal || this.isFading) return;
       this.isFading = true;
 
       const a = this.$refs.startupAudio;
       if (a && typeof a.play === "function") { a.currentTime = 0; a.play().catch(() => {}); }
 
-      setTimeout(() => {
-        this.showLogin = false;
-        this.isFading = false;
-        if (this.$router?.currentRoute?.value?.path !== "/status") this.$router.push("/status");
-      }, 800);
+      // Remember dismissal for this session and hide overlay
+      try { sessionStorage.setItem(OVERLAY_KEY, "1"); } catch {}
+      setTimeout(() => { this.showLogin = false; this.isFading = false; }, 800);
     },
-
     openAdminLogin() { this.showAdminModal = true; },
     closeAdminLogin() { this.showAdminModal = false; },
     onAdminLoginSuccess() {
       this.showAdminModal = false;
+      try { sessionStorage.setItem(OVERLAY_KEY, "1"); } catch {}
       this.showLogin = false;
       this.isFading = false;
       if (this.$router?.currentRoute?.value?.path !== "/admin") this.$router.push("/admin");
     },
 
-    normalize(str) {
-      return String(str || "").replace(/"/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-    },
+    // ---- utils (unchanged)
+    normalize(str) { return String(str || "").replace(/"/g, "").replace(/\s+/g, " ").trim().toLowerCase(); },
     setTitleFavicon(title, favicon) {
       document.title = title;
       const link = document.createElement("link"); link.rel = "icon"; link.href = favicon; document.head.appendChild(link);
@@ -425,6 +450,7 @@ export default {
 
 <style>
 #app { min-height: 100vh; overflow: hidden !important; }
+/* Splash overlay */
 .login-overlay { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background: #000; cursor: pointer; opacity: 1; transition: opacity 0.8s ease; }
 .login-overlay.fading { opacity: 0; pointer-events: none; }
 .admin-login-btn { position: absolute; right: 16px; bottom: 16px; z-index: 1; background: rgba(0, 0, 0, 0.35); color: #e0f0ff; border: 1px solid rgba(30, 144, 255, 0.85); border-radius: 999px; padding: 0.4rem 0.8rem; cursor: pointer; font-family: "Titillium Web", sans-serif; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -436,6 +462,8 @@ export default {
 .login-warning { font-size: 11px; line-height: 1.8em; opacity: 0.75; margin-bottom: 3em; }
 .login-prompt { font-size: 18px; font-weight: 800; letter-spacing: 0.22em; animation: pulse 1.8s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* Page transition */
 .hud-enter-active { animation: hud-in 420ms ease-out both; }
 .hud-leave-active { animation: hud-out 220ms ease-in both; }
 @keyframes hud-in { 0%{opacity:0;transform:translate3d(0,0,0);filter:blur(2px);} 35%{opacity:.75;transform:translate3d(1px,-1px,0);filter:blur(1px);} 55%{transform:translate3d(-1px,1px,0);} 70%{transform:translate3d(1px,0,0);} 100%{opacity:1;transform:translate3d(0,0,0);filter:blur(0);} }
