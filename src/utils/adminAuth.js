@@ -1,32 +1,26 @@
 // src/utils/adminAuth.js
-// Direct-to-Apps Script (no Netlify proxy). Ensure your Apps Script sets CORS headers.
+// Direct-to-Apps Script (no Netlify proxy). Ensures login body includes the shared secret.
 //
-// Expected Apps Script handlers:
-//   POST  { action:"admin.staff:login", username, password } -> { ok, displayName, role, token, ttlSec }
-//   GET   (discipline list) -> array
-//   POST  (discipline save) { secret, name, nameKey, notes, warnings } -> { ok:true }
-//
-// IMPORTANT: Apps Script must return CORS headers for your Netlify origin:
-//   Access-Control-Allow-Origin: https://150th-orbat.netlify.app
-//   Access-Control-Allow-Methods: GET,POST,OPTIONS
-//   Access-Control-Allow-Headers: Content-Type, Authorization
-//   and answer OPTIONS with 200.
+// Apps Script must CORS-allow your site and handle:
+//  - POST { action:"admin.staff:login", username, password, secret } -> { ok, displayName, role, token, ttlSec }
+//  - GET   (discipline list) -> array
+//  - POST  (discipline save) { secret, name, nameKey, notes, warnings } -> { ok:true }
 
 const LS_USER = "admin:user";
 const LS_ROLE = "admin:role";
 const LS_TOKEN = "admin:token";
 const LS_EXP   = "admin:exp"; // epoch ms
 
-// Your direct Apps Script /exec URL (from Netlify env you shared)
+// Your direct /exec URL (from your env)
 const GAS_URL = "https://script.google.com/macros/s/AKfycbyT8iabGBhx5H5LoKbNzZ55OIxsUv_Zw6BjtGWdu2SMg-sMOiJL5QDjXHwBweSvjh3S/exec";
 
-// Label only; real validation is done server-side by the script
+// Label only; real validation happens in Apps Script
 export function adminSecret() { return "PLEX"; }
 
-// Use the same endpoint for all admin operations to keep it simple
+// Use same endpoint for all admin ops
 export function adminEndpoint() { return GAS_URL; }
 
-// ---------- Session ----------
+/* ---------------- Session ---------------- */
 export function setAdminSession({ username, displayName, role, token, ttlSec = 3600 }) {
   const exp = Date.now() + Math.max(60, Number(ttlSec)) * 1000;
   const user = { username, displayName: displayName || username };
@@ -74,14 +68,13 @@ export function isAdmin() {
   } catch { return false; }
 }
 
-// ---------- Roles ----------
+/* ---------------- Roles ---------------- */
 export function isOfficer() { return (adminRole() || "").toLowerCase() === "officer"; }
 export function isStaff()   { return (adminRole() || "").toLowerCase() === "staff"; }
 export function isOfficerOrStaff() { return isAdmin() && (isOfficer() || isStaff()); }
 
-// ---------- Pub/Sub (reactivity) ----------
+/* ---------------- Pub/Sub ---------------- */
 const listeners = new Set();
-/** subscribe(fn) -> unsubscribe() */
 export function subscribe(fn) {
   if (typeof fn === "function") {
     listeners.add(fn);
@@ -104,16 +97,29 @@ function sessionSnapshot() {
   return { user: adminUser(), role: adminRole(), token: adminToken(), exp: getExp(), isAdmin: isAdmin() };
 }
 
-// ---------- Login (direct to GAS) ----------
+/* ---------------- Login (direct to GAS + secret) ---------------- */
 export async function adminLogin(username, password) {
+  const body = {
+    action: "admin.staff:login",
+    username,
+    password,
+    secret: adminSecret(), // <-- include shared secret to satisfy Apps Script auth
+  };
+
   const res = await fetch(GAS_URL, {
     method: "POST",
     // text/plain avoids preflight; Apps Script reads raw body via e.postData.contents
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action: "admin.staff:login", username, password }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Login failed (${res.status})`);
-  const data = await res.json();
+
+  // Apps Script may respond 401/403 with text "Unauthorized"
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Login failed (${res.status})`);
+  }
+
+  const data = await res.json().catch(() => ({}));
   if (!data?.ok) throw new Error(data?.error || "Login failed");
 
   setAdminSession({
