@@ -4,15 +4,24 @@ import { createMemoryHistory, createWebHistory, createRouter } from "vue-router"
 import Status from "@/views/StatusView.vue";
 import Pilots from "@/views/PilotsView.vue";
 import Events from "@/views/EventsView.vue";
+
+import LoginView from "@/views/LoginView.vue";       // NEW home landing
 import AdminGate from "@/views/admin/AdminGate.vue";
 import AdminHome from "@/views/admin/AdminHome.vue";
+
 import { isAdmin } from "@/utils/adminAuth";
 import Config from "@/assets/info/general-config.json";
 
 const DEFAULT_TITLE = Config.defaultTitle;
 
 const routes = [
-  { path: "/", redirect: "/status" },
+  // Landing with two big options
+  {
+    path: "/",
+    name: "Access Portal",
+    component: LoginView,
+    meta: { title: `${DEFAULT_TITLE} ACCESS PORTAL`, public: true },
+  },
 
   {
     path: "/status",
@@ -36,11 +45,11 @@ const routes = [
     meta: { title: `${DEFAULT_TITLE} OPERATIONS LOG` },
   },
 
-  // ---- Admin
+  // Admin
   {
     path: "/admin/login",
     name: "Admin Login",
-    component: AdminGate,
+    component: AdminGate, // keep dedicated admin login if you still want it
     meta: { title: `${DEFAULT_TITLE} ADMIN LOGIN`, public: true },
   },
   {
@@ -50,7 +59,7 @@ const routes = [
     meta: { title: `${DEFAULT_TITLE} ADMIN`, requiresAdmin: true },
   },
 
-  { path: "/:pathMatch(.*)*", redirect: "/status" },
+  { path: "/:pathMatch(.*)*", redirect: "/" },
 ];
 
 const router = createRouter({
@@ -64,14 +73,12 @@ const router = createRouter({
 // Single guard: admin gate + title
 router.beforeEach((to, _from, next) => {
   // Protect admin routes
-  if (to.meta?.requiresAdmin) {
-    if (!isAdmin()) {
-      return next({ path: "/admin/login", query: { redirect: to.fullPath } });
-    }
+  if (to.meta?.requiresAdmin && !isAdmin()) {
+    return next({ path: "/admin/login", query: { redirect: to.fullPath } });
   }
 
-  // Prevent seeing login if already authed
-  if (to.path === "/admin/login" && isAdmin()) {
+  // If already authed, skip any login screens
+  if ((to.path === "/" || to.path === "/admin/login") && isAdmin()) {
     return next({ path: "/admin" });
   }
 
