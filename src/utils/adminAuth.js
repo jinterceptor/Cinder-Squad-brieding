@@ -1,27 +1,38 @@
 // src/utils/adminAuth.js
-// Staff auth via Netlify proxy → GAS; session-based (no persistence across full browser restarts)
+// Staff auth via Netlify Function → GAS; session-based (clears on full browser restart)
 
 const ENDPOINT = "/.netlify/functions/gas"; // same-origin → no CORS
 const SECRET = "PLEX";
 
-const STORAGE_KEY = "staff-auth"; // previous localStorage key (we'll purge)
-const SESSION_KEY = "staff-auth-session"; // new sessionStorage key
+const STORAGE_KEY = "staff-auth";        // legacy (purged)
+const SESSION_KEY = "staff-auth-session"; // current (session only)
 
+// ---- in-memory auth snapshot
 let auth = { token: null, user: null, role: null, exp: 0 };
 
-// --- tiny event bus for reactive consumers (Sidebar etc.)
+// ---- tiny event bus (reactivity)
 const listeners = new Set();
 function notify() { for (const cb of listeners) try { cb(getSnapshot()); } catch {} }
-export function subscribe(cb) { listeners.add(cb); try { cb(getSnapshot()); } catch {}; return () => listeners.delete(cb); }
 
-// snapshot
+/** subscribe(fn) -> unsubscribe() */
+export function subscribe(cb) { listeners.add(cb); try { cb(getSnapshot()); } catch {}; return () => listeners.delete(cb); }
+/** alias some code expects */
+export const onChange = subscribe;
+
+// ---- snapshot helpers
 function getSnapshot() {
-  return { token: auth.token || null, user: auth.user ? { ...auth.user } : null, role: auth.role || null, exp: auth.exp || 0 };
+  return {
+    token: auth.token || null,
+    user: auth.user ? { ...auth.user } : null,
+    role: auth.role || null,
+    exp: auth.exp || 0,
+  };
 }
 
-// migrate: nuke any old localStorage token (persisted across restarts)
+// ---- purge legacy localStorage token
 try { localStorage.removeItem(STORAGE_KEY); } catch {}
 
+// ---- load/save session
 function loadFromSession() {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
@@ -31,9 +42,7 @@ function loadFromSession() {
     else sessionStorage.removeItem(SESSION_KEY);
   } catch { try { sessionStorage.removeItem(SESSION_KEY); } catch {} }
 }
-function saveToSession() {
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(auth)); } catch {}
-}
+function saveToSession() { try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(auth)); } catch {} }
 
 function isValidAuth(a) {
   if (!a || typeof a !== "object") return false;
@@ -41,12 +50,10 @@ function isValidAuth(a) {
   if (!(r === "officer" || r === "staff")) return false;
   if (!a.user || typeof a.user.username !== "string") return false;
   const t = a.token; if (typeof t !== "string" || !t.includes(".")) return false; // signed "<data>.<sig>"
-  const now = Date.now();
-  // exp required & in future
-  return Number.isFinite(a.exp) && a.exp > now;
+  return Number.isFinite(a.exp) && a.exp > Date.now();
 }
 
-// keep tabs in sync (multiple tabs)
+// ---- cross-tab sync
 try {
   window.addEventListener("storage", (ev) => {
     if (ev.key !== SESSION_KEY) return;
@@ -55,26 +62,31 @@ try {
   });
 } catch {}
 
-// initial load
+// ---- initial load
 loadFromSession();
 
-// public API
+// ---- public API
 export async function adminLogin(username, password) {
+  // NOTE: Action matches your GAS handler: "login"
   const res = await fetch(ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids preflight
     body: JSON.stringify({ secret: SECRET, action: "login", username, password }),
   });
-  const data = await res.json();
-  if (!data?.ok) throw new Error(data?.error || "Login failed");
+
+  // Robust parse (GAS can return text/html on error)
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { ok: false, error: text || `HTTP ${res.status}` }; }
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `Login failed (${res.status})`);
 
   // session-only + TTL (8h)
   const now = Date.now();
   const ttlMs = 8 * 60 * 60 * 1000;
 
   auth = {
-    token: data.token,
-    user: { username: data.username, displayName: data.displayName },
+    token: data.token, // expected format "<data>.<sig>"
+    user: { username: data.username, displayName: data.displayName || data.username },
     role: String(data.role || "staff").toLowerCase(),
     exp: now + ttlMs,
   };
@@ -89,29 +101,43 @@ export function adminLogout() {
   notify();
 }
 
-// Officer/Staff only
+// Gate helpers
 export function isOfficerOrStaff() {
-  // auto-expire on access
   if (!isFresh()) { adminLogout(); return false; }
   const r = (auth.role || "").toLowerCase();
   return !!auth.token && (r === "officer" || r === "staff");
 }
 export function isAdmin() { return isOfficerOrStaff(); }
-
 function isFresh() {
   return Number.isFinite(auth.exp) && auth.exp > Date.now() && auth.token && String(auth.token).includes(".");
 }
 
-// getters
+// Getters (consumers expect these)
 export function adminToken()    { return isFresh() ? (auth.token || "") : ""; }
 export function adminUser()     { return isFresh() ? auth.user : null; }
 export function adminRole()     { return isFresh() ? (auth.role || "staff") : "staff"; }
 export function adminEndpoint() { return ENDPOINT; }
 export function adminSecret()   { return SECRET; }
+// Additional role helpers for compatibility
+export function isOfficer()     { return isFresh() && (String(auth.role||"").toLowerCase() === "officer"); }
+export function isStaff()       { return isFresh() && (String(auth.role||"").toLowerCase() === "staff"); }
+// Some code may call this; keep identical to ENDPOINT to avoid surprises
+export function staffEndpoint() { return ENDPOINT; }
 
-// utility: hard reset (optional usage from console)
+// Utilities
 export function __purgeAuth__() {
   try { localStorage.removeItem(STORAGE_KEY); } catch {}
   try { sessionStorage.removeItem(SESSION_KEY); } catch {}
   adminLogout();
+}
+
+/** Minimal ping to debug end-to-end path (returns {ok:true} from GAS if wired) */
+export async function adminPing() {
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ secret: SECRET, action: "ping" }),
+  });
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { return { ok: false, error: text || `HTTP ${res.status}` }; }
 }
