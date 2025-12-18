@@ -1,7 +1,7 @@
 <!-- /src/components/layout/Header.vue -->
 <template>
   <header>
-    <!-- Auth Indicator (left) -->
+    <!-- Auth Indicator -->
     <div class="auth-indicator" v-if="isLoggedIn">
       <div class="auth-line">
         <span class="auth-role" :data-variant="authVariant">{{ authLabel }}</span>
@@ -13,9 +13,11 @@
     <div class="title clipped-x-large-forward">
       <img class="logo" src="/faction-logos/Broadsword111.png" />
       <div class="title-container">
+        <!-- PRIMARY TITLE (FIXED) -->
         <div id="title-first-line" class="title-row">
           <span id="title-header">UNSC TACNET</span>
         </div>
+        <!-- SECONDARY LINE (CONFIG-DRIVEN) -->
         <div class="title-row">
           <span id="subtitle-header">{{ header.subheaderTitle }}</span>
           <span id="subtitle-subheader">// {{ header.subheaderSubtitle }}</span>
@@ -31,26 +33,31 @@
       </video>
 
       <div class="location-info">
+        <!-- ROW 1 -->
         <div class="location-row grid">
           <div id="year">
             <h4>Year</h4>
             <span class="subtitle">{{ header.year }}</span>
           </div>
+
           <div id="status" class="span-2">
             <h4>Status</h4>
             <span class="subtitle">{{ header.status }}</span>
           </div>
         </div>
 
+        <!-- ROW 2 -->
         <div class="location-row grid">
           <div id="AO">
             <h4>AO</h4>
             <span class="subtitle">{{ header.AO }}</span>
           </div>
+
           <div id="planet">
             <h4>Planet</h4>
             <span class="subtitle">{{ header.planet }}</span>
           </div>
+
           <div id="system">
             <h4>System</h4>
             <span class="subtitle">{{ header.system }}</span>
@@ -64,7 +71,6 @@
 <script>
 import {
   adminUser,
-  adminRole,
   isAdmin,
   adminLogout,
   subscribe as authSubscribe,
@@ -77,8 +83,8 @@ export default {
   },
   data() {
     return {
-      role: null,          // 'member' | 'staff' | null
-      staffUser: null,     // { username, displayName } | null
+      role: null,          // 'member' | 'staff' | null (overlay role)
+      staffUser: null,     // { username, displayName } | null (admin session)
       unsub: null,
     };
   },
@@ -87,7 +93,7 @@ export default {
       return this.role === "member" || this.isStaff;
     },
     isStaff() {
-      return isAdmin(); // uses session + expiry from adminAuth
+      return isAdmin(); // reads admin session + expiry
     },
     authVariant() {
       return this.isStaff ? "staff" : "member";
@@ -101,7 +107,7 @@ export default {
   },
   created() {
     this.readAuth();
-    this.unsub = authSubscribe(() => this.readAuth()); // react to admin session changes
+    this.unsub = authSubscribe(() => this.readAuth());
     window.addEventListener("storage", this.onStorage);
   },
   beforeUnmount() {
@@ -115,12 +121,11 @@ export default {
     },
     onStorage(e) {
       if (!e) return;
-      if (e.key === "admin:user" || e.key === "admin:role" || e.key === "admin:token" || e.key === "admin:exp" || e.key === "authRole") {
+      if (["admin:user", "admin:role", "admin:token", "admin:exp", "authRole"].includes(e.key)) {
         this.readAuth();
       }
     },
     async onLogout() {
-      // why: ensure both staff and member paths are cleared
       try { adminLogout(); } catch {}
       try { sessionStorage.removeItem("authRole"); } catch {}
       this.readAuth();
@@ -133,7 +138,10 @@ export default {
 </script>
 
 <style scoped>
-/* Auth indicator pill */
+/* Ensure absolute children can anchor inside header */
+header { position: relative; }
+
+/* Auth indicator pill (top-left) */
 .auth-indicator {
   position: absolute;
   left: 12px;
@@ -150,6 +158,7 @@ export default {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1;
+  z-index: 2; /* stay above header art */
 }
 
 .auth-line { display: inline-flex; align-items: center; gap: 6px; }
@@ -178,7 +187,7 @@ export default {
 }
 .auth-logout:hover { border-color: rgba(170,255,210,.9); }
 
-/* Keep existing styles */
+/* Existing layout styles you provided */
 .location-row.grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
