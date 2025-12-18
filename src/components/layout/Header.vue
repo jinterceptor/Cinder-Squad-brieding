@@ -172,7 +172,7 @@ export default {
 /* Positioned into the empty space to the left of planet block.
    Adjust --auth-right to fine-tune horizontal position if needed. */
 .auth-status {
-  --auth-right: 300px; /* move further left by increasing this; ~planet block width */
+  --auth-right: 600px; /* move further left by increasing this; ~planet block width */
   position: absolute;
   top: 8px;
   right: var(--auth-right);
