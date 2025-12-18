@@ -1,4 +1,3 @@
-<!-- src/components/layout/Header.vue -->
 <template>
   <header class="hdr-root">
     <!-- Auth status (LEFT, no tile bg) -->
@@ -10,8 +9,11 @@
           <span v-else>GUEST</span>
         </span>
 
-        <span class="auth-name" v-if="authed">{{ displayName }}</span>
-        <span class="auth-name muted" v-else>NOT SIGNED IN</span>
+        <div class="auth-ident">
+          <span v-if="authed && rankShort" class="rank-pill">{{ rankShort }}</span>
+          <span class="auth-name" v-if="authed">{{ displayName }}</span>
+          <span class="auth-name muted" v-else>NOT SIGNED IN</span>
+        </div>
       </div>
 
       <div class="auth-actions">
@@ -85,7 +87,62 @@
 </template>
 
 <script>
-import { subscribe, adminUser, adminRole, isAdmin, adminLogout } from "@/utils/adminAuth";
+import {
+  subscribe,
+  adminUser,
+  adminRole,
+  isAdmin,
+  adminLogout,
+} from "@/utils/adminAuth";
+
+/**
+ * RefData CSV (published) – we use CSV to avoid Sheets API auth.
+ * You shared the pubhtml link earlier; the CSV form is below.
+ * gid=107253735 corresponds to "RefData" sheet in your doc.
+ */
+const REF_CSV =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
+
+let _refCache = null;
+async function fetchRefDataOnce() {
+  if (_refCache) return _refCache;
+  const res = await fetch(REF_CSV, { mode: "cors" });
+  const text = await res.text();
+  _refCache = parseCsv(text);
+  return _refCache;
+}
+
+function parseCsv(text) {
+  // minimal CSV parser: handles commas, quotes, and newlines.
+  const rows = [];
+  let cur = [], val = "", inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1];
+    if (inQ) {
+      if (c === '"' && n === '"') { val += '"'; i++; }
+      else if (c === '"') { inQ = false; }
+      else { val += c; }
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { cur.push(val); val = ""; }
+      else if (c === '\n' || c === '\r') {
+        if (val !== "" || cur.length) { cur.push(val); rows.push(cur); cur = []; val = ""; }
+        // swallow CRLF pairs
+        if (c === '\r' && n === '\n') i++;
+      } else { val += c; }
+    }
+  }
+  if (val !== "" || cur.length) { cur.push(val); rows.push(cur); }
+  if (!rows.length) return { headers: [], rows: [] };
+  const headers = rows[0].map(h => (h || "").trim());
+  const dataRows = rows.slice(1).filter(r => r.some(x => (x || "").trim().length));
+  return { headers, rows: dataRows };
+}
+
+function findCol(headers, names) {
+  const ix = headers.findIndex(h => names.some(n => h.toLowerCase() === n.toLowerCase()));
+  return ix >= 0 ? ix : -1;
+}
 
 export default {
   name: "Header",
@@ -94,7 +151,14 @@ export default {
     header: { type: Object, required: true },
   },
   data() {
-    return { authed: false, displayName: "", role: "staff", unsub: null };
+    return {
+      authed: false,
+      displayName: "",
+      role: "staff",
+      rankShort: "",
+
+      unsub: null,
+    };
   },
   computed: {
     roleLabel() {
@@ -108,18 +172,50 @@ export default {
     },
   },
   mounted() {
-    const push = () => {
+    const push = async () => {
       this.authed = !!isAdmin();
       const u = adminUser();
       this.displayName = u?.displayName || u?.username || "";
       this.role = adminRole() || "staff";
+      this.rankShort = "";
+      if (this.authed && this.displayName) {
+        try { await this.resolveRank(this.displayName); } catch {}
+      }
     };
     this.unsub = subscribe(push);
     push();
   },
-  beforeUnmount() { if (typeof this.unsub === "function") this.unsub(); },
+  beforeUnmount() {
+    if (typeof this.unsub === "function") this.unsub();
+  },
   methods: {
-    doLogout() { adminLogout(); this.$router.replace("/status"); },
+    async resolveRank(troopName) {
+      const { headers, rows } = await fetchRefDataOnce();
+
+      // find columns
+      const colTroop = findCol(headers, ["Troop List", "Troop", "Name", "TroopList"]);
+      const colRank  = findCol(headers, ["Rank", "Current Rank", "Rank (abbr)", "Rank Abbr"]);
+      if (colTroop === -1 || colRank === -1) return;
+
+      // exact match first
+      let hit = rows.find(r => (r[colTroop] || "").trim() === troopName.trim());
+
+      // if not exact, try case-insensitive & collapsed spaces
+      if (!hit) {
+        const norm = (s) => s.replace(/\s+/g, " ").trim().toLowerCase();
+        const target = norm(troopName);
+        hit = rows.find(r => norm(r[colTroop] || "") === target);
+      }
+
+      if (hit) {
+        const rk = String(hit[colRank] || "").trim();
+        if (rk) this.rankShort = rk;
+      }
+    },
+    doLogout() {
+      adminLogout();
+      this.$router.replace("/status");
+    },
   },
 };
 </script>
@@ -140,18 +236,16 @@ export default {
 
 /* --------- Auth status (LEFT, no background tile) --------- */
 .auth-status{
-  --auth-left: 750px;
+  --auth-left: 750px; /* your sweet spot */
   position: absolute;
-  top: 10px;                /* slightly higher */
+  top: 4px;
   left: var(--auth-left);
   display: grid;
   gap: .4rem;
   min-width: 260px;
-  /* No background, no border — integrates with header */
   padding: 0;
 }
 
-/* compact top row */
 .auth-top{
   display: grid;
   grid-template-columns: auto 1fr;
@@ -159,7 +253,37 @@ export default {
   align-items: center;
 }
 
-/* Badge: pill. Officer = cool cyan; Staff = darker military olive. */
+.auth-ident{
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-width: 0;
+}
+
+/* small rank pill before name */
+.rank-pill{
+  border: 1px solid rgba(120,200,255,.7);
+  color: #e6f3ff;
+  background: rgba(6,24,40,.55);
+  border-radius: 999px;
+  padding: .08rem .45rem;
+  font-size: .74rem;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+
+.auth-name{
+  min-width: 0;
+  color: #E6F3FF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: .92rem;
+  letter-spacing: .04em;
+}
+.muted{ color:#9ec5e6; }
+
+/* Badge: Officer = cool cyan; Staff = darker olive */
 .auth-badge{
   display: inline-flex;
   align-items: center;
@@ -173,53 +297,19 @@ export default {
   text-transform: uppercase;
   letter-spacing: .12em;
   color: #E6F3FF;
-  border: 1px solid rgba(150,190,230,.5);   /* default/guest */
+  border: 1px solid rgba(150,190,230,.5);
   background: rgba(0,18,36,.42);
 }
-
-/* small “chevron” icon */
 .auth-icon{
-  width: 12px; height: 12px;
-  border-radius: 2px;
+  width: 12px; height: 12px; border-radius: 2px;
   background:
     linear-gradient(135deg, transparent 40%, rgba(255,255,255,.18) 40% 52%, transparent 52%),
     linear-gradient(315deg, transparent 40%, rgba(255,255,255,.18) 40% 52%, transparent 52%);
   opacity: .9;
 }
-
-/* Officer: cyan/teal, a bit subdued */
-.badge-officer{
-  border-color: rgba(120,200,255,.8);
-  background: rgba(6,24,40,.55);
-}
-
-/* Staff: darker military olive look */
-.badge-staff{
-  border-color: rgba(88,128,88,.85);
-  background: linear-gradient(180deg, rgba(10,24,12,.72), rgba(10,24,12,.5));
-}
-.badge-staff .auth-icon{
-  background:
-    linear-gradient(135deg, transparent 40%, rgba(190,230,190,.22) 40% 52%, transparent 52%),
-    linear-gradient(315deg, transparent 40%, rgba(190,230,190,.22) 40% 52%, transparent 52%);
-}
-
-/* Guest state (unused when authed) */
-.badge-guest{
-  border-color: rgba(150,190,230,.5);
-}
-
-/* name & actions */
-.auth-name{
-  min-width: 0;
-  color: #E6F3FF;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: .92rem;
-  letter-spacing: .04em;
-}
-.muted{ color:#9ec5e6; }
+.badge-officer{ border-color: rgba(120,200,255,.8); background: rgba(6,24,40,.55); }
+.badge-staff  { border-color: rgba(88,128,88,.85);  background: linear-gradient(180deg, rgba(10,24,12,.72), rgba(10,24,12,.5)); }
+.badge-guest  { border-color: rgba(150,190,230,.5); }
 
 .auth-actions{ display: flex; gap: .45rem; }
 .auth-btn{
