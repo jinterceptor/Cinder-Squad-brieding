@@ -168,7 +168,7 @@ export default {
 /* Place it in the blank space left of the planet block, to the right of the title area.
    Tweak --auth-left to slide horizontally without overlapping anything. */
 .auth-status {
-  --auth-left: 700px; /* increase/decrease to nudge; ~width of title cluster */
+  --auth-left: 750px; /* increase/decrease to nudge; ~width of title cluster */
   position: absolute;
   top: 8px;
   left: var(--auth-left);
