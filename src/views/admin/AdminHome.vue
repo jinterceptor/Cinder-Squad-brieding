@@ -638,7 +638,7 @@ export default {
     toggleWarn(i) { const next = [...this.edit.warn]; next[i] = !next[i]; this.edit.warn = next; },
     async saveDiscipline() {
       this.discError = ""; this.discOK = false;
-      const m = (this.members || []).find x => String(x.id || '') === String(this.edit.memberId);
+      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
       if (!m) { this.discError = "Select a member."; return; }
       if (!this.isInTroopList(m)) { this.discError = "Member not in Troop List."; return; }
       if (this.isDischarged(this.memberStatusOf(m))) { this.discError = "Cannot edit a discharged member."; return; }
@@ -723,6 +723,7 @@ export default {
 .chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
 .chip.warn { border-color: rgba(255,190,80,0.7); }
+
 .muted { color: #9ec5e6; }
 .ok-text { color: #79ffba; }
 .empty { color: #9ec5e6; padding: .8rem; text-align: center; }
