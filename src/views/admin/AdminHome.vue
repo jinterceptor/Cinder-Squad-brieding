@@ -7,7 +7,7 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
-      <div class="header-shell">
+      <div class="header-shell header-admin">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
           <h1>Admin</h1>
@@ -123,7 +123,7 @@
           </div>
         </div>
 
-        <!-- Discipline (notes + warnings) -->
+        <!-- Discipline -->
         <div v-else-if="activeKey === 'discipline'" class="promotions-panel">
           <div class="filters">
             <div class="row">
@@ -133,7 +133,9 @@
               </label>
               <div class="control" style="align-self:end">
                 <span>&nbsp;</span>
-                <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">{{ discLoading ? 'Refreshing…' : 'Refresh' }}</button>
+                <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">
+                  {{ discLoading ? 'Refreshing…' : 'Refresh' }}
+                </button>
               </div>
             </div>
           </div>
@@ -157,9 +159,9 @@
               <label class="control">
                 <span>Warnings (3 slots)</span>
                 <div class="warn-toggle">
-                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" title="Warning 1">1</button>
-                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" title="Warning 2">2</button>
-                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" title="Warning 3">3</button>
+                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)">1</button>
+                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)">2</button>
+                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)">3</button>
                 </div>
               </label>
             </div>
@@ -201,13 +203,6 @@
                   <span class="td">{{ r.squad || '—' }}</span>
                   <span class="td">
                     <span class="status-pill" :class="'st-' + statusClass(r.status)">{{ r.status || 'Unknown' }}</span>
-                  </span>
-                  <span class="td warncells">
-                    <div class="warn-badges" :class="'w'+r.warnCount" aria-label="Warnings">
-                      <span class="dot" :class="{ on: r.warnBits[0] }" title="Warning 1"></span>
-                      <span class="dot" :class="{ on: r.warnBits[1] }" title="Warning 2"></span>
-                      <span class="dot" :class="{ on: r.warnBits[2] }" title="Warning 3"></span>
-                    </div>
                   </span>
                   <span class="td">{{ r.notes || '—' }}</span>
                 </div>
@@ -279,11 +274,11 @@ export default {
     }
   },
   mounted() {
-    this.triggerFlicker(); // why: consistent with other views
+    this.triggerFlicker();
   },
   computed: {
     isAuthed() { return isAdmin(); },
-
+    /* ... (unchanged computed/methods from your last working version) ... */
     nameKey() {
       return (name) =>
         String(name || "")
@@ -292,19 +287,12 @@ export default {
           .trim()
           .toUpperCase();
     },
-    cleanMemberName() {
-      return (name) => String(name || "").replace(/\s*[\(\[].*?[\)\]]\s*$/g, "").trim();
-    },
+    cleanMemberName() { return (name) => String(name || "").replace(/\s*[\(\[].*?[\)\]]\s*$/g, "").trim(); },
     rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
-
     normalizeStatus() {
-      const pretty = {
-        ACTIVE: "Active", RESERVE: "Reserve", ELOA: "ELOA", OTHER: "Other",
-        INACTIVE: "Inactive", UNKNOWN: "Unknown", DISCHARGED: "Discharged",
-      };
+      const pretty = { ACTIVE:"Active", RESERVE:"Reserve", ELOA:"ELOA", OTHER:"Other", INACTIVE:"Inactive", UNKNOWN:"Unknown", DISCHARGED:"Discharged" };
       return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
     },
-
     statusIndexFromApi() {
       const idx = Object.create(null);
       (this.disciplineRows || []).forEach(r => {
@@ -320,12 +308,7 @@ export default {
         has: (_, k) => (k in this.csvStatusIndex) || (k in this.statusIndexFromApi)
       });
     },
-    memberStatusOf() {
-      return (m) => {
-        const nk = this.nameKey(this.cleanMemberName(m?.name));
-        return this.statusIndex[nk] || "Unknown";
-      };
-    },
+    memberStatusOf() { return (m) => this.statusIndex[this.nameKey(this.cleanMemberName(m?.name))] || "Unknown"; },
     isDischarged() { return (status) => String(status || "").toLowerCase() === "discharged"; },
     isInTroopList() {
       return (m) => {
@@ -334,7 +317,6 @@ export default {
         return hasCsv ? !!this.csvTroopIndex[nk] : true;
       };
     },
-
     attendanceMap() {
       const map = Object.create(null);
       (this.members || []).forEach((m) => {
@@ -352,89 +334,55 @@ export default {
       });
       return map;
     },
-
     membershipIndex() {
       const idx = Object.create(null);
       const nk = this.nameKey;
-      const addMember = (squadName, m) => {
+      const add = (squadName, m) => {
         if (!m) return;
         if (m.id != null) idx[`ID:${m.id}`] = squadName;
         if (m.name) idx[`NM:${nk(m.name)}`] = squadName;
       };
       (this.orbat || []).forEach((sq) => {
-        const squadName = String(sq?.squad || "").trim();
-        if (!squadName) return;
-        (sq?.fireteams || []).forEach((ft) => (ft?.slots || []).forEach((slot) => addMember(squadName, slot?.member)));
-        (sq?.members || []).forEach((m) => addMember(squadName, m));
+        const s = String(sq?.squad || "").trim();
+        if (!s) return;
+        (sq?.fireteams || []).forEach((ft) => (ft?.slots || []).forEach((slot) => add(s, slot?.member)));
+        (sq?.members || []).forEach((m) => add(s, m));
       });
       return idx;
     },
-
     squads() {
       const set = new Set();
-      (this.orbat || []).forEach((sq) => {
-        const s = String(sq?.squad || "").trim();
-        if (s) set.add(s);
-      });
-      (this.members || []).forEach((m) => {
-        const s = String(m?.squad || "").trim();
-        if (s) set.add(s);
-      });
+      (this.orbat || []).forEach((sq) => { const s = String(sq?.squad || "").trim(); if (s) set.add(s); });
+      (this.members || []).forEach((m) => { const s = String(m?.squad || "").trim(); if (s) set.add(s); });
       return Array.from(set).sort((a, b) => a.localeCompare(b));
     },
-
     membersSorted() {
       return [...(this.members || [])]
         .filter(m => this.isInTroopList(m) && !this.isDischarged(this.memberStatusOf(m)))
         .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
     },
     membersSortedNonDischarged() { return this.membersSorted; },
-
     windowTitle() {
       if (!this.isAuthed) return "Locked";
-      return {
-        promotions: "PROMOTIONS OVERVIEW",
-        discipline: "DISCIPLINE (NOTES & WARNINGS)",
-        audits: "ROSTER AUDITS",
-      }[this.activeKey] || "ADMIN TOOLS";
+      return { promotions: "PROMOTIONS OVERVIEW", discipline: "DISCIPLINE (NOTES & WARNINGS)", audits: "ROSTER AUDITS" }[this.activeKey] || "ADMIN TOOLS";
     },
     sections() {
       return [
-        {
-          key: "promotions",
-          title: "Promotions Overview",
-          icon: "/icons/protocol.svg",
+        { key: "promotions", title: "Promotions Overview", icon: "/icons/protocol.svg",
           preview: [
             { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
             { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
-          ],
-        },
-        {
-          key: "discipline",
-          title: "Discipline",
-          icon: "/icons/protocol.svg",
+          ]},
+        { key: "discipline", title: "Discipline", icon: "/icons/protocol.svg",
           preview: [
             { label: "Members w/ notes", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
             { label: "Any warnings", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
-          ],
-        },
+          ]},
         { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
       ];
     },
-
     nextPromotion() {
-      const alias = {
-        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
-        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
-        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
-        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
-        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
-        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
-        HOSPITALCORPSMANTHIRDCLASS: "HM3", HOSPITALCORPSMANSECONDCLASS: "HM2",
-        HOSPITALCORPSMANFIRSTCLASS: "HM1", CHIEFHOSPITALCORPSMAN: "HMC",
-        WARRANTOFFICER: "WO", CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
-        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
-      };
+      const alias = { PRIVATE:"PVT", PRIVATEFIRSTCLASS:"PFC", SPECIALIST:"SPC", SPECIALIST2:"SPC2", SPECIALIST3:"SPC3", SPECIALIST4:"SPC4", LANCECORPORAL:"LCPL", CORPORAL:"CPL", SERGEANT:"SGT", STAFFSERGEANT:"SSGT", GUNNYSERGEANT:"GYSGT", SECONDLIEUTENANT:"2NDLT", FIRSTLIEUTENANT:"1STLT", CAPTAIN:"CAPT", HOSPITALMANAPPRENTICE:"HA", HOSPITALMAN:"HN", HOSPITALCORPSMANTHIRDCLASS:"HM3", HOSPITALCORPSMANSECONDCLASS:"HM2", HOSPITALCORPSMANFIRSTCLASS:"HM1", CHIEFHOSPITALCORPSMAN:"HMC", WARRANTOFFICER:"WO", CHIEFWARRANTOFFICER2:"CWO2", CHIEFWARRANTOFFICER3:"CWO3", CHIEFWARRANTOFFICER4:"CWO4", CHIEFWARRANTOFFICER5:"CWO5" };
       const rules = {
         PVT:{nextRank:"PFC",nextAt:10}, PFC:{nextRank:"SPC",nextAt:20}, SPC:{nextRank:"SPC2",nextAt:30},
         SPC2:{nextRank:"SPC3",nextAt:40}, SPC3:{nextRank:"SPC4",nextAt:50}, SPC4:{nextRank:"LCpl",nextAt:null},
@@ -455,7 +403,6 @@ export default {
       const term = (this.search || "").trim().toLowerCase();
       const squadFilter = this.selectedSquad;
       const onlyProm = !!this.onlyPromotable;
-
       const rows = [];
       for (const m of (this.members || [])) {
         if (!this.isInTroopList(m)) continue;
@@ -570,12 +517,9 @@ export default {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => {
-        requestAnimationFrame(() => {
-          this.animateView = true; // why: avoid post-anim snap
-        });
+        requestAnimationFrame(() => { this.animateView = true; });
       });
     },
-
     isFiniteNum(v) { return Number.isFinite(v); },
     getOps(member) {
       if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
@@ -596,7 +540,6 @@ export default {
       if (s === 'discharged') return 'discharged';
       return 'unknown';
     },
-
     async fetchTroopStatusCsv() {
       try {
         const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
@@ -632,9 +575,8 @@ export default {
       for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (inQ) {
-          if (ch === '"') {
-            if (text[i + 1] === '"') { val += '"'; i++; } else { inQ = false; }
-          } else { val += ch; }
+          if (ch === '"') { if (text[i + 1] === '"') { val += '"'; i++; } else { inQ = false; } }
+          else { val += ch; }
         } else {
           if (ch === '"') inQ = true;
           else if (ch === ',') { cur.push(val); val = ''; }
@@ -647,7 +589,6 @@ export default {
       if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
       return rows;
     },
-
     async loadDiscipline() {
       if (!this.discEndpoint || !this.discSecret) return;
       this.discLoading = true; this.discError = ""; this.discOK = false;
@@ -663,17 +604,13 @@ export default {
           warnings: r.warnings || 'N, N, N',
           status: this.normalizeStatus(r.status || r.troopStatus),
         }));
-      } catch (e) {
-        this.discError = String(e?.message || e);
-      } finally {
-        this.discLoading = false;
-      }
+      } catch (e) { this.discError = String(e?.message || e); }
+      finally { this.discLoading = false; }
     },
     async refreshDiscipline() {
       await this.loadDiscipline();
       if (this.troopStatusCsvUrl) await this.fetchTroopStatusCsv();
     },
-
     focusMemberByNameKey(nk) {
       const m = (this.members || []).find(x => this.nameKey(this.cleanMemberName(x?.name)) === nk);
       if (!m) return;
@@ -681,10 +618,7 @@ export default {
       if (this.isDischarged(this.memberStatusOf(m))) return;
       this.edit.memberId = m.id || null;
       this.populateEditFromMember();
-      this.$nextTick(() => {
-        const ta = this.$el.querySelector('textarea');
-        if (ta) ta.focus();
-      });
+      this.$nextTick(() => { const ta = this.$el.querySelector('textarea'); if (ta) ta.focus(); });
     },
     populateEditFromMember() {
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
@@ -695,19 +629,13 @@ export default {
       this.edit.notes = api?.notes || '';
       this.edit.warn = [0,1,2].map(i => warnings[i] === 'Y');
     },
-
     warnArrayToString(arr) {
       const a = Array.isArray(arr) ? arr : [false, false, false];
       const out = a.slice(0,3).map(x => (x ? 'Y' : 'N'));
       while (out.length < 3) out.push('N');
       return out.join(', ');
     },
-    toggleWarn(i) {
-      const next = [...this.edit.warn];
-      next[i] = !next[i];
-      this.edit.warn = next;
-    },
-
+    toggleWarn(i) { const next = [...this.edit.warn]; next[i] = !next[i]; this.edit.warn = next; },
     async saveDiscipline() {
       this.discError = ""; this.discOK = false;
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
@@ -732,15 +660,13 @@ export default {
           redirect: 'follow',
         });
         const text = await res.text();
-        let data;
-        try { data = JSON.parse(text); } catch { data = { ok: false, error: 'Bad JSON from server' }; }
+        let data; try { data = JSON.parse(text); } catch { data = { ok:false, error:'Bad JSON from server' }; }
         if (!data?.ok) throw new Error(data?.error || 'Save failed');
 
         this.discOK = true;
         await this.refreshDiscipline();
-      } catch (e) {
-        this.discError = String(e?.message || e);
-      } finally {
+      } catch (e) { this.discError = String(e?.message || e); }
+      finally {
         this.discSaving = false;
         setTimeout(() => (this.discOK = false), 1500);
       }
@@ -750,14 +676,20 @@ export default {
 </script>
 
 <style scoped>
-/* Reserve space for scrollbars to avoid end-of-fade width snap */
+/* Reserve space to avoid end-of-fade width snap */
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 .rows-scroll { scrollbar-gutter: stable; }
 
 /* Header alignment shell (matches other views) */
-.header-shell { height: 52px; overflow: hidden; } /* why: seats rhombus flush with plate */
+.header-shell { height: 52px; overflow: hidden; }
 
-/* Help compositor; avoids micro-jank on heavy DOM */
+/* Narrow only the LEFT “Admin” plate */
+.header-admin .section-header { width: 50%; min-width: 320px; } /* why: ~half width */
+@media (max-width: 980px) {
+  .header-admin .section-header { width: 70%; min-width: 260px; }
+}
+
+/* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
 
 /* (unchanged layout + visuals) */
