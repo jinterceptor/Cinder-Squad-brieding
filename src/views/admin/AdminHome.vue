@@ -1,6 +1,10 @@
 <!-- src/views/admin/AdminHome.vue -->
 <template>
-  <div class="windows-grid">
+  <div
+    class="windows-grid content-container"
+    :class="{ animate: animateView }"
+    :style="{ 'animation-delay': animationDelay }"
+  >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
       <div class="section-header clipped-medium-backward-pilot">
@@ -66,20 +70,23 @@
               <label class="control">
                 <span>Sort by</span>
                 <select v-model="sortKey">
-                  <option value="rank">Rank</option>
-                  <option value="name">Name</option>
-                  <option value="squad">Squad</option>
-                  <option value="ops">Ops</option>
+                  <option value="rank">Rank (high→low)</option>
+                  <option value="ops">Ops attended</option>
+                  <option value="progress">Progress to next rank</option>
+                  <option value="name">Name (A→Z)</option>
                 </select>
               </label>
-              <label class="control" style="align-self:end">
-                <span>&nbsp;</span>
-                <label class="checkbox">
-                  <input type="checkbox" v-model="onlyPromotable" />
-                  <span>Promotable only</span>
-                </label>
+              <label class="control chk">
+                <input type="checkbox" v-model="onlyPromotable" />
+                <span>Promotable only</span>
               </label>
             </div>
+          </div>
+
+          <div class="chips">
+            <span class="chip">Total: {{ promotionsTable.length }}</span>
+            <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
+            <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
           </div>
 
           <!-- Table: fixed header, scroll body -->
@@ -98,14 +105,9 @@
                   <span class="td name">{{ row.name }}</span>
                   <span class="td rank">{{ row.rank }}</span>
                   <span class="td squad">{{ row.squad || '—' }}</span>
-                  <span class="td ops">
-                    <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
-                    <span v-else class="muted">N/A</span>
-                  </span>
+                  <span class="td ops"><span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span><span v-else class="muted">N/A</span></span>
                   <span class="td next">
-                    <span v-if="row.nextRank">
-                      {{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small>
-                    </span>
+                    <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
                     <span v-else class="muted">—</span>
                   </span>
                   <span class="td prog">
@@ -129,9 +131,7 @@
               </label>
               <div class="control" style="align-self:end">
                 <span>&nbsp;</span>
-                <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">
-                  {{ discLoading ? 'Refreshing…' : 'Refresh' }}
-                </button>
+                <button class="btn-sm" @click="refreshDiscipline" :disabled="discLoading">{{ discLoading ? 'Refreshing…' : 'Refresh' }}</button>
               </div>
             </div>
           </div>
@@ -156,9 +156,9 @@
               <label class="control">
                 <span>Warnings (3 slots)</span>
                 <div class="warn-toggle">
-                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)">1</button>
-                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)">2</button>
-                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)">3</button>
+                  <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" :aria-pressed="!!edit.warn[0]" aria-label="Toggle warning 1" title="Warning 1">1</button>
+                  <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" :aria-pressed="!!edit.warn[1]" aria-label="Toggle warning 2" title="Warning 2">2</button>
+                  <button type="button" class="warn-pill lvl3" :class="{ on: edit.warn[2] }" @click="toggleWarn(2)" :aria-pressed="!!edit.warn[2]" aria-label="Toggle warning 3" title="Warning 3">3</button>
                 </div>
               </label>
             </div>
@@ -204,9 +204,9 @@
                   </span>
                   <span class="td warncells">
                     <div class="warn-badges" :class="'w'+r.warnCount" aria-label="Warnings">
-                      <span class="dot" :class="{ on: r.warnBits[0] }"></span>
-                      <span class="dot" :class="{ on: r.warnBits[1] }"></span>
-                      <span class="dot" :class="{ on: r.warnBits[2] }"></span>
+                      <span class="dot" :class="{ on: r.warnBits[0] }" title="Warning 1"></span>
+                      <span class="dot" :class="{ on: r.warnBits[1] }" title="Warning 2"></span>
+                      <span class="dot" :class="{ on: r.warnBits[2] }" title="Warning 3"></span>
                     </div>
                   </span>
                   <span class="td">{{ r.notes || '—' }}</span>
@@ -240,6 +240,10 @@ export default {
   },
   data() {
     return {
+      // view flicker
+      animateView: false,
+      animationDelay: "0ms",
+
       activeKey: "promotions",
 
       // Promotions
@@ -274,73 +278,325 @@ export default {
       this.fetchTroopStatusCsv();
     }
   },
+  mounted() {
+    // why: trigger panel "power-on" flicker on mount
+    this.triggerFlicker();
+  },
   computed: {
     isAuthed() { return isAdmin(); },
-    windowTitle() {
-      if (this.activeKey === "promotions") return "Promotions";
-      if (this.activeKey === "discipline") return "Discipline";
-      if (this.activeKey === "audits") return "Audits";
-      return "Admin";
+
+    nameKey() {
+      return (name) =>
+        String(name || "")
+          .replace(/["'.]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toUpperCase();
     },
+    cleanMemberName() {
+      return (name) => String(name || "").replace(/\s*[\(\[].*?[\)\]]\s*$/g, "").trim();
+    },
+    rankKey() { return (rank) => String(rank || "").trim().toUpperCase().replace(/[.\s]/g, ""); },
+
+    normalizeStatus() {
+      const pretty = {
+        ACTIVE: "Active", RESERVE: "Reserve", ELOA: "ELOA", OTHER: "Other",
+        INACTIVE: "Inactive", UNKNOWN: "Unknown", DISCHARGED: "Discharged",
+      };
+      return (raw) => pretty[String(raw || "").trim().toUpperCase()] || "Unknown";
+    },
+
+    statusIndexFromApi() {
+      const idx = Object.create(null);
+      (this.disciplineRows || []).forEach(r => {
+        const nk = r.nameKey || this.nameKey(r.name || "");
+        const s = this.normalizeStatus(r.status || r.troopStatus);
+        if (nk) idx[nk] = s;
+      });
+      return idx;
+    },
+    statusIndex() {
+      return new Proxy({}, {
+        get: (_, k) => this.csvStatusIndex[k] ?? this.statusIndexFromApi[k],
+        has: (_, k) => (k in this.csvStatusIndex) || (k in this.statusIndexFromApi)
+      });
+    },
+    memberStatusOf() {
+      return (m) => {
+        const nk = this.nameKey(this.cleanMemberName(m?.name));
+        return this.statusIndex[nk] || "Unknown";
+      };
+    },
+    isDischarged() { return (status) => String(status || "").toLowerCase() === "discharged"; },
+    isInTroopList() {
+      return (m) => {
+        const nk = this.nameKey(this.cleanMemberName(m?.name));
+        const hasCsv = Object.keys(this.csvTroopIndex).length > 0;
+        return hasCsv ? !!this.csvTroopIndex[nk] : true;
+      };
+    },
+
+    attendanceMap() {
+      const map = Object.create(null);
+      (this.members || []).forEach((m) => {
+        const ops = Number(m.opsAttended);
+        if (Number.isFinite(ops)) {
+          if (m.id != null) map[`ID:${m.id}`] = ops;
+          if (m.name) map[`NM:${this.nameKey(m.name)}`] = ops;
+        }
+      });
+      (this.attendance || []).forEach((row) => {
+        const ops = Number(row?.ops ?? row?.attended ?? row?.value);
+        if (!Number.isFinite(ops)) return;
+        if (row?.id != null) map[`ID:${row.id}`] = ops;
+        if (row?.name) map[`NM:${this.nameKey(row.name)}`] = ops;
+      });
+      return map;
+    },
+
+    membershipIndex() {
+      const idx = Object.create(null);
+      const nk = this.nameKey;
+      const addMember = (squadName, m) => {
+        if (!m) return;
+        if (m.id != null) idx[`ID:${m.id}`] = squadName;
+        if (m.name) idx[`NM:${nk(m.name)}`] = squadName;
+      };
+      (this.orbat || []).forEach((sq) => {
+        const squadName = String(sq?.squad || "").trim();
+        if (!squadName) return;
+        (sq?.fireteams || []).forEach((ft) => (ft?.slots || []).forEach((slot) => addMember(squadName, slot?.member)));
+        (sq?.members || []).forEach((m) => addMember(squadName, m));
+      });
+      return idx;
+    },
+
     squads() {
-      const s = new Set();
-      (this.members || []).forEach((m) => { if (m.squad) s.add(m.squad); });
-      return Array.from(s).sort();
+      const set = new Set();
+      (this.orbat || []).forEach((sq) => {
+        const s = String(sq?.squad || "").trim();
+        if (s) set.add(s);
+      });
+      (this.members || []).forEach((m) => {
+        const s = String(m?.squad || "").trim();
+        if (s) set.add(s);
+      });
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    },
+
+    membersSorted() {
+      return [...(this.members || [])]
+        .filter(m => this.isInTroopList(m) && !this.isDischarged(this.memberStatusOf(m)))
+        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+    },
+    membersSortedNonDischarged() { return this.membersSorted; },
+
+    windowTitle() {
+      if (!this.isAuthed) return "Locked";
+      return {
+        promotions: "PROMOTIONS OVERVIEW",
+        discipline: "DISCIPLINE (NOTES & WARNINGS)",
+        audits: "ROSTER AUDITS",
+      }[this.activeKey] || "ADMIN TOOLS";
+    },
+    sections() {
+      return [
+        {
+          key: "promotions",
+          title: "Promotions Overview",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
+            { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
+          ],
+        },
+        {
+          key: "discipline",
+          title: "Discipline",
+          icon: "/icons/protocol.svg",
+          preview: [
+            { label: "Members w/ notes", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
+            { label: "Any warnings", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
+          ],
+        },
+        { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
+      ];
+    },
+
+    nextPromotion() {
+      const alias = {
+        PRIVATE: "PVT", PRIVATEFIRSTCLASS: "PFC", SPECIALIST: "SPC",
+        SPECIALIST2: "SPC2", SPECIALIST3: "SPC3", SPECIALIST4: "SPC4",
+        LANCECORPORAL: "LCPL", CORPORAL: "CPL", SERGEANT: "SGT",
+        STAFFSERGEANT: "SSGT", GUNNYSERGEANT: "GYSGT",
+        SECONDLIEUTENANT: "2NDLT", FIRSTLIEUTENANT: "1STLT", CAPTAIN: "CAPT",
+        HOSPITALMANAPPRENTICE: "HA", HOSPITALMAN: "HN",
+        HOSPITALCORPSMANTHIRDCLASS: "HM3", HOSPITALCORPSMANSECONDCLASS: "HM2",
+        HOSPITALCORPSMANFIRSTCLASS: "HM1", CHIEFHOSPITALCORPSMAN: "HMC",
+        WARRANTOFFICER: "WO", CHIEFWARRANTOFFICER2: "CWO2", CHIEFWARRANTOFFICER3: "CWO3",
+        CHIEFWARRANTOFFICER4: "CWO4", CHIEFWARRANTOFFICER5: "CWO5",
+      };
+      const rules = {
+        PVT:{nextRank:"PFC",nextAt:10}, PFC:{nextRank:"SPC",nextAt:20}, SPC:{nextRank:"SPC2",nextAt:30},
+        SPC2:{nextRank:"SPC3",nextAt:40}, SPC3:{nextRank:"SPC4",nextAt:50}, SPC4:{nextRank:"LCpl",nextAt:null},
+        LCPL:{nextRank:"Cpl",nextAt:null}, CPL:{nextRank:"Sgt",nextAt:null}, SGT:{nextRank:"SSgt",nextAt:null},
+        SSGT:{nextRank:"GySgt",nextAt:null}, GYSGT:{nextRank:"2ndLt",nextAt:null}, "2NDLT":{nextRank:"1stLt",nextAt:null},
+        "1STLT":{nextRank:"Capt",nextAt:null}, CAPT:{nextRank:null,nextAt:null},
+        HA:{nextRank:"HN",nextAt:10}, HN:{nextRank:"HM3",nextAt:20}, HM3:{nextRank:"HM2",nextAt:30},
+        HM2:{nextRank:"HM1",nextAt:null}, HM1:{nextRank:"HMC",nextAt:null}, HMC:{nextRank:null,nextAt:null},
+        WO:{nextRank:"CWO2",nextAt:10}, CWO2:{nextRank:"CWO3",nextAt:20}, CWO3:{nextRank:"CWO4",nextAt:30},
+        CWO4:{nextRank:"CWO5",nextAt:null}, CWO5:{nextRank:null,nextAt:null},
+      };
+      return (member) => {
+        const rk = alias[this.rankKey(member?.rank)] || this.rankKey(member?.rank);
+        return rules[rk] || { nextRank: null, nextAt: null };
+      };
     },
     promotionsTable() {
-      const rows = (this.members || []).map((m) => {
-        const ops = this.formatOps(m.opsAttended);
-        const ladder = this.promotionLadderFor(m.rank);
-        const nextRank = ladder?.nextRank || null;
-        const opsToNext = this.opsToNextPromotion(m);
-        const progress = nextRank && Number.isFinite(opsToNext)
-          ? Math.min(100, Math.round((Number(m.opsAttended || 0) / ladder.nextAt) * 100))
-          : 0;
-        return {
-          id: m.id, name: m.name, rank: m.rank, squad: m.squad || "",
-          ops, nextRank, nextAt: ladder?.nextAt || null, opsToNext, progress,
-        };
+      const term = (this.search || "").trim().toLowerCase();
+      const squadFilter = this.selectedSquad;
+      const onlyProm = !!this.onlyPromotable;
+
+      const rows = [];
+      for (const m of (this.members || [])) {
+        if (!this.isInTroopList(m)) continue;
+        const status = this.memberStatusOf(m);
+        if (this.isDischarged(status)) continue;
+
+        if (term) {
+          const hay = [m.name, m.rank, m.squad, status].map(x => String(x || "").toLowerCase()).join(" ");
+          if (!hay.includes(term)) continue;
+        }
+        const squad = String(
+          m?.squad ||
+          this.membershipIndex[`ID:${m?.id}`] ||
+          this.membershipIndex[`NM:${this.nameKey(m?.name)}`] ||
+          ""
+        ).trim();
+        if (squadFilter && squadFilter !== "__ALL__" && squad !== squadFilter) continue;
+
+        const rule = this.nextPromotion(m);
+        const ops = this.getOps(m);
+        const nextRank = rule?.nextRank ?? null;
+        const nextAt = rule?.nextAt ?? null;
+
+        let progress = 0;
+        let opsToNext = null;
+        if (Number.isFinite(nextAt) && Number.isFinite(ops)) {
+          progress = Math.min(100, Math.max(0, Math.round((ops / nextAt) * 100)));
+          opsToNext = Math.max(0, nextAt - ops);
+        }
+
+        rows.push({
+          id: m.id,
+          name: m.name || "Unknown",
+          rank: m.rank || "N/A",
+          squad,
+          status,
+          ops: Number.isFinite(ops) ? ops : null,
+          nextRank,
+          nextAt,
+          progress,
+          opsToNext,
+          rankScore: this.rankScore(m?.rank),
+        });
+      }
+
+      const filtered = onlyProm ? rows.filter((r) => r.opsToNext === 0 && !!r.nextRank) : rows;
+      const sorter = {
+        rank: (a, b) => a.rankScore - b.rankScore,
+        ops: (a, b) => (b.ops ?? -Infinity) - (a.ops ?? -Infinity),
+        progress: (a, b) => (b.progress ?? -Infinity) - (a.progress ?? -Infinity),
+        name: (a, b) => a.name.localeCompare(b.name),
+      }[this.sortKey] || ((a, b) => 0);
+
+      return filtered.sort(sorter);
+    },
+    eligibleNowCount() { return this.promotionsTable.filter((r) => r.opsToNext === 0 && !!r.nextRank).length; },
+    imminentCount()     { return this.promotionsTable.filter((r) => Number.isFinite(r.opsToNext) && r.opsToNext > 0 && r.opsToNext <= 3).length; },
+    rankScore() {
+      const order = ["MAJ","CAPT","1STLT","2NDLT","CWO5","CWO4","CWO3","CWO2","WO","GYSGT","SSGT","SGT","CPL","LCPL","SPC4","SPC3","SPC2","SPC","PFC","PVT","RCT","HMC","HM1","HM2","HM3","HN","HA","HR"];
+      return (r) => { const idx = order.indexOf(this.rankKey(r)); return idx === -1 ? 999 : idx; };
+    },
+
+    disciplineRowsIndexed() {
+      const idx = Object.create(null);
+      (this.disciplineRows || []).forEach(r => { idx[r.nameKey] = r; });
+      return idx;
+    },
+    discTable() {
+      const rows = [];
+      (this.members || []).forEach(m => {
+        if (!this.isInTroopList(m)) return;
+        const status = this.memberStatusOf(m);
+        if (this.isDischarged(status)) return;
+
+        const nk = this.nameKey(m?.name);
+        const squad = String(m?.squad || this.membershipIndex[`ID:${m?.id}`] || this.membershipIndex[`NM:${nk}`] || '').trim();
+        const api = this.disciplineRowsIndexed[nk] || { notes: '', warnings: 'N, N, N' };
+        const bits = (api.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase() === 'Y');
+        const warnCount = bits.filter(Boolean).length;
+        rows.push({
+          name: m?.name || 'Unknown',
+          nameKey: this.nameKey(this.cleanMemberName(m?.name)),
+          squad,
+          status,
+          notes: api.notes || '',
+          warnings: api.warnings || 'N, N, N',
+          warnBits: [!!bits[0], !!bits[1], !!bits[2]],
+          warnCount,
+        });
       });
-
-      let filtered = rows;
-      if (this.search.trim()) {
-        const q = this.search.trim().toLowerCase();
-        filtered = filtered.filter(r =>
-          r.name.toLowerCase().includes(q) ||
-          r.rank.toLowerCase().includes(q) ||
-          r.squad.toLowerCase().includes(q)
-        );
+      return rows.sort((a,b) => a.name.localeCompare(b.name));
+    },
+    discFiltered() {
+      const term = (this.discSearch || '').trim().toLowerCase();
+      if (!term) return this.discTable;
+      return this.discTable.filter(r => {
+        const hay = [r.name, r.squad, r.notes, r.status].map(x => String(x||'').toLowerCase()).join(' ');
+        return hay.includes(term);
+      });
+    },
+  },
+  watch: {
+    isAuthed(v) {
+      if (v) {
+        this.loadDiscipline();
+        if (this.troopStatusCsvUrl) this.fetchTroopStatusCsv();
       }
-      if (this.selectedSquad !== "__ALL__") {
-        filtered = filtered.filter(r => r.squad === this.selectedSquad);
-      }
-      if (this.onlyPromotable) {
-        filtered = filtered.filter(r => r.nextRank && r.opsToNext === 0);
-      }
-
-      if (this.sortKey === "name") filtered.sort((a,b)=>a.name.localeCompare(b.name));
-      else if (this.sortKey === "squad") filtered.sort((a,b)=>a.squad.localeCompare(b.squad));
-      else if (this.sortKey === "ops") filtered.sort((a,b)=>(Number(b.ops||0)-Number(a.ops||0)));
-      else filtered.sort((a,b)=>a.rank.localeCompare(b.rank)); // default rank
-      return filtered;
     },
   },
   methods: {
-    isFiniteNum(v) { return Number.isFinite(Number(v)); },
-    refreshDiscipline() { this.loadDiscipline(); },
-    statusClass(st) {
-      const s = String(st || "").toLowerCase();
-      if (s.includes("active")) return "ok";
-      if (s.includes("reserve")) return "warn";
-      if (s.includes("discharg")) return "bad";
-      return "na";
+    // view flicker
+    triggerFlicker(delayMs = 0) {
+      this.animateView = false;
+      this.animationDelay = `${delayMs}ms`;
+      this.$nextTick(() => {
+        requestAnimationFrame(() => {
+          this.animateView = true; // keep set; avoids post-anim snap
+        });
+      });
     },
-    normalizeStatus(s) {
-      const n = String(s || "").toLowerCase();
-      if (n.includes("active")) return "Active Duty";
-      if (n.includes("reserve")) return "Reserve";
-      if (n.includes("discharg")) return "Discharged";
-      return s || "Unknown";
+
+    isFiniteNum(v) { return Number.isFinite(v); },
+    getOps(member) {
+      if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
+      if (member?.name) {
+        const nk = this.nameKey(member.name);
+        if (this.attendanceMap[`NM:${nk}`] !== undefined) return this.attendanceMap[`NM:${nk}`];
+      }
+      const direct = Number(member?.opsAttended);
+      return Number.isFinite(direct) ? direct : null;
+    },
+    statusClass(status) {
+      const s = String(status || 'Unknown').toLowerCase();
+      if (s === 'active') return 'active';
+      if (s === 'reserve') return 'reserve';
+      if (s === 'eloa') return 'eloa';
+      if (s === 'inactive') return 'inactive';
+      if (s === 'other') return 'other';
+      if (s === 'discharged') return 'discharged';
+      return 'unknown';
     },
 
     async fetchTroopStatusCsv() {
@@ -401,136 +657,204 @@ export default {
         const url = `${this.discEndpoint}?secret=${encodeURIComponent(this.discSecret)}&t=${Date.now()}`;
         const res = await fetch(url, { method: 'GET' });
         const data = await res.json();
-        const arr = Array.isArray(data)
-          ? data
-          : (Array.isArray(data?.data) ? data.data : []);
-        this.disciplineRows = arr.map((r) => {
-          return {
-            name: r?.name || "",
-            nameKey: this.nameKey(this.cleanMemberName(r?.name || "")),
-            squad: r?.squad || "",
-            status: r?.status || "",
-            warnBits: [
-              !!(r?.warn1 === true || r?.warn1 === "Y" || r?.warn1 === 1),
-              !!(r?.warn2 === true || r?.warn2 === "Y" || r?.warn2 === 1),
-              !!(r?.warn3 === true || r?.warn3 === "Y" || r?.warn3 === 1),
-            ],
-            warnCount: [r?.warn1, r?.warn2, r?.warn3].filter(w => w === true || w === "Y" || w === 1).length,
-            notes: r?.notes || "",
-          };
-        });
-        this.discOK = true;
+        const arr = Array.isArray(data) ? data : [];
+        this.disciplineRows = arr.map(r => ({
+          name: r.name || '',
+          nameKey: this.nameKey(this.cleanMemberName(r.name || r.nameKey || '')),
+          notes: r.notes || '',
+          warnings: r.warnings || 'N, N, N',
+          status: this.normalizeStatus(r.status || r.troopStatus),
+        }));
       } catch (e) {
-        this.discError = String(e?.message || e || "Failed");
+        this.discError = String(e?.message || e);
       } finally {
         this.discLoading = false;
       }
     },
+    async refreshDiscipline() {
+      await this.loadDiscipline();
+      if (this.troopStatusCsvUrl) await this.fetchTroopStatusCsv();
+    },
 
-    saveDiscipline: async function () {
-      if (!this.discEndpoint || !this.discSecret) return;
-      this.discSaving = true; this.discError = ""; this.discOK = false;
+    focusMemberByNameKey(nk) {
+      const m = (this.members || []).find(x => this.nameKey(this.cleanMemberName(x?.name)) === nk);
+      if (!m) return;
+      if (!this.isInTroopList(m)) return;
+      if (this.isDischarged(this.memberStatusOf(m))) return;
+      this.edit.memberId = m.id || null;
+      this.populateEditFromMember();
+      this.$nextTick(() => {
+        const ta = this.$el.querySelector('textarea');
+        if (ta) ta.focus();
+      });
+    },
+    populateEditFromMember() {
+      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
+      if (!m) { this.edit.notes = ''; this.edit.warn = [false,false,false]; return; }
+      const nk = this.nameKey(this.cleanMemberName(m.name));
+      const api = (this.disciplineRows || []).find(r => (r.nameKey) === nk);
+      const warnings = (api?.warnings || 'N, N, N').split(',').map(s => s.trim().toUpperCase());
+      this.edit.notes = api?.notes || '';
+      this.edit.warn = [0,1,2].map(i => warnings[i] === 'Y');
+    },
+
+    warnArrayToString(arr) {
+      const a = Array.isArray(arr) ? arr : [false, false, false];
+      const out = a.slice(0,3).map(x => (x ? 'Y' : 'N'));
+      while (out.length < 3) out.push('N');
+      return out.join(', ');
+    },
+    toggleWarn(i) {
+      const next = [...this.edit.warn];
+      next[i] = !next[i];
+      this.edit.warn = next;
+    },
+
+    async saveDiscipline() {
+      this.discError = ""; this.discOK = false;
+      const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
+      if (!m) { this.discError = "Select a member."; return; }
+      if (!this.isInTroopList(m)) { this.discError = "Member not in Troop List."; return; }
+      if (this.isDischarged(this.memberStatusOf(m))) { this.discError = "Cannot edit a discharged member."; return; }
+
+      const payload = {
+        secret: this.discSecret,
+        name: m.name || '',
+        nameKey: this.nameKey(this.cleanMemberName(m.name || '')),
+        notes: (this.edit.notes || '').trim(),
+        warnings: this.warnArrayToString(this.edit.warn),
+      };
+
+      this.discSaving = true;
       try {
-        const payload = {
-          secret: this.discSecret,
-          action: "admin.discipline:save",
-          memberId: this.edit.memberId,
-          notes: this.edit.notes,
-          warn1: !!this.edit.warn[0],
-          warn2: !!this.edit.warn[1],
-          warn3: !!this.edit.warn[2],
-        };
         const res = await fetch(this.discEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" }, // why: keep it 'simple' request
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload),
+          redirect: 'follow',
         });
-        const data = await res.json();
-        if (data?.ok !== true) throw new Error(data?.error || "Save failed");
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = { ok: false, error: 'Bad JSON from server' }; }
+        if (!data?.ok) throw new Error(data?.error || 'Save failed');
+
         this.discOK = true;
+        await this.refreshDiscipline();
       } catch (e) {
-        this.discError = String(e?.message || e || "Failed");
+        this.discError = String(e?.message || e);
       } finally {
         this.discSaving = false;
-        setTimeout(() => { this.discOK = false; }, 1400);
+        setTimeout(() => (this.discOK = false), 1500);
       }
-    },
-
-    // helpers
-    isFiniteNum(v) { return Number.isFinite(Number(v)); },
-    cleanMemberName(n) { return String(n || "").replace(/^["'\s]+|["'\s]+$/g, ""); },
-    nameKey(n) { return String(n || "").toLowerCase().replace(/\s+/g, " ").trim(); },
-
-    rankKey(rank) { return String(rank || "").trim().toUpperCase().replace(/\s+/g, ""); },
-    promotionLadderFor(rank) {
-      const r = this.rankKey(rank);
-      return ({
-        PVT: { nextAt: 2, nextRank: "PFC" }, PFC: { nextAt: 10, nextRank: "SPC" },
-        SPC: { nextAt: 20, nextRank: "SPC2" }, SPC2: { nextAt: 30, nextRank: "SPC3" },
-        SPC3: { nextAt: 40, nextRank: "SPC4" }, SPC4: { nextAt: 50, nextRank: null },
-        HA:  { nextAt: 2, nextRank: "HN" }, HN:  { nextAt: 10, nextRank: "HM3" },
-        HM3: { nextAt: 20, nextRank: "HM2" }, HM2: { nextAt: 30, nextRank: null },
-        CWO2:{ nextAt: 10, nextRank: "CWO3" }, CWO3:{ nextAt: 20, nextRank: "CWO4" },
-        CWO4:{ nextAt: 30, nextRank: null },
-      })[r] || null;
-    },
-    opsToNextPromotion(member) {
-      const ops = Number(member?.opsAttended);
-      if (!Number.isFinite(ops)) return null;
-      const ladder = this.promotionLadderFor(member?.rank);
-      if (!ladder || !ladder.nextAt) return null;
-      return Math.max(0, ladder.nextAt - ops);
-    },
-    formatOps(v) {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : "—";
     },
   },
 };
 </script>
 
 <style scoped>
-/* keep your existing AdminHome styles here; no visual changes needed for the header swap */
-.windows-grid { display: grid; grid-template-columns: 380px 1fr; column-gap: 1.8rem; align-items: start; }
-.left-window { min-height: 70vh; }
-.right-window { min-height: 70vh; }
+/* Reserve space for scrollbars to avoid end-of-fade width snap */
+.right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 
-.rail { display: grid; gap: .8rem; }
-.rail-card { background: rgba(0,10,30,0.8); border: 1px solid rgba(30,144,255,.35); border-radius: .5rem; padding: .6rem; text-align: left; }
-.rail-card.active { border-color: rgba(30,144,255,.85); box-shadow: 0 0 0 2px rgba(30,144,255,.15) inset; }
-.rail-card-head { display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: .6rem; }
-.rail-icon { width: 28px; height: 28px; }
-.rail-title { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #dce6f1; }
-.rail-card-body { margin-top: .4rem; display: grid; gap: .25rem; }
-.rail-line { display: grid; grid-template-columns: 1fr auto; gap: .6rem; }
-.rail-line .label { color: #a8c0d9; }
-.pill { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 24px; padding: 0 .5rem; border-radius: 999px; font-weight: 700; letter-spacing: .06em; }
-.pill.ok { background: rgba(60,180,120,.15); color: #9ef3c8; border: 1px solid rgba(60,180,120,.35); }
-.pill.warn { background: rgba(255,200,80,.1); color: #ffdd99; border: 1px solid rgba(255,200,80,.3); }
-.pill.bad { background: rgba(255,80,80,.08); color: #ffaaaa; border: 1px solid rgba(255,80,80,.28); }
+/* Also ensure inner scrolling tables don't shift at the end */
+.rows-scroll { scrollbar-gutter: stable; }
 
-.promotions-panel { display: grid; gap: 1rem; height: 70vh; max-height: 70vh; overflow: hidden; }
-.filters .row { display: grid; grid-template-columns: 1fr 220px 160px; gap: .6rem; }
-.control { display: grid; gap: .25rem; }
-.control > span { color: #9fb1c7; font-size: .9rem; letter-spacing: .08em; text-transform: uppercase; }
-.control input, .control select, .control textarea { background: rgba(0,10,30,0.25); color: #dce6f1; border: 1px solid rgba(30,144,255,.35); border-radius: .35rem; padding: .45rem .55rem; }
+/* Help compositor; avoids micro-jank on heavy DOM during fade */
+.content-container { will-change: opacity, filter; contain: paint; }
 
-.table-scroll { overflow: auto; border: 1px solid rgba(30,144,255,.35); border-radius: .5rem; background: rgba(0,10,30,.25); }
-.table-shell { min-width: 780px; }
-.tr.head { background: rgba(0,10,30,.45); position: sticky; top: 0; z-index: 1; }
-.grid6 { display: grid; grid-template-columns: 2fr 1fr 1fr .6fr 1.2fr .8fr; gap: .6rem; align-items: center; }
-.tr, .td, .th { padding: .5rem .6rem; }
-.th { color: #a8c0d9; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
-.bar { height: 10px; border-radius: 999px; background: rgba(90,130,170,.25); border: 1px solid rgba(90,130,170,.35); overflow: hidden; }
-.fill { height: 100%; background: linear-gradient(90deg, rgba(30,144,255,.4), rgba(170,255,210,.6)); }
-.bar.done .fill { background: linear-gradient(90deg, rgba(60,200,140,.7), rgba(170,255,210,.95)); }
+/* (unchanged layout + visuals) */
 
-.muted { color: #8aa3bd; }
-.ok-text { color: #9ef3c8; }
-.btn-sm { background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); color: #dce6f1; border-radius: .35rem; padding: .35rem .6rem; }
-.status-pill { padding: .15rem .45rem; border-radius: 999px; font-weight: 700; letter-spacing: .06em; }
-.st-ok { color: #9ef3c8; border: 1px solid rgba(60,180,120,.35); background: rgba(60,180,120,.12); }
-.st-warn { color: #ffd38a; border: 1px solid rgba(255,200,80,.35); background: rgba(255,200,80,.12); }
-.st-bad { color: #ffaaaa; border: 1px solid rgba(255,80,80,.35); background: rgba(255,80,80,.12); }
-.st-na { color: #aac3de; border: 1px solid rgba(120,150,180,.35); background: rgba(120,150,180,.12); }
+.windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
+.windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
+.left-window { height: auto !important; max-height: none !important; }
+.right-window { display: flex; flex-direction: column; max-height: 100vh; overflow: hidden; }
+.right-window .section-content-container.right-content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: .6rem .6rem .2rem; }
+
+.promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
+
+.control { display: grid; gap: .2rem; }
+.control span { font-size: .85rem; color: #9ec5e6; }
+.control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #e6f3ff; }
+.control textarea { resize: vertical; }
+.control input::placeholder, .control textarea::placeholder { color: #aac7e6; }
+.control input:focus, .control select:focus, .control textarea:focus { outline: none; border-color: rgba(30,144,255,0.6); }
+.control select option { background: rgba(5,20,40,0.98); color: #e6f3ff; }
+.control.chk { display: flex; align-items: center; gap: .45rem; padding-top: 1.25rem; }
+.control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
+.control.chk span { color: #e6f3ff; font-size: .9rem; }
+
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
+.filters .row { display: grid; grid-template-columns: 1.2fr auto auto auto; gap: .6rem; align-items: end; }
+.chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; }
+.chip.ok { border-color: rgba(120,255,170,0.7); }
+.chip.warn { border-color: rgba(255,190,80,0.7); }
+.muted { color: #9ec5e6; }
+.ok-text { color: #79ffba; }
+.empty { color: #9ec5e6; padding: .8rem; text-align: center; }
+
+.rail { display: grid; gap: .6rem; align-content: start; }
+.rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; cursor: pointer; }
+.rail-card.active { border-color: rgba(120,255,170,0.7); }
+.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.rail-icon { width: 20px; height: 20px; }
+.rail-title, .rail-line .label { color: #d9ebff; }
+.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
+.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
+
+.table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
+.grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
+.gridFlags { display: grid; grid-template-columns: 1.4fr .9fr .9fr 1fr 2.7fr; align-items: center; }
+.tr.head { font-weight: 600; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; }
+.rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
+.rows-scroll .tr:last-child .td { border-bottom: 0; }
+
+.bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
+.bar.done .fill { background: rgba(120,255,170,0.7); }
+
+.warn-row { position: relative; }
+.warn-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: transparent; }
+.warn-0 { background: transparent; }
+.warn-1 { background: rgba(255, 200, 80, 0.06); }
+.warn-1::before { background: rgba(255, 200, 80, 0.8); }
+.warn-2 { background: rgba(255, 140, 60, 0.08); }
+.warn-2::before { background: rgba(255, 140, 60, 0.85); }
+.warn-3 { background: rgba(255, 90, 90, 0.10); }
+.warn-3::before { background: rgba(255, 90, 90, 0.9); }
+
+.warncells { display: flex; align-items: center; }
+.warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
+.warn-badges .dot { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
+.warn-badges .dot.on { border-color: rgba(150,190,230,0.6); }
+.warn-badges.w1 .dot.on { background: rgba(255, 200, 80, 0.75); }
+.warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
+.warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
+
+.status-pill { padding: .1rem .5rem; border-radius: 999px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); font-size: .82rem; }
+.status-pill.st-active { border-color: rgba(120,255,170,0.7); }
+.status-pill.st-reserve { border-color: rgba(120,200,255,0.7); }
+.status-pill.st-eloa { border-color: rgba(200,180,255,0.7); }
+.status-pill.st-inactive { border-color: rgba(200,200,200,0.4); }
+.status-pill.st-other { border-color: rgba(255,190,80,0.6); }
+.status-pill.st-unknown { border-color: rgba(150,190,230,0.35); }
+.status-pill.st-discharged { border-color: rgba(255,90,90,0.9); }
+
+.flag-form { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .6rem; display: grid; gap: .6rem; background: rgba(0,10,30,0.25); }
+.flag-form .row { display: grid; grid-template-columns: 1.6fr 1fr; gap: .6rem; }
+.flag-form .row.end { grid-template-columns: 1fr auto auto; align-items: center; }
+
+@media (max-width: 1200px) {
+  .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
+  .promotions-panel { height: 68vh; max-height: 68vh; }
+  .flag-form .row { grid-template-columns: 1fr; }
+}
+@media (max-width: 980px) {
+  .windows-grid { grid-template-columns: 1fr; }
+  .right-window { order: 1; }
+  .left-window { order: 2; }
+  .promotions-panel { height: 64vh; max-height: 64vh; }
+  .flag-form .row { grid-template-columns: 1fr; }
+}
 </style>
