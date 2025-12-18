@@ -13,15 +13,19 @@
       </div>
 
       <div class="lane-grid">
+        <!-- Member -->
         <div class="lane-card">
           <div class="lane-head">
             <img src="/icons/license.svg" alt="" />
             <h2>Member Access</h2>
           </div>
           <p class="muted">View rosters, mission status, and logs. No sign-in required.</p>
-          <button class="btn-hero" @click="$router.push({ path: '/status' })">Enter as Member</button>
+          <button class="btn-hero" @click="$router.push({ path: '/status' })">
+            Enter as Member
+          </button>
         </div>
 
+        <!-- Staff / Officer -->
         <div class="lane-card">
           <div class="lane-head">
             <img src="/icons/protocol.svg" alt="" />
@@ -37,7 +41,9 @@
               <input v-model="p" type="password" autocomplete="current-password" @keyup.enter="go" />
             </label>
           </div>
-          <button class="btn-hero" :disabled="loading" @click="go">{{ loading ? 'Authorizing…' : 'Sign in' }}</button>
+          <button class="btn-hero" :disabled="loading" @click="go">
+            {{ loading ? 'Authorizing…' : 'Sign in' }}
+          </button>
           <p v-if="err" class="err">{{ err }}</p>
           <p v-if="ok" class="ok">Authorized. Redirecting…</p>
         </div>
@@ -85,7 +91,7 @@ export default {
 <style scoped>
 .splash-root {
   position: relative;
-  min-height: calc(100vh - 0px);
+  min-height: 100vh;
   background: radial-gradient(1200px 600px at 50% 10%, rgba(10,30,50,.55), rgba(4,10,20,.96)),
               linear-gradient(180deg, rgba(2,6,12,1), rgba(2,6,12,.98));
   overflow: hidden;
@@ -110,42 +116,18 @@ export default {
 .splash-text { display: grid; gap: .15rem; }
 .line-1 { font-size: 1.25rem; letter-spacing: .18em; color: #e6f3ff; text-transform: uppercase; }
 .line-2 { font-size: .95rem; letter-spacing: .10em; color: #9ec5e6; text-transform: uppercase; }
-
 .lane-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; align-items: start; }
 .lane-card { border: 1px dashed rgba(30,144,255,.35); background: rgba(0,10,30,.25); border-radius: .75rem; padding: 1rem; display: grid; gap: .8rem; }
 .lane-head { display:flex; align-items:center; gap:.6rem; }
 .lane-head img { width: 28px; height: 28px; }
 .muted { color:#9ec5e6; }
-
 .controls { display:grid; gap:.6rem; }
 .control { display:grid; gap:.25rem; }
 .control span { color:#9ec5e6; font-size:.9rem; }
-.control input {
-  background: rgba(5,20,40,.85);
-  border: 1px solid rgba(30,144,255,.35);
-  border-radius: .35rem;
-  padding: .55rem .65rem;
-  color: #e6f3ff;
-}
-
-.btn-hero {
-  border: 1px solid rgba(120,255,170,.7);
-  background: rgba(0,30,20,.35);
-  color: #e6fff5;
-  border-radius: .55rem;
-  padding: .65rem .95rem;
-  cursor: pointer;
-  text-align: center;
-  font-size: 1rem;
-  letter-spacing: .06em;
-}
+.control input { background: rgba(5,20,40,.85); border: 1px solid rgba(30,144,255,.35); border-radius: .35rem; padding: .55rem .65rem; color: #e6f3ff; }
+.btn-hero { border: 1px solid rgba(120,255,170,.7); background: rgba(0,30,20,.35); color: #e6fff5; border-radius: .55rem; padding: .65rem .95rem; cursor: pointer; text-align: center; font-size: 1rem; letter-spacing: .06em; }
 .btn-hero:hover { filter: brightness(1.06); }
-
 .err { color:#ffb080; }
 .ok { color:#79ffba; }
-
-@media (max-width: 960px){
-  .splash-center { margin-top: 4vh; }
-  .lane-grid { grid-template-columns: 1fr; }
-}
+@media (max-width: 960px){ .splash-center { margin-top: 4vh; } .lane-grid { grid-template-columns: 1fr; } }
 </style>
