@@ -41,8 +41,9 @@
           <span>Logs</span>
         </router-link>
 
-        <!-- ADMIN -->
+        <!-- ADMIN (Officer/Staff only) -->
         <router-link
+          v-if="isOfficerOrStaff"
           class="clipped-bottom-right"
           to="/admin"
           @click.native="playBrowse"
@@ -56,15 +57,18 @@
 </template>
 
 <script>
+import { useAdminAuth } from "@/composables/useAdminAuth";
+
 let browseAudio;
 
 export default {
   name: "Sidebar",
   props: {
-    animate: {
-      type: Boolean,
-      required: true,
-    },
+    animate: { type: Boolean, required: true },
+  },
+  setup() {
+    const { isOfficerOrStaff } = useAdminAuth(); // why: reactive auth gate
+    return { isOfficerOrStaff };
   },
   data() {
     return {
@@ -74,7 +78,6 @@ export default {
     };
   },
   mounted() {
-    // single instance; respects user gesture
     browseAudio = new Audio("/sound/Orbat Main Menu Browse.ogg");
     browseAudio.volume = 0.6;
   },
