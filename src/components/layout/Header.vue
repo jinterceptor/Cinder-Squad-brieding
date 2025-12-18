@@ -10,7 +10,16 @@
         </span>
 
         <div class="auth-ident">
+          <!-- rank insignia + rank text BEFORE the name -->
+          <img
+            v-if="rankIcon"
+            :src="rankIcon"
+            alt=""
+            class="rank-insignia"
+            :title="rankShort"
+          />
           <span v-if="authed && rankShort" class="rank-pill">{{ rankShort }}</span>
+
           <span class="auth-name" v-if="authed">{{ displayName }}</span>
           <span class="auth-name muted" v-else>NOT SIGNED IN</span>
         </div>
@@ -28,10 +37,14 @@
 
     <div class="title clipped-x-large-forward">
       <img class="logo" src="/faction-logos/Broadsword111.png" />
+
       <div class="title-container">
+        <!-- PRIMARY TITLE (FIXED) -->
         <div id="title-first-line" class="title-row">
           <span id="title-header">UNSC TACNET</span>
         </div>
+
+        <!-- SECONDARY LINE (CONFIG-DRIVEN) -->
         <div class="title-row">
           <span id="subtitle-header">{{ header.subheaderTitle }}</span>
           <span id="subtitle-subheader">// {{ header.subheaderSubtitle }}</span>
@@ -47,26 +60,31 @@
       </video>
 
       <div class="location-info">
+        <!-- ROW 1 -->
         <div class="location-row grid">
           <div id="year">
             <h4>Year</h4>
             <span class="subtitle">{{ header.year }}</span>
           </div>
+
           <div id="status" class="span-2">
             <h4>Status</h4>
             <span class="subtitle">{{ header.status }}</span>
           </div>
         </div>
 
+        <!-- ROW 2 -->
         <div class="location-row grid">
           <div id="AO">
             <h4>AO</h4>
             <span class="subtitle">{{ header.AO }}</span>
           </div>
+
           <div id="planet">
             <h4>Planet</h4>
             <span class="subtitle">{{ header.planet }}</span>
           </div>
+
           <div id="system">
             <h4>System</h4>
             <span class="subtitle">{{ header.system }}</span>
@@ -80,12 +98,14 @@
 <script>
 import { subscribe, adminUser, adminRole, isAdmin, adminLogout } from "@/utils/adminAuth";
 
-/* Published CSV for RefData sheet (gid must point to RefData) */
+/**
+ * RefData CSV (published). Make sure the gid points to RefData.
+ * Uses CSV so no OAuth is needed.
+ */
 const REF_CSV =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
 
 let _refCache = null;
-
 async function fetchRefDataOnce() {
   if (_refCache) return _refCache;
   const res = await fetch(REF_CSV, { mode: "cors" });
@@ -94,7 +114,7 @@ async function fetchRefDataOnce() {
   return _refCache;
 }
 
-/* Minimal CSV parser (handles quotes, commas, CRLF) */
+/* Minimal CSV parser (quotes, commas, CRLF) */
 function parseCsv(text) {
   const rows = [];
   let cur = [], val = "", inQ = false;
@@ -120,7 +140,7 @@ function parseCsv(text) {
   return { headers, rows: dataRows };
 }
 
-/* Same normalization approach the roster uses: strip punctuation, collapse spaces, uppercase */
+/* Roster-style normalization: strip punctuation, collapse spaces, UPPERCASE */
 function nameKey(name) {
   return String(name || "")
     .replace(/["'.]/g, "")
@@ -132,6 +152,40 @@ function nameKey(name) {
 function findCol(headers, names) {
   const ix = headers.findIndex(h => names.some(n => h.toLowerCase() === n.toLowerCase()));
   return ix >= 0 ? ix : -1;
+}
+
+/* Insignia mapper. Update paths to match your assets folder. */
+function rankIconFor(rank) {
+  if (!rank) return "";
+  const key = String(rank).replace(/\s+/g, "").toUpperCase();
+
+  // Common abbreviations seen in your sheets (extend as needed)
+  const MAP = {
+    PVT: "/insignia/ranks/pvt.png",
+    PFC: "/insignia/ranks/pfc.png",
+    SPC: "/insignia/ranks/spc.png",
+    SPC2: "/insignia/ranks/spc2.png",
+    SPC3: "/insignia/ranks/spc3.png",
+    SPC4: "/insignia/ranks/spc4.png",
+    LCPL: "/insignia/ranks/lcpl.png",
+    CPL: "/insignia/ranks/cpl.png",
+    SGT: "/insignia/ranks/sgt.png",
+    GYSGT: "/insignia/ranks/gysgt.png",
+    WO: "/insignia/ranks/wo.png",
+    CWO2: "/insignia/ranks/cwo2.png",
+    CWO3: "/insignia/ranks/cwo3.png",
+    CWO4: "/insignia/ranks/cwo4.png",
+    "2NDLT": "/insignia/ranks/2ndlt.png",
+    "1STLT": "/insignia/ranks/1stlt.png",
+    CAPT: "/insignia/ranks/capt.png",
+    MAJ: "/insignia/ranks/maj.png",
+    HM3: "/insignia/ranks/hm3.png",
+    HM2: "/insignia/ranks/hm2.png",
+    HN: "/insignia/ranks/hn.png",
+  };
+
+  // Try direct, then strip non-letters/numbers (handles "CWO3 (30)" etc.)
+  return MAP[key] || MAP[key.replace(/[^A-Z0-9]/g, "")] || "";
 }
 
 export default {
@@ -146,6 +200,7 @@ export default {
       displayName: "",
       role: "staff",
       rankShort: "",
+      rankIcon: "",
       unsub: null,
     };
   },
@@ -167,14 +222,19 @@ export default {
       this.displayName = u?.displayName || u?.username || "";
       this.role = adminRole() || "staff";
       this.rankShort = "";
+      this.rankIcon = "";
       if (this.authed && this.displayName) {
-        try { await this.resolveRank(this.displayName); } catch {}
+        try {
+          await this.resolveRank(this.displayName);
+        } catch {}
       }
     };
     this.unsub = subscribe(push);
     push();
   },
-  beforeUnmount() { if (typeof this.unsub === "function") this.unsub(); },
+  beforeUnmount() {
+    if (typeof this.unsub === "function") this.unsub();
+  },
   methods: {
     async resolveRank(displayName) {
       const { headers, rows } = await fetchRefDataOnce();
@@ -188,9 +248,15 @@ export default {
       if (!hit) return;
 
       const rk = String(hit[colRank] || "").trim();
-      if (rk) this.rankShort = rk;
+      if (rk) {
+        this.rankShort = rk;
+        this.rankIcon = rankIconFor(rk);
+      }
     },
-    doLogout() { adminLogout(); this.$router.replace("/status"); },
+    doLogout() {
+      adminLogout();
+      this.$router.replace("/status");
+    },
   },
 };
 </script>
@@ -211,9 +277,9 @@ export default {
 
 /* --------- Auth status (LEFT, no background tile) --------- */
 .auth-status{
-  --auth-left: 750px;
+  --auth-left: 750px; /* your chosen spot */
   position: absolute;
-  top: 4px;
+  top: 4px;          /* slightly higher */
   left: var(--auth-left);
   display: grid;
   gap: .4rem;
@@ -233,6 +299,14 @@ export default {
   align-items: center;
   gap: .4rem;
   min-width: 0;
+}
+
+/* insignia image next to rank */
+.rank-insignia{
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,.4));
 }
 
 /* small rank pill before name */
@@ -306,7 +380,7 @@ export default {
   color: #ffe9e6;
 }
 
-/* Mobile */
+/* Mobile: stack under the title */
 @media (max-width: 1100px){
   .auth-status{ position: static; margin: .5rem 0 .25rem auto; }
 }
