@@ -12,7 +12,7 @@ on:
         description: "Username (create/update/delete)"
         required: false
       password:
-        description: "Password (create/update; optional for update)"
+        description: "Password (create/update)"
         required: false
       displayName:
         description: "Display name (create/update)"
@@ -31,9 +31,9 @@ jobs:
           test -n "${{ secrets.GAS_SECRET }}"   || (echo "GAS_SECRET missing" && exit 1)
           test -n "${{ secrets.GAS_ADMIN_KEY }}"|| (echo "GAS_ADMIN_KEY missing" && exit 1)
 
-      - name: Build request body
-        id: build
+      - name: Build & call Apps Script
         env:
+          ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
           SECRET:   ${{ secrets.GAS_SECRET }}
           ADMINKEY: ${{ secrets.GAS_ADMIN_KEY }}
           ACTION:   ${{ github.event.inputs.action }}
@@ -43,44 +43,47 @@ jobs:
           ROLE:     ${{ github.event.inputs.role }}
         run: |
           set -euo pipefail
-          case "$ACTION" in
-            list)
-              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" \
-                '{secret:$s, action:"admin.staff:list", adminKey:$k}')
-              ;;
-            create)
-              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
-                '{secret:$s, action:"admin.staff:create", adminKey:$k, username:$u, password:$p, displayName:$d, role:$r}')
-              ;;
-            update)
-              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
-                '{secret:$s, action:"admin.staff:update", adminKey:$k, username:$u, displayName:$d, role:$r, newPassword:$p}')
-              ;;
-            delete)
-              BODY=$(jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" \
-                '{secret:$s, action:"admin.staff:delete", adminKey:$k, username:$u}')
-              ;;
-            *)
-              echo "Unknown action: $ACTION"; exit 1;;
-          esac
-          echo "body=${BODY}" >> $GITHUB_OUTPUT
+
+          make_body() {
+            case "$ACTION" in
+              list)
+                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" \
+                  '{secret:$s, action:"admin.staff:list", adminKey:$k}'
+                ;;
+              create)
+                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
+                  '{secret:$s, action:"admin.staff:create", adminKey:$k, username:$u, password:$p, displayName:$d, role:$r}'
+                ;;
+              update)
+                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" --arg p "$PASSWORD" --arg d "$DISPLAY" --arg r "$ROLE" \
+                  '{secret:$s, action:"admin.staff:update", adminKey:$k, username:$u, displayName:$d, role:$r, newPassword:$p}'
+                ;;
+              delete)
+                jq -n --arg s "$SECRET" --arg k "$ADMINKEY" --arg u "$USERNAME" \
+                  '{secret:$s, action:"admin.staff:delete", adminKey:$k, username:$u}'
+                ;;
+              *)
+                echo "Unknown action: $ACTION" >&2; exit 1;;
+            esac
+          }
+
+          BODY="$(make_body)"
+
+          # Redacted preview for logs
           echo "Request: $(echo "$BODY" | sed -E 's/"secret":"[^"]+"/"secret":"***"/; s/"adminKey":"[^"]+"/"adminKey":"***"/; s/"password":"[^"]+"/"password":"***"/; s/"newPassword":"[^"]+"/"newPassword":"***"/')"
 
-      - name: Call Apps Script
-        env:
-          ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
-          BODY: ${{ steps.build.outputs.body }}
-        run: |
-          set -euo pipefail
           HTTP=$(curl -sS -w "\n%{http_code}" -X POST \
             -H 'Content-Type: text/plain;charset=utf-8' \
             --data "$BODY" \
             "$ENDPOINT")
+
           STATUS=$(echo "$HTTP" | tail -n1)
           RESP=$(echo "$HTTP" | head -n -1)
+
           echo "HTTP $STATUS"
           echo "Response: $RESP"
-          echo "$RESP" | jq .
+          echo "$RESP" | jq . || true
+
           test "$STATUS" = "200"
           echo "$RESP" | grep -q '"ok":true'
 
