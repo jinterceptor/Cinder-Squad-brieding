@@ -80,7 +80,7 @@ export default {
   props: {
     planetPath: { type: String, required: true },
     header: { type: Object, required: true },
-    authOffsetX: { type: Number, default: 315 }, // default shift right
+    authOffsetX: { type: Number, default: 320 }, // default shift right
     authOffsetY: { type: Number, default: 10 },  // shift down
   },
   data() {
