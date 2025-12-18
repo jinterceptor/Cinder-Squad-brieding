@@ -18,7 +18,7 @@ on:
         description: "Display name (create/update)"
         required: false
       role:
-        description: "Role (staff/officer) for create/update"
+        description: "Role (staff/officer) for create/update)"
         required: false
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
           test -n "${{ secrets.GAS_SECRET }}"   || (echo "GAS_SECRET missing" && exit 1)
           test -n "${{ secrets.GAS_ADMIN_KEY }}"|| (echo "GAS_ADMIN_KEY missing" && exit 1)
 
-      - name: Build & call Apps Script
+      - name: Build + call Apps Script (no outputs)
         env:
           ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
           SECRET:   ${{ secrets.GAS_SECRET }}
@@ -69,7 +69,6 @@ jobs:
 
           BODY="$(make_body)"
 
-          # Redacted preview for logs
           echo "Request: $(echo "$BODY" | sed -E 's/"secret":"[^"]+"/"secret":"***"/; s/"adminKey":"[^"]+"/"adminKey":"***"/; s/"password":"[^"]+"/"password":"***"/; s/"newPassword":"[^"]+"/"newPassword":"***"/')"
 
           HTTP=$(curl -sS -w "\n%{http_code}" -X POST \
