@@ -1,4 +1,4 @@
-<!-- src/views/admin/AdminHome.vue -->
+<!-- /src/views/admin/AdminHome.vue -->
 <template>
   <div
     class="windows-grid content-container"
@@ -9,12 +9,11 @@
     <section class="section-container left-window">
       <div class="section-header clipped-medium-backward">
         <img src="/icons/protocol.svg" alt="" />
-        <h1>Admin</h1>
+        <h1>ADMIN</h1>
       </div>
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container">
-        <!-- Tiles only (no password box). Route guard ensures auth. -->
         <div v-if="isAuthed" class="rail">
           <button
             v-for="s in sections"
@@ -32,11 +31,11 @@
                 <span class="label">{{ line.label }}</span>
                 <span class="pill" :class="line.kind">{{ line.value }}</span>
               </div>
-              <div class="rail-foot">Click to open</div>
+              <div class="rail-foot">CLICK TO OPEN</div>
             </div>
           </button>
         </div>
-        <div v-else class="muted">Staff only.</div>
+        <div v-else class="muted">STAFF ONLY.</div>
       </div>
     </section>
 
@@ -50,25 +49,29 @@
       <div class="rhombus-back">&nbsp;</div>
 
       <div class="section-content-container right-content">
-        <div v-if="!isAuthed" class="muted">Staff only.</div>
+        <div v-if="!isAuthed" class="muted">STAFF ONLY.</div>
 
         <!-- Promotions -->
         <div v-else-if="activeKey === 'promotions'" class="promotions-panel">
+          <div class="panel-header">
+            <h2>PROMOTIONS OVERVIEW</h2>
+          </div>
+
           <div class="filters">
             <div class="row">
               <label class="control">
-                <span>Search</span>
+                <span>SEARCH</span>
                 <input type="text" v-model="search" placeholder="Name, rank, squad" />
               </label>
               <label class="control">
-                <span>Squad</span>
+                <span>SQUAD</span>
                 <select v-model="selectedSquad">
                   <option value="__ALL__">All squads</option>
                   <option v-for="s in squads" :key="s" :value="s">{{ s }}</option>
                 </select>
               </label>
               <label class="control">
-                <span>Sort by</span>
+                <span>SORT BY</span>
                 <select v-model="sortKey">
                   <option value="rank">Rank (high→low)</option>
                   <option value="ops">Ops attended</option>
@@ -78,27 +81,26 @@
               </label>
               <label class="control chk">
                 <input type="checkbox" v-model="onlyPromotable" />
-                <span>Promotable only</span>
+                <span>PROMOTABLE ONLY</span>
               </label>
             </div>
           </div>
 
           <div class="chips">
-            <span class="chip">Total: {{ promotionsTable.length }}</span>
-            <span class="chip ok">Eligible now: {{ eligibleNowCount }}</span>
-            <span class="chip warn">Imminent (≤3): {{ imminentCount }}</span>
+            <span class="chip">TOTAL: {{ promotionsTable.length }}</span>
+            <span class="chip ok">ELIGIBLE NOW: {{ eligibleNowCount }}</span>
+            <span class="chip warn">IMMINENT (≤3): {{ imminentCount }}</span>
           </div>
 
-          <!-- Table: fixed header, scroll body -->
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head grid6">
-                <span class="th name">Name</span>
-                <span class="th rank">Rank</span>
-                <span class="th squad">Squad</span>
-                <span class="th ops">Ops</span>
-                <span class="th next">Next Rank</span>
-                <span class="th prog">Progress</span>
+                <span class="th name">NAME</span>
+                <span class="th rank">RANK</span>
+                <span class="th squad">SQUAD</span>
+                <span class="th ops">OPS</span>
+                <span class="th next">NEXT RANK</span>
+                <span class="th prog">PROGRESS</span>
               </div>
               <div class="rows-scroll">
                 <div v-for="row in promotionsTable" :key="row.id || row.name" class="tr grid6">
@@ -121,12 +123,16 @@
           </div>
         </div>
 
-        <!-- Discipline (notes + warnings) -->
+        <!-- Discipline -->
         <div v-else-if="activeKey === 'discipline'" class="promotions-panel">
+          <div class="panel-header">
+            <h2>DISCIPLINE</h2>
+          </div>
+
           <div class="filters">
             <div class="row">
               <label class="control">
-                <span>Search</span>
+                <span>SEARCH</span>
                 <input type="text" v-model="discSearch" placeholder="Name, squad, note" />
               </label>
               <div class="control" style="align-self:end">
@@ -136,11 +142,13 @@
             </div>
           </div>
 
-          <!-- Editor -->
+          <div class="panel-subheader">
+            <h3>EDITOR</h3>
+          </div>
           <div class="flag-form">
             <div class="row">
               <label class="control">
-                <span>Member</span>
+                <span>MEMBER</span>
                 <select v-model="edit.memberId" @change="populateEditFromMember">
                   <option :value="null">Select member…</option>
                   <option
@@ -154,7 +162,7 @@
               </label>
 
               <label class="control">
-                <span>Warnings (3 slots)</span>
+                <span>WARNINGS (3)</span>
                 <div class="warn-toggle">
                   <button type="button" class="warn-pill lvl1" :class="{ on: edit.warn[0] }" @click="toggleWarn(0)" :aria-pressed="!!edit.warn[0]" aria-label="Toggle warning 1" title="Warning 1">1</button>
                   <button type="button" class="warn-pill lvl2" :class="{ on: edit.warn[1] }" @click="toggleWarn(1)" :aria-pressed="!!edit.warn[1]" aria-label="Toggle warning 2" title="Warning 2">2</button>
@@ -164,7 +172,7 @@
             </div>
 
             <label class="control">
-              <span>Disciplinary Notes</span>
+              <span>DISCIPLINARY NOTES</span>
               <textarea v-model="edit.notes" rows="3" placeholder="Notes visible to staff"></textarea>
             </label>
 
@@ -177,15 +185,17 @@
             </div>
           </div>
 
-          <!-- List -->
+          <div class="panel-subheader">
+            <h3>LIST</h3>
+          </div>
           <div class="table-scroll">
             <div class="table-shell">
               <div class="tr head gridFlags">
-                <span class="th">Member</span>
-                <span class="th">Squad</span>
-                <span class="th">Status</span>
-                <span class="th">Warnings</span>
-                <span class="th">Notes</span>
+                <span class="th">MEMBER</span>
+                <span class="th">SQUAD</span>
+                <span class="th">STATUS</span>
+                <span class="th">WARNINGS</span>
+                <span class="th">NOTES</span>
               </div>
               <div class="rows-scroll">
                 <div
@@ -211,7 +221,7 @@
                   </span>
                   <span class="td">{{ r.notes || '—' }}</span>
                 </div>
-                <div v-if="!discFiltered.length && !discLoading" class="empty">No entries.</div>
+                <div v-if="!discFiltered.length && !discLoading" class="empty">NO ENTRIES.</div>
               </div>
             </div>
           </div>
@@ -219,10 +229,13 @@
 
         <!-- Future pages -->
         <div v-else-if="activeKey === 'audits'">
+          <div class="panel-header">
+            <h2>ROSTER AUDITS</h2>
+          </div>
           <div class="empty">Coming soon. This is a stub to demonstrate future admin pages.</div>
         </div>
 
-        <div v-else class="muted">Select a tool from the left.</div>
+        <div v-else class="muted">SELECT A TOOL FROM THE LEFT.</div>
       </div>
     </section>
   </div>
@@ -279,7 +292,6 @@ export default {
     }
   },
   mounted() {
-    // why: trigger panel "power-on" flicker on mount
     this.triggerFlicker();
   },
   computed: {
@@ -392,7 +404,7 @@ export default {
     membersSortedNonDischarged() { return this.membersSorted; },
 
     windowTitle() {
-      if (!this.isAuthed) return "Locked";
+      if (!this.isAuthed) return "LOCKED";
       return {
         promotions: "PROMOTIONS OVERVIEW",
         discipline: "DISCIPLINE (NOTES & WARNINGS)",
@@ -403,23 +415,23 @@ export default {
       return [
         {
           key: "promotions",
-          title: "Promotions Overview",
+          title: "PROMOTIONS OVERVIEW",
           icon: "/icons/protocol.svg",
           preview: [
-            { label: "Eligible now", value: this.eligibleNowCount, kind: "ok" },
-            { label: "Imminent (≤3)", value: this.imminentCount, kind: "warn" },
+            { label: "ELIGIBLE NOW", value: this.eligibleNowCount, kind: "ok" },
+            { label: "IMMINENT (≤3)", value: this.imminentCount, kind: "warn" },
           ],
         },
         {
           key: "discipline",
-          title: "Discipline",
+          title: "DISCIPLINE",
           icon: "/icons/protocol.svg",
           preview: [
-            { label: "Members w/ notes", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
-            { label: "Any warnings", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
+            { label: "MEMBERS W/ NOTES", value: this.disciplineRows.filter(r => !!r.notes).length, kind: "warn" },
+            { label: "ANY WARNINGS", value: this.disciplineRows.filter(r => r.warnCount > 0).length, kind: "ok" },
           ],
         },
-        { key: "audits", title: "Roster Audits", icon: "/icons/protocol.svg", preview: [] },
+        { key: "audits", title: "ROSTER AUDITS", icon: "/icons/protocol.svg", preview: [] },
       ];
     },
 
@@ -573,7 +585,7 @@ export default {
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => {
         requestAnimationFrame(() => {
-          this.animateView = true; // keep set; avoids post-anim snap
+          this.animateView = true;
         });
       });
     },
@@ -752,28 +764,53 @@ export default {
 </script>
 
 <style scoped>
-/* Reserve space for scrollbars to avoid end-of-fade width snap */
+/* Reserve space to avoid end-of-fade width snap */
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
-
-/* Also ensure inner scrolling tables don't shift at the end */
 .rows-scroll { scrollbar-gutter: stable; }
 
-/* Help compositor; avoids micro-jank on heavy DOM during fade */
+/* Smooth animation on heavy DOM */
 .content-container { will-change: opacity, filter; contain: paint; }
 
-/* (unchanged layout + visuals, minus the old password card usage) */
+/* --- Global view frame parity --- */
+.section-container { color: #dce6f1; font-family: "Consolas","Courier New",monospace; width: 100% !important; max-width: 2200px; margin: 0 auto; box-sizing: border-box; }
+.section-header { display: flex; align-items: center; gap: .6rem; text-transform: uppercase; letter-spacing: .14em; }
+.section-header h1 { margin: 0; color: #79ffba; font-weight: 800; font-size: 1.25rem; } /* green titles */
+.section-header img { width: 28px; height: 28px; opacity: .95; }
+.clipped-medium-backward { clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%); background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5)); padding: .4rem .75rem; border: 1px solid rgba(30,144,255,.35); border-left-width: 0; border-radius: 0 .35rem .35rem 0; }
+.rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
 
+/* --- Grid layout --- */
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
-.left-window { height: auto !important; max-height: none !important; }
-.right-window { display: flex; flex-direction: column; max-height: 100vh; overflow: hidden; }
+.left-window { height: auto !important; max-height: none !important; padding: 2rem 1.2rem; }
+.right-window { display: flex; flex-direction: column; max-height: 100vh; overflow: hidden; padding: 2rem 1.2rem; }
 .right-window .section-content-container.right-content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: .6rem .6rem .2rem; }
 
-.promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
+/* --- Left rail tiles (match cards in other views, green titles) --- */
+.rail { display: grid; gap: .7rem; align-content: start; }
+.rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .6rem; padding: .7rem .75rem; cursor: pointer; transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.rail-card:hover { transform: translateY(-1px); border-color: #5ab3ff; box-shadow: 0 0 14px rgba(0,0,0,.35); }
+.rail-card.active { border-color: rgba(120,255,170,0.7); box-shadow: 0 0 0 1px rgba(120,255,170,0.35) inset; }
+.rail-card-head { display: flex; align-items: center; gap: .6rem; margin-bottom: .45rem; }
+.rail-icon { width: 20px; height: 20px; }
+.rail-title { color: #79ffba; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; } /* green */
+.rail-line { display: flex; justify-content: space-between; font-size: .9rem; }
+.rail-line .label { color: #9ec5e6; letter-spacing: .08em; text-transform: uppercase; }
+.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; text-transform: uppercase; letter-spacing: .08em; }
+.pill.ok { border-color: rgba(120,255,170,0.7); }
+.pill.warn { border-color: rgba(255,190,80,0.7); }
+.rail-foot { margin-top: .35rem; font-size: .8rem; color: #9ec5e6; letter-spacing: .1em; text-transform: uppercase; }
 
+/* --- Right side panels --- */
+.promotions-panel { display: flex; flex-direction: column; gap: .6rem; height: 72vh; max-height: 72vh; min-height: 50vh; overflow: hidden; }
+.panel-header { display: flex; align-items: center; gap: .6rem; }
+.panel-header h2 { margin: .2rem 0 .4rem; font-size: 1.05rem; color: #79ffba; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; } /* green */
+.panel-subheader h3 { margin: .6rem 0 .4rem; font-size: .95rem; color: #79ffba; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; }
+
+/* Inputs */
 .control { display: grid; gap: .2rem; }
-.control span { font-size: .85rem; color: .#9ec5e6; }
-.control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .35rem .45rem; color: #e6f3ff; }
+.control span { font-size: .8rem; color: #9ec5e6; letter-spacing: .12em; text-transform: uppercase; }
+.control input, .control select, .control textarea { background: rgba(5,20,40,0.85); border: 1px solid rgba(30,144,255,0.35); border-radius: .35rem; padding: .45rem .6rem; color: #e6f3ff; }
 .control textarea { resize: vertical; }
 .control input::placeholder, .control textarea::placeholder { color: #aac7e6; }
 .control input:focus, .control select:focus, .control textarea:focus { outline: none; border-color: rgba(30,144,255,0.6); }
@@ -782,38 +819,31 @@ export default {
 .control.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: #78ffd0; }
 .control.chk span { color: #e6f3ff; font-size: .9rem; }
 
-.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .5rem; margin-bottom: .6rem; }
-.filters .row { display: grid; grid-template-columns: 1.2fr auto; gap: .6rem; align-items: end; }
+/* Filters & chips */
+.filters { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .6rem; margin-bottom: .6rem; background: rgba(0,10,30,0.18); }
+.filters .row { display: grid; grid-template-columns: 1.2fr auto auto auto; gap: .6rem; align-items: end; }
 .chips { display: flex; gap: .45rem; margin-bottom: .55rem; flex-wrap: wrap; }
-.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; }
+.chip { padding: .25rem .5rem; border-radius: 999px; background: rgba(0,10,30,0.25); border: 1px solid rgba(30,144,255,0.45); color: #e6f3ff; letter-spacing: .12em; text-transform: uppercase; }
 .chip.ok { border-color: rgba(120,255,170,0.7); }
 .chip.warn { border-color: rgba(255,190,80,0.7); }
-.muted { color: #9ec5e6; }
+.muted { color: #9ec5e6; letter-spacing: .08em; text-transform: uppercase; }
 .ok-text { color: #79ffba; }
-.empty { color: #9ec5e6; padding: .8rem; text-align: center; }
 
-.rail { display: grid; gap: .6rem; align-content: start; }
-.rail-card { text-align: left; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); border-radius: .5rem; padding: .6rem; cursor: pointer; }
-.rail-card.active { border-color: rgba(120,255,170,0.7); }
-.rail-card-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
-.rail-icon { width: 20px; height: 20px; }
-.rail-title, .rail-line .label { color: #d9ebff; }
-.pill { font-size: .85rem; border: 1px solid rgba(30,144,255,0.45); border-radius: 999px; padding: .05rem .5rem; color: #e6f3ff; }
-.rail-foot { margin-top: .25rem; font-size: .8rem; color: #9ec5e6; }
-
+/* Tables */
 .table-scroll { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .table-shell { flex: 1 1 auto; min-height: 0; border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; background: rgba(0,10,30,0.18); display: flex; flex-direction: column; overflow: hidden; }
 .grid6 { display: grid; grid-template-columns: 1.6fr .8fr 1fr .6fr .9fr 1.2fr; align-items: center; }
 .gridFlags { display: grid; grid-template-columns: 1.4fr .9fr .9fr 1fr 2.7fr; align-items: center; }
-.tr.head { font-weight: 600; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; }
+.tr.head { font-weight: 700; background: rgba(0,10,30,0.35); border-bottom: 1px dashed rgba(30,144,255,0.25); flex: 0 0 auto; letter-spacing: .12em; text-transform: uppercase; color: #79ffba; } /* green head */
 .rows-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.tr .th, .tr .td { padding: .4rem .5rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
+.tr .th, .tr .td { padding: .5rem .6rem; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .rows-scroll .tr:last-child .td { border-bottom: 0; }
 
 .bar { height: 8px; background: rgba(0,10,30,0.35); border: 1px solid rgba(30,144,255,0.35); border-radius: 999px; position: relative; overflow: hidden; }
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; transition: width .25s ease; background: rgba(120,200,255,0.6); }
 .bar.done .fill { background: rgba(120,255,170,0.7); }
 
+/* Discipline list accents */
 .warn-row { position: relative; }
 .warn-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: transparent; }
 .warn-0 { background: transparent; }
@@ -832,7 +862,7 @@ export default {
 .warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
 .warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
 
-.status-pill { padding: .1rem .5rem; border-radius: 999px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); font-size: .82rem; }
+.status-pill { padding: .1rem .5rem; border-radius: 999px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
 .status-pill.st-active { border-color: rgba(120,255,170,0.7); }
 .status-pill.st-reserve { border-color: rgba(120,200,255,0.7); }
 .status-pill.st-eloa { border-color: rgba(200,180,255,0.7); }
@@ -841,29 +871,16 @@ export default {
 .status-pill.st-unknown { border-color: rgba(150,190,230,0.35); }
 .status-pill.st-discharged { border-color: rgba(255,90,90,0.9); }
 
-.warn-toggle { display: inline-flex; gap: .4rem; align-items: center; }
-.warn-pill { min-width: 36px; height: 28px; padding: 0 .5rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .45rem; border: 1px solid rgba(30,144,255,0.35); background: rgba(0,10,30,0.35); color: #e6f3ff; font-weight: 600; font-size: .9rem; transition: transform .05s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease; }
-.warn-pill:hover { transform: translateY(-1px); }
-.warn-pill:focus { outline: none; box-shadow: 0 0 0 2px rgba(120,200,255,0.35); }
-.warn-pill.on { color: #0a0f16; border-color: transparent; }
-.warn-pill.lvl1.on { background: rgba(255, 200, 80, 0.9); }
-.warn-pill.lvl2.on { background: rgba(255, 140, 60, 0.95); }
-.warn-pill.lvl3.on { background: rgba(255, 90, 90, 0.98); }
-
-.rhombus-back { height: 6px; background: repeating-linear-gradient(45deg, rgba(30,144,255,.2) 0px, rgba(30,144,255,.2) 10px, transparent 10px, transparent 20px ); }
-.clipped-medium-backward { clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%); background: linear-gradient(90deg, rgba(5,20,40,.85), rgba(5,20,40,.5)); padding: .4rem .75rem; border: 1px solid rgba(30,144,255,.35); border-left-width: 0; border-radius: 0 .35rem .35rem 0; }
-.section-header { display: flex; align-items: center; gap: .6rem; }
-.section-header img { width: 28px; height: 28px; }
-.right-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; }
-.right-actions { display: flex; gap: .4rem; }
-
+/* Editor */
 .flag-form { border: 1px dashed rgba(30,144,255,0.35); border-radius: .35rem; padding: .6rem; display: grid; gap: .6rem; background: rgba(0,10,30,0.25); }
 .flag-form .row { display: grid; grid-template-columns: 1.6fr 1fr; gap: .6rem; }
 .flag-form .row.end { grid-template-columns: 1fr auto auto; align-items: center; }
 
+/* Responsive */
 @media (max-width: 1200px) {
   .windows-grid { grid-template-columns: 340px 1fr; column-gap: 1.4rem; }
   .promotions-panel { height: 68vh; max-height: 68vh; }
+  .filters .row { grid-template-columns: 1fr; }
   .flag-form .row { grid-template-columns: 1fr; }
 }
 @media (max-width: 980px) {
@@ -871,6 +888,7 @@ export default {
   .right-window { order: 1; }
   .left-window { order: 2; }
   .promotions-panel { height: 64vh; max-height: 64vh; }
+  .filters .row { grid-template-columns: 1fr; }
   .flag-form .row { grid-template-columns: 1fr; }
 }
 </style>
