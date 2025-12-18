@@ -80,13 +80,13 @@ export default {
   props: {
     planetPath: { type: String, required: true },
     header: { type: Object, required: true },
-    authOffsetX: { type: Number, default: 12 }, // shift right
+    authOffsetX: { type: Number, default: 12 }, // shift right (e.g., 315)
     authOffsetY: { type: Number, default: 10 }, // shift down
   },
   data() {
     return {
       role: null,          // 'member' | 'staff' | null (overlay)
-      staffUser: null,     // { username, displayName, name } from admin session
+      staffUser: null,     // { username, displayName } from admin session
       unsub: null,
     };
   },
@@ -105,12 +105,8 @@ export default {
     },
     displayName() {
       if (!this.isStaff) return "";
-      // Prefer displayName; then name; then username
-      return (
-        (this.staffUser && (this.staffUser.displayName || this.staffUser.name)) ||
-        (this.staffUser && this.staffUser.username) ||
-        ""
-      );
+      // ONLY displayName — no username fallback by request
+      return (this.staffUser && this.staffUser.displayName) || "";
     },
   },
   created() {
