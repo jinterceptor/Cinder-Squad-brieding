@@ -1,6 +1,6 @@
 <!-- /src/components/layout/Header.vue -->
 <template>
-  <header>
+  <header :style="{'--auth-x': authOffsetX + 'px', '--auth-y': authOffsetY + 'px'}">
     <!-- Auth Indicator -->
     <div class="auth-indicator" v-if="isLoggedIn">
       <div class="auth-line">
@@ -80,11 +80,15 @@ export default {
   props: {
     planetPath: { type: String, required: true },
     header: { type: Object, required: true },
+    /** Horizontal offset (px) for the auth pill; increase to shift right */
+    authOffsetX: { type: Number, default: 12 },
+    /** Vertical offset (px) for the auth pill */
+    authOffsetY: { type: Number, default: 10 },
   },
   data() {
     return {
-      role: null,          // 'member' | 'staff' | null (overlay role)
-      staffUser: null,     // { username, displayName } | null (admin session)
+      role: null,          // 'member' | 'staff' | null
+      staffUser: null,     // { name?, displayName?, username? } | null
       unsub: null,
     };
   },
@@ -93,7 +97,7 @@ export default {
       return this.role === "member" || this.isStaff;
     },
     isStaff() {
-      return isAdmin(); // reads admin session + expiry
+      return isAdmin();
     },
     authVariant() {
       return this.isStaff ? "staff" : "member";
@@ -102,7 +106,9 @@ export default {
       return this.isStaff ? "Staff" : "Member";
     },
     displayName() {
-      return this.isStaff ? (this.staffUser?.displayName || this.staffUser?.username || "") : "";
+      if (!this.isStaff) return "";
+      // prefer real name, then displayName, then username
+      return this.staffUser?.name || this.staffUser?.displayName || this.staffUser?.username || "";
     },
   },
   created() {
@@ -141,11 +147,11 @@ export default {
 /* Ensure absolute children can anchor inside header */
 header { position: relative; }
 
-/* Auth indicator pill (top-left) */
+/* Auth indicator pill (position via CSS variables for easy shifting) */
 .auth-indicator {
   position: absolute;
-  left: 12px;
-  top: 10px;
+  left: var(--auth-x, 12px);
+  top: var(--auth-y, 10px);
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -158,7 +164,7 @@ header { position: relative; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1;
-  z-index: 2; /* stay above header art */
+  z-index: 2; /* keep above header art */
 }
 
 .auth-line { display: inline-flex; align-items: center; gap: 6px; }
