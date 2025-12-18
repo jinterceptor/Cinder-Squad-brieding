@@ -1,0 +1,77 @@
+name: Staff Admin
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action"
+        required: true
+        type: choice
+        options: [list, create, update, delete]
+      username:
+        description: "Username (create/update/delete)"
+        required: false
+      password:
+        description: "Password (create/update)"
+        required: false
+      displayName:
+        description: "Display name (create/update)"
+        required: false
+      role:
+        description: "Role (staff/officer) for create/update"
+        required: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Apps Script
+        env:
+          ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
+          SECRET:   ${{ secrets.GAS_SECRET }}
+          ADMINKEY: ${{ secrets.GAS_ADMIN_KEY }}
+          ACTION:   ${{ github.event.inputs.action }}
+          USERNAME: ${{ github.event.inputs.username }}
+          PASSWORD: ${{ github.event.inputs.password }}
+          DISPLAY:  ${{ github.event.inputs.displayName }}
+          ROLE:     ${{ github.event.inputs.role }}
+        run: |
+          set -euo pipefail
+
+          build_body() {
+            case "$ACTION" in
+              list)
+                cat <<JSON
+{"secret":"${SECRET}","action":"admin.staff:list","adminKey":"${ADMINKEY}"}
+JSON
+                ;;
+              create)
+                cat <<JSON
+{"secret":"${SECRET}","action":"admin.staff:create","adminKey":"${ADMINKEY}","username":"${USERNAME}","password":"${PASSWORD}","displayName":"${DISPLAY}","role":"${ROLE}"}
+JSON
+                ;;
+              update)
+                cat <<JSON
+{"secret":"${SECRET}","action":"admin.staff:update","adminKey":"${ADMINKEY}","username":"${USERNAME}","displayName":"${DISPLAY}","role":"${ROLE}","newPassword":"${PASSWORD}"}
+JSON
+                ;;
+              delete)
+                cat <<JSON
+{"secret":"${SECRET}","action":"admin.staff:delete","adminKey":"${ADMINKEY}","username":"${USERNAME}"}
+JSON
+                ;;
+              *)
+                echo "Unknown action: $ACTION" >&2; exit 1;;
+            esac
+          }
+
+          BODY=$(build_body)
+          echo "Request: $BODY"
+
+          RES=$(curl -sS -X POST \
+            -H 'Content-Type: text/plain;charset=utf-8' \
+            --data "$BODY" \
+            "$ENDPOINT")
+
+          echo "Response: $RES"
+          echo "$RES" | grep -q '"ok":true'
