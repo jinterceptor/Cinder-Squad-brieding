@@ -4,15 +4,24 @@ import { createMemoryHistory, createWebHistory, createRouter } from "vue-router"
 import Status from "@/views/StatusView.vue";
 import Pilots from "@/views/PilotsView.vue";
 import Events from "@/views/EventsView.vue";
-import AdminGate from "@/views/admin/AdminGate.vue";
+
+import LoginView from "@/views/LoginView.vue";       // landing splash (2 options)
+import AdminGate from "@/views/admin/AdminGate.vue";  // keep if you still want /admin/login
 import AdminHome from "@/views/admin/AdminHome.vue";
+
 import { isAdmin } from "@/utils/adminAuth";
 import Config from "@/assets/info/general-config.json";
 
 const DEFAULT_TITLE = Config.defaultTitle;
 
 const routes = [
-  { path: "/", redirect: "/status" },
+  // NEW: start on the access portal
+  {
+    path: "/",
+    name: "Access Portal",
+    component: LoginView,
+    meta: { title: `${DEFAULT_TITLE} ACCESS PORTAL`, public: true },
+  },
 
   {
     path: "/status",
@@ -36,7 +45,7 @@ const routes = [
     meta: { title: `${DEFAULT_TITLE} OPERATIONS LOG` },
   },
 
-  // ---- Admin
+  // Admin
   {
     path: "/admin/login",
     name: "Admin Login",
@@ -50,7 +59,8 @@ const routes = [
     meta: { title: `${DEFAULT_TITLE} ADMIN`, requiresAdmin: true },
   },
 
-  { path: "/:pathMatch(.*)*", redirect: "/status" },
+  // Fallback to the new landing (do NOT redirect to /status)
+  { path: "/:pathMatch(.*)*", redirect: "/" },
 ];
 
 const router = createRouter({
@@ -61,23 +71,17 @@ const router = createRouter({
   },
 });
 
-// Single guard: admin gate + title
 router.beforeEach((to, _from, next) => {
-  // Protect admin routes
-  if (to.meta?.requiresAdmin) {
-    if (!isAdmin()) {
-      return next({ path: "/admin/login", query: { redirect: to.fullPath } });
-    }
+  // Guard admin
+  if (to.meta?.requiresAdmin && !isAdmin()) {
+    return next({ path: "/admin/login", query: { redirect: to.fullPath } });
   }
-
-  // Prevent seeing login if already authed
-  if (to.path === "/admin/login" && isAdmin()) {
+  // If authed, skip login UIs
+  if ((to.path === "/" || to.path === "/admin/login") && isAdmin()) {
     return next({ path: "/admin" });
   }
-
   // Title
   if (to.meta?.title) document.title = String(to.meta.title);
-
   next();
 });
 
