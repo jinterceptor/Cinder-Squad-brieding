@@ -10,16 +10,15 @@ const isBrowser = typeof window !== "undefined";
 
 /* ---------- Endpoint + label (client-safe) ---------- */
 export function adminEndpoint() {
-  // Must match your Netlify proxy that talks to Apps Script
-  // Used by Discipline and other admin APIs
+  // Proxy used by Discipline/Warnings (Apps Script behind Netlify function)
   return "/api/warnings";
 }
 export function staffEndpoint() {
-  // Admin login/manage staff (GitHub Actions + Apps Script)
+  // Proxy used by staff login / management
   return "/api/staff";
 }
 export function adminSecret() {
-  // Client-visible label; real secret is enforced server-side in the proxy
+  // Client-visible label; real secret enforced server-side in the proxy
   return "PLEX";
 }
 
@@ -48,18 +47,14 @@ export function clearAdminSession() {
   notify();
 }
 
-// alias expected by some components
-export function adminLogout() {
-  clearAdminSession();
-}
+// Alias some code expects
+export function adminLogout() { clearAdminSession(); }
 
 export function adminUser() {
   try {
     const raw = sessionStorage.getItem(LS_USER);
     return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 export function adminRole() {
   try { return sessionStorage.getItem(LS_ROLE) || null; } catch { return null; }
@@ -75,9 +70,7 @@ function notExpired() {
   return Number.isFinite(exp) && Date.now() < exp;
 }
 
-/**
- * Strict check: must have user + token + not expired.
- */
+/** Strict check: must have user + token + not expired. */
 export function isAdmin() {
   try {
     const u = adminUser();
@@ -85,9 +78,21 @@ export function isAdmin() {
     if (!u || !t) return false;
     if (!notExpired()) return false;
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
+}
+
+/* ---------- Roles ---------- */
+export function isOfficer() {
+  const r = (adminRole() || "").toLowerCase();
+  return r === "officer";
+}
+export function isStaff() {
+  const r = (adminRole() || "").toLowerCase();
+  return r === "staff";
+}
+/** Matches legacy imports: officers OR staff are allowed. */
+export function isOfficerOrStaff() {
+  return isAdmin() && (isOfficer() || isStaff());
 }
 
 /* ---------- Pub/Sub so composables can react ---------- */
@@ -99,23 +104,22 @@ const listeners = new Set();
 export function subscribe(fn) {
   if (typeof fn === "function") {
     listeners.add(fn);
-    // push current state immediately
     try { fn(sessionSnapshot()); } catch {}
   }
   return () => listeners.delete(fn);
 }
+// some code may import onChange
+export const onChange = subscribe;
+
 function notify() {
   const snap = sessionSnapshot();
   listeners.forEach((fn) => {
     try { fn(snap); } catch {}
   });
 }
-// cross-tab sync
 if (isBrowser && typeof window.addEventListener === "function") {
   window.addEventListener("storage", (e) => {
-    if ([LS_USER, LS_ROLE, LS_TOKEN, LS_EXP].includes(e.key)) {
-      notify();
-    }
+    if ([LS_USER, LS_ROLE, LS_TOKEN, LS_EXP].includes(e.key)) notify();
   });
 }
 function sessionSnapshot() {
