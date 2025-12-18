@@ -1,6 +1,14 @@
 # netlify.toml
+
 [build]
-  functions = "netlify/functions"
+  command = "npm run build"
+  publish = "dist"               # Vite output
 
 [functions]
-  directory = "netlify/functions"
+  directory = "netlify/functions"  # your existing functions folder
+
+# SPA fallback: serve index.html for any route (so "/" renders LoginView.vue)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
