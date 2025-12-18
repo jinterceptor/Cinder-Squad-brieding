@@ -11,7 +11,6 @@ import Config from "@/assets/info/general-config.json";
 
 const DEFAULT_TITLE = Config.defaultTitle;
 
-// Prevent open-redirects: allow only same-site absolute paths
 function safeRedirectPath(path) {
   if (typeof path !== "string") return "/admin";
   return path.startsWith("/") ? path : "/admin";
@@ -42,21 +41,9 @@ const routes = [
     meta: { title: `${DEFAULT_TITLE} OPERATIONS LOG` },
   },
 
-  // --- Admin routes ---
-  {
-    path: "/admin/login",
-    name: "Admin Login",
-    component: AdminGate,
-    meta: { title: `${DEFAULT_TITLE} ADMIN LOGIN`, public: true },
-  },
-  {
-    path: "/admin",
-    name: "Admin",
-    component: AdminHome,
-    meta: { title: `${DEFAULT_TITLE} ADMIN`, requiresAdmin: true },
-  },
+  { path: "/admin/login", name: "Admin Login", component: AdminGate, meta: { title: `${DEFAULT_TITLE} ADMIN LOGIN`, public: true } },
+  { path: "/admin", name: "Admin", component: AdminHome, meta: { title: `${DEFAULT_TITLE} ADMIN`, requiresAdmin: true } },
 
-  // Fallback
   { path: "/:pathMatch(.*)*", redirect: "/status" },
 ];
 
@@ -69,23 +56,15 @@ const router = createRouter({
   },
 });
 
-// Single guard: admin gate + title
 router.beforeEach((to, _from, next) => {
-  // Admin protection
   if (to.meta?.requiresAdmin && !isAdmin()) {
-    const redirect = safeRedirectPath(to.fullPath);
-    return next({ path: "/admin/login", query: { redirect } });
+    return next({ path: "/admin/login", query: { redirect: to.fullPath } });
   }
-
-  // Already logged in? Skip login page.
   if (to.path === "/admin/login" && isAdmin()) {
     const target = safeRedirectPath(to.query?.redirect || "/admin");
     return next(target);
   }
-
-  // Title
   if (to.meta?.title) document.title = String(to.meta.title);
-
   next();
 });
 
