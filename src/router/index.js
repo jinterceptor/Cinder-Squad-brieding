@@ -5,7 +5,7 @@ import Status from "@/views/StatusView.vue";
 import Pilots from "@/views/PilotsView.vue";
 import Events from "@/views/EventsView.vue";
 
-import LoginView from "@/views/LoginView.vue";
+import LoginView from "@/views/LoginView.vue";       // landing splash with 2 lanes
 import AdminGate from "@/views/admin/AdminGate.vue";
 import AdminHome from "@/views/admin/AdminHome.vue";
 
@@ -15,14 +15,12 @@ import Config from "@/assets/info/general-config.json";
 const DEFAULT_TITLE = Config.defaultTitle;
 
 const routes = [
-  // Landing: two big choices (Member vs Staff)
   {
     path: "/",
     name: "Access Portal",
     component: LoginView,
     meta: { title: `${DEFAULT_TITLE} ACCESS PORTAL`, public: true },
   },
-
   {
     path: "/status",
     name: "Mission Status",
@@ -70,12 +68,12 @@ const router = createRouter({
   },
 });
 
-// Guard + title
 router.beforeEach((to, _from, next) => {
+  // Protect admin routes
   if (to.meta?.requiresAdmin && !isAdmin()) {
     return next({ path: "/admin/login", query: { redirect: to.fullPath } });
   }
-  // Already authed? Skip login screens
+  // If already authed, skip login UIs
   if ((to.path === "/" || to.path === "/admin/login") && isAdmin()) {
     return next({ path: "/admin" });
   }
