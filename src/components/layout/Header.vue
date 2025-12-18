@@ -80,8 +80,8 @@ export default {
   props: {
     planetPath: { type: String, required: true },
     header: { type: Object, required: true },
-    authOffsetX: { type: Number, default: 12 }, // shift right (e.g., 315)
-    authOffsetY: { type: Number, default: 10 }, // shift down
+    authOffsetX: { type: Number, default: 315 }, // default shift right
+    authOffsetY: { type: Number, default: 10 },  // shift down
   },
   data() {
     return {
@@ -105,7 +105,6 @@ export default {
     },
     displayName() {
       if (!this.isStaff) return "";
-      // ONLY displayName — no username fallback by request
       return (this.staffUser && this.staffUser.displayName) || "";
     },
   },
@@ -147,7 +146,7 @@ header { position: relative; }
 /* Auth indicator pill (position via CSS variables) */
 .auth-indicator {
   position: absolute;
-  left: var(--auth-x, 12px);
+  left: var(--auth-x, 315px);
   top: var(--auth-y, 10px);
   display: inline-flex;
   align-items: center;
