@@ -1,3 +1,4 @@
+<!-- /src/views/EventsView.vue -->
 <template>
 	<div
 		id="eventsView"
@@ -70,7 +71,15 @@ export default {
 	data() {
 		return {
 			selectedEvent: {},
+			// flicker controls
+			animateView: false,
+			animationDelay: "0ms",
 		};
+	},
+
+	mounted() {
+		// why: trigger per-view “power-on” animation on mount
+		this.triggerFlicker();
 	},
 
 	computed: {
@@ -105,10 +114,7 @@ export default {
 	},
 
 	methods: {
-		/**
-		 * Adds an id/index property to events so we know which /events/<id>/ folder to load from.
-		 * Your loader can already define `id: "000"` etc.; this ensures a fallback.
-		 */
+		// adds an id/index so we know which /events/<id>/ folder to load
 		withId(item, index) {
 			if (!item.id && !item.filename) {
 				return { ...item, id: index.toString().padStart(3, "0") };
@@ -118,12 +124,32 @@ export default {
 
 		selectEvent(event) {
 			this.selectedEvent = event;
+			// optional: uncomment to flicker when selecting an event
+			// this.triggerFlicker(0);
+		},
+
+		// minimal, reusable panel flicker
+		triggerFlicker(delayMs = 0) {
+			this.animateView = false;
+			this.animationDelay = `${delayMs}ms`;
+			this.$nextTick(() => {
+				requestAnimationFrame(() => {
+					this.animateView = true;
+					// keep class until next trigger; avoids post-anim snap
+				});
+			});
 		},
 	},
 };
 </script>
 
 <style scoped>
+/* Prevent end-of-fade layout jump when scrollbars appear */
+.section-container {
+	scrollbar-gutter: stable; /* why: reserve gutter to avoid width reflow */
+}
+
+/* Existing */
 .markdown img {
 	display: block;
 	max-width: 100%;
