@@ -1,6 +1,11 @@
 <!-- src/views/PilotsView.vue -->
 <template>
-  <section id="members" class="section-container">
+  <section
+    id="members"
+    class="section-container"
+    :class="{ animate: animateView }"
+    :style="{ 'animation-delay': animationDelay }"
+  >
     <div style="height: 52px; overflow: hidden">
       <div class="section-header clipped-medium-backward-pilot">
         <img src="/icons/license.svg" alt="Members Icon" />
@@ -337,6 +342,10 @@ export default {
   },
   data() {
     return {
+      /* flicker */
+      animateView: false,
+      animationDelay: "0ms",
+
       activeSquad: null,
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
@@ -632,6 +641,18 @@ export default {
       const n = Number(v);
       return Number.isFinite(n) ? n : "—";
     },
+
+    /* view-entry flicker (non-invasive) */
+    triggerFlicker(delayMs = 0) {
+      this.animateView = false;
+      this.animationDelay = `${delayMs}ms`;
+      this.$nextTick(() => {
+        requestAnimationFrame(() => { this.animateView = true; });
+      });
+    },
+  },
+  mounted() {
+    this.triggerFlicker();
   },
 };
 </script>
@@ -783,4 +804,15 @@ export default {
 
 /* Safety belt */
 :deep(.squad-modal img) { max-width: 100%; height: auto; }
+
+/* --- flicker animation (non-invasive) --- */
+.section-container.animate {
+  animation: contentEntry 260ms ease-out both;
+}
+@keyframes contentEntry {
+  0%   { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
+  60%  { opacity: 1; filter: brightness(1.0)  saturate(1.0)  blur(0); }
+  80%  { opacity: 0.98; filter: brightness(1.03); }
+  100% { opacity: 1; filter: none; }
+}
 </style>
