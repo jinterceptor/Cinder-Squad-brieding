@@ -10,10 +10,9 @@
         <div class="rhombus-back">&nbsp;</div>
       </div>
 
-      <!-- flicker only here; forced re-mount via :key -->
+      <!-- flicker only here -->
       <div
         class="section-content-container"
-        :key="flickerKey"
         :class="{ animate: animateView }"
         :style="{ 'animation-delay': animationDelay }"
       >
@@ -130,7 +129,7 @@
         </div> <!-- /orbat-wrapper -->
       </div> <!-- /section-content-container -->
 
-      <!-- Modal (unaffected) -->
+      <!-- Modal (unaffected by flicker) -->
       <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
         <div class="squad-modal">
           <div class="squad-modal-header">
@@ -141,6 +140,7 @@
               </div>
               <div class="rhombus-back">&nbsp;</div>
             </div>
+
             <button class="squad-close" @click="closeSquad">✕</button>
           </div>
 
@@ -151,6 +151,7 @@
                 {{ squadDescriptor(activeSquad.squad) }} ·
                 {{ personnelCount(activeSquad) }} PERSONNEL
               </p>
+
               <div class="loadout-status">
                 <span class="points">LOADOUT: {{ squadLoadoutStatus.points }}/10 PTS</span>
                 <span v-if="!squadLoadoutStatus.valid" class="warn" :title="squadLoadoutStatus.errors.join(' • ')">
@@ -159,6 +160,7 @@
                 <span v-else class="ok">✓ VALID</span>
               </div>
             </div>
+
             <div class="squad-tag"><span>{{ squadInitials(activeSquad.squad) }}</span></div>
           </div>
 
@@ -222,6 +224,7 @@
                           class="member-rank-insignia"
                         />
                       </div>
+
                       <div class="member-header-text">
                         <h3>{{ (slot.member?.name || 'UNKNOWN').toUpperCase() }}</h3>
                         <p class="rank-line">
@@ -344,7 +347,6 @@ export default {
     return {
       animateView: false,
       animationDelay: "0ms",
-      flickerKey: 0, // why: force re-mount to restart CSS animation
 
       activeSquad: null,
       certLabels: [
@@ -362,10 +364,8 @@ export default {
       },
     };
   },
-  mounted() { this.triggerFlicker(0); },
-  activated() { this.triggerFlicker(0); },
-  watch: {
-    $route() { this.triggerFlicker(0); },
+  mounted() {
+    this.triggerFlicker();
   },
   computed: {
     attendanceMap() {
@@ -469,11 +469,10 @@ export default {
     },
   },
   methods: {
-    // re-mount + class toggle to guarantee CSS animation runs
+    // flicker trigger
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
-      this.flickerKey += 1; // why: force VDOM to recreate node
       this.$nextTick(() => {
         requestAnimationFrame(() => { this.animateView = true; });
       });
@@ -657,6 +656,7 @@ export default {
 </script>
 
 <style scoped>
+/* Reserve space for scrollbar to avoid width snap at the end of the fade */
 .section-container {
   height: 100vh;
   overflow-y: auto;
@@ -670,10 +670,152 @@ export default {
   box-sizing: border-box;
 }
 
-/* Animation target */
+/* Help the GPU plan the animation; avoids micro-jank on heavy DOM */
 .section-content-container { will-change: opacity, filter; contain: paint; }
 
-/* ... (all your existing styles from the previous version remain unchanged) ... */
+.section-content_container { width: 100% !important; }
+.orbat-wrapper { width: 100%; margin-top: 0.75rem; padding-bottom: 4rem; }
+.hierarchy-container { width: 100%; margin-top: 2rem; }
+.orbat-row { margin-bottom: 3rem; }
+.center-row { display: flex; justify-content: center; }
+.squad-row.single { display: flex; justify-content: center; }
+.squad-row.three { display: grid; grid-template-columns: repeat(3, minmax(280px, 1fr)); gap: 2.5rem; }
+@media (max-width: 1400px) { .squad-row.three { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
+@media (max-width: 900px) { .squad-row.three { grid-template-columns: 1fr; } }
+
+/* Connector lines */
+@media (min-width: 900px) {
+  .actual-row { position: relative; }
+  .actual-row::after { content: ""; position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); width: 3px; height: 24px; background: rgba(30, 144, 255, 0.6); border-radius: 2px; pointer-events: none; }
+  .chalk-row { position: relative; margin-top: 2.5rem; padding-top: 1.5rem; }
+  .chalk-row::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 3px; background: rgba(30,144,255,0.6); border-radius: 2px; }
+}
+
+/* Squad tiles */
+.squad-card { background: radial-gradient(circle at top left, rgba(30,144,255,0.25), transparent 65%), rgba(0,10,30,0.9); border: 2px solid rgba(30,144,255,0.85); border-radius: 0.8rem; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; min-height: 210px; padding-right: 1.5rem; transition: 0.15s ease-in-out; }
+.squad-card:hover { transform: translateY(-2px); border-color: #5ab3ff; }
+.squad-header { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: 1.4rem 2rem; }
+.squad-insignia { width: 95px; height: 95px; border-radius: 0.6rem; border: 4px solid #1e90ff; display: flex; align-items: center; justify-content: center; margin-right: 1.6rem; font-size: 2rem; font-weight: bold; color: #1e90ff; background: rgba(0,0,0,0.7); text-align: center; }
+.squad-meta h2 { margin: 0; font-size: 2.3rem; color: #e0f0ff; letter-spacing: 0.05em; }
+.squad-subtitle { margin: 0.2rem 0 0; font-size: 1.1rem; color: #9ec5e6; text-transform: uppercase; }
+.squad-count { margin: 0.4rem 0 0; font-size: 1rem; color: #7aa7c7; }
+
+/* Modal shell */
+.squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.squad-modal { background-color: #050811; color: #dce6f1; width: 95vw; max-width: 1860px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
+.squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
+.squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
+
+/* Meta */
+.squad-modal-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(30,144,255,0.6); padding-bottom: 0.5rem; }
+.squad-modal-meta.invalid { border-bottom-color: rgba(255,190,80,0.9); }
+.loadout-status { margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center; font-size: 0.85rem; text-transform: uppercase; }
+.loadout-status .points { color: #9ec5e6; }
+.loadout-status .warn { color: rgba(255,190,80,0.95); }
+.loadout-status .ok { color: rgba(120,255,170,0.9); }
+
+/* Scroll + Fireteam blocks */
+.squad-modal-scroll { overflow: auto; padding-right: .4rem; margin-top: .8rem; max-height: calc(90vh - 200px); }
+.fireteam-block { margin-bottom: 1.2rem; }
+.fireteam-header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: baseline; padding: .35rem .25rem; background: linear-gradient(to bottom, rgba(5,8,17,.92), rgba(5,8,17,.75)); z-index: 1; border-top: 1px solid rgba(30,144,255,.35); border-bottom: 1px solid rgba(30,144,255,.15); }
+.fireteam-title { font-weight: 700; letter-spacing: .06em; color: #e0f0ff; }
+.fireteam-count { color: #9ec5e6; font-size: .9rem; }
+.fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
+
+/* Cards grid – set to 5-up, with responsive fallbacks */
+.squad-members-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .95rem;
+}
+@media (max-width: 1680px) {
+  .squad-members-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1350px) {
+  .squad-members-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 980px) {
+  .squad-members-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .squad-members-grid { grid-template-columns: 1fr; }
+}
+
+/* Cards */
+.member-card { position: relative; background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
+.member-card.vacant, .member-card.closed { border-left-color: rgba(30,144,255,0.35); }
+
+/* VACANT */
+.member-card.vacant {
+  background:
+    repeating-linear-gradient(45deg, rgba(30,144,255,0.06) 0, rgba(30,144,255,0.06) 10px, transparent 10px, transparent 20px),
+    rgba(0, 12, 25, 0.9);
+  border-left-style: dashed;
+}
+
+/* CLOSED */
+.member-card.closed {
+  filter: grayscale(85%);
+  opacity: 0.6;
+  background:
+    repeating-linear-gradient(45deg, rgba(200,200,200,0.06) 0, rgba(200,200,200,0.06) 8px, transparent 8px, transparent 16px),
+    repeating-linear-gradient(-45deg, rgba(200,200,200,0.04) 0, rgba(200,200,200,0.04) 8px, transparent 8px, transparent 16px),
+    rgba(1, 6, 14, 0.9);
+}
+.member-card.closed .member-header h3,
+.member-card.closed .rank-line,
+.member-card.closed .detail-line,
+.member-card.closed .cert-label,
+.member-card.closed .cert-none,
+.member-card.closed .member-footer { opacity: 0.75; }
+
+/* Header */
+.member-header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .9rem; }
+.member-header h3 { margin: 0; font-size: 1.1rem; color: #e0f0ff; word-break: break-word; }
+.rank-line { margin: 0.15rem 0 0; font-size: 0.88rem; color: #9ec5e6; display: flex; gap: .6rem; flex-wrap: wrap; }
+.member-rank-insignia-wrapper { width: 46px; height: 46px; display: grid; place-items: center; }
+.member-rank-insignia { max-width: 46px; max-height: 46px; object-fit: contain; }
+
+/* Body */
+.member-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.6rem; font-size: 0.9rem; }
+.member-column p { margin: 0.18rem 0; }
+
+/* Info accents */
+.detail-line strong { color: #9ec5e6; }
+.role-accent { color: #55ff88; font-weight: 600; }
+.role-corpsman { color: #ff6b6b; font-weight: 700; }
+.date-accent { color: #55ff88; }
+.accent { color: #a3e7ff; }
+.accent-strong { color: #7fffd4; font-weight: 700; }
+
+/* Keep on one line */
+.join-date { white-space: nowrap; }
+.next-rank-line { white-space: nowrap; }
+
+/* Ops / promo */
+.ops-promo { margin-top: 0.45rem; padding: 0.45rem 0.55rem; border: 1px dashed rgba(30,144,255,0.45); border-radius: 0.35rem; background: rgba(0,10,30,0.35); }
+.ops-promo.imminent { border-color: rgba(120,255,170,0.85); background: rgba(0,50,20,0.35); color: rgba(120,255,170,0.95); box-shadow: 0 0 10px rgba(120,255,170,0.15) inset; }
+
+/* Loadout controls */
+.loadout-row { margin-top: 0.4rem; }
+.disposable { user-select: none; }
+.primary-label { display: block; margin-bottom: .15rem; font-size: .85rem; color: #9ec5e6; }
+.loadout-select { width: 100%; background: #040a14; border: 1px solid rgba(30,144,255,.45); color: #dce6f1; border-radius: .3rem; padding: .25rem .35rem; }
+
+/* Certs */
+.cert-list { display: grid; grid-template-columns: 20px 1fr; row-gap: .28rem; }
+.cert-row { display: contents; }
+.cert-checkbox { width: 16px; height: 16px; border: 1px solid rgba(30,144,255,.6); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
+.cert-checkbox.checked { border-color: rgba(120,255,170,.9); box-shadow: 0 0 6px rgba(120,255,170,.25) inset; }
+.checkbox-dot { width: 10px; height: 10px; background: rgba(120,255,170,.95); border-radius: 2px; display: block; }
+.cert-label { color: #dce6f1; }
+.cert-none { font-size: .85rem; opacity: .75; }
+
+/* Footer */
+.member-footer { margin-top: 0.6rem; font-size: 0.75rem; color: #7aa7c7; display: flex; justify-content: space-between; }
+
+/* Safety belt */
+:deep(.squad-modal img) { max-width: 100%; height: auto; }
 
 /* ---- Flicker animation ONLY for content (modal unaffected) ---- */
 .section-content-container.animate {
