@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- LEFT: TRAINING & CONTACTS (shifted away from edges) -->
+    <!-- LEFT: TRAINING & CONTACTS -->
     <section id="training" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -49,7 +49,7 @@
       </div>
     </section>
 
-    <!-- RIGHT: S-SHOP PERSONNEL (also shifted down) -->
+    <!-- RIGHT: S-SHOP PERSONNEL -->
     <section id="sshops" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -127,12 +127,13 @@ export default {
 
           const raw = this.readDown(table, 2, c).filter(this.isRealName);
 
-          // unique-preserving list; include contact inside trainers
+          // unique-preserving list; include contact in trainers
           const uniq = [];
           for (const n of raw) if (!uniq.includes(n)) uniq.push(n);
 
           const lead = uniq[0] || "";
           const trainersAll = uniq.slice();
+
           trainers.push({ key: `role-${c}`, title, lead, trainers: trainersAll });
         }
 
@@ -197,15 +198,16 @@ export default {
   grid-template-columns: 1.7fr 1fr;
   gap: 1.2rem;
   align-items: start;
+
+  /* Offset the entire page (matches other views’ spacing feel) */
+  padding-top: 28px;   /* move both windows down from the header */
+  padding-left: 18px;  /* nudge away from sidebar edge */
 }
 #trainingView > .section-container { width: 100%; margin: 0; }
 #training { grid-column: 1; }
 #sshops  { grid-column: 2; }
 
-/* Shift both windows down; keep left nudged right */
-#training { padding-left: 18px; margin-top: 24px; }
-#sshops  { margin-top: 24px; }
-
+/* Headers */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
 .error { color: #ff9f9f; }
@@ -227,7 +229,7 @@ export default {
 @media (max-width: 1700px) { .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 1400px) { .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1100px) {
-  #trainingView { grid-template-columns: 1fr; }
+  #trainingView { grid-template-columns: 1fr; padding-left: 12px; }
   .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 800px) {
