@@ -196,16 +196,20 @@ export default {
     return {
       animateView: false,
       animationDelay: "0ms",
+
       plan: { units: [] },
+      original: new Map(), // why: per-unit ORBAT snapshot for one-click restore
+
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
+
       personnel: [],
       STORAGE_KEY: "deploymentPlan",
-      MIN_CHALK_SLOTS: 12, // why: allow over-fill capacity
+      MIN_CHALK_SLOTS: 12,
     };
   },
   created() {
     this.personnel = this.buildPersonnelPool();
-    this.plan.units = this.loadOrInitPlan(); // auto-fills from ORBAT; Chalks padded to 12
+    this.plan.units = this.loadOrInitPlan(); // also builds "original"
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
@@ -275,23 +279,30 @@ export default {
     },
 
     loadOrInitPlan() {
+      // Prefer saved plan; still rebuild "original" from current ORBAT for Auto-fill
+      const baseFromOrbat = this.buildUnitsFromOrbat(); // sets this.original
       const saved = sessionStorage.getItem(this.STORAGE_KEY);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed?.units)) {
-            this.padChalks(parsed.units); // why: ensure >=12 slots even if old save lacked them
+            // Ensure Chalk padding remains
+            this.padChalks(parsed.units);
             return parsed.units;
           }
         } catch {}
       }
-      return this.initPlanFromOrbat(); // fresh auto-fill from ORBAT
+      return baseFromOrbat;
     },
 
-    initPlanFromOrbat() {
+    buildUnitsFromOrbat() {
       const units = [];
+      this.original.clear();
+
       this.selectedSquads.forEach((sq)=>{
         const key = this.keyFromName(sq.squad);
+
+        // Build slots from ORBAT (as displayed on Roster)
         const slots = [];
         (sq.fireteams||[]).forEach(ft=>{
           (ft.slots||[]).forEach((s)=>{
@@ -306,23 +317,46 @@ export default {
             });
           });
         });
-        const unit = { key, title: sq.squad, slots };
+
+        // Inject Chalk Actual as first slot for Chalks
+        let actualSlot = null;
+        if (this.isChalk(sq.squad)) {
+          const found = this.findChalkActualInSquad(sq);
+          if (found) {
+            actualSlot = { id: String(found.id), name: found.name, role: found.role || "Actual", origStatus: "FILLED" };
+          } else {
+            actualSlot = { id: null, name: null, role: "Actual", origStatus: "VACANT" };
+          }
+        }
+
+        const combined = actualSlot ? [actualSlot, ...slots] : slots;
+
+        // Enforce Chalk min slots (≥12)
+        const finalSlots = this.isChalk(sq.squad) ? this.padSlots(combined, this.MIN_CHALK_SLOTS) : combined;
+
+        const unit = { key, title: sq.squad, slots: finalSlots };
         units.push(unit);
+
+        // Save pristine snapshot for Auto-fill
+        this.original.set(key, JSON.parse(JSON.stringify(finalSlots)));
       });
 
-      // ensure Chalks have at least 12 slots (for over-fill capacity)
-      this.padChalks(units);
       return units;
     },
 
+    padSlots(arr, min) {
+      const out = arr.slice();
+      const need = Math.max(0, min - out.length);
+      for (let i = 0; i < need; i++) {
+        out.push({ id: null, name: null, role: "", origStatus: "VACANT" });
+      }
+      return out;
+    },
+
     padChalks(units) {
-      const minN = this.MIN_CHALK_SLOTS;
       for (const u of units) {
         if (this.isChalk(u.title)) {
-          const need = Math.max(0, minN - u.slots.length);
-          for (let i = 0; i < need; i++) {
-            u.slots.push({ id: null, name: null, role: "", origStatus: "VACANT" });
-          }
+          u.slots = this.padSlots(u.slots, this.MIN_CHALK_SLOTS);
         }
       }
     },
@@ -331,7 +365,23 @@ export default {
       return /chalk\s*\d+/i.test(String(title || ""));
     },
 
-    persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
+    findChalkActualInSquad(sq) {
+      // Try to locate an Actual/SL in the ORBAT slots
+      const roleMatch = /(^|\b)(actual|sl|squad\s*leader)(\b|$)/i;
+      for (const ft of (sq.fireteams || [])) {
+        for (const s of (ft.slots || [])) {
+          const r = String(s?.role || s?.member?.slot || "");
+          if (roleMatch.test(r) && s?.member?.id && s?.member?.name) {
+            return { id: s.member.id, name: s.member.name, role: r };
+          }
+        }
+      }
+      return null;
+    },
+
+    persistPlan() {
+      try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {}
+    },
 
     keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
     filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
@@ -382,6 +432,7 @@ export default {
       this.persistPlan();
       this.closePicker();
     },
+
     clearSlot(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g) return;
@@ -394,28 +445,23 @@ export default {
       g.slots = g.slots.map(s=>({ ...s, id:null, name:null }));
       this.persistPlan();
     },
-    clearCurrentSlot(){
-      if (!this.picker.open) return;
-      this.clearSlot(this.picker.unitKey, this.picker.slotIdx);
-      this.closePicker();
+
+    // NEW: one-click restore from ORBAT snapshot
+    fillFromRoster(unitKey){
+      const snapshot = this.original.get(unitKey);
+      const g = this.plan.units.find(u=>u.key===unitKey);
+      if (!g || !snapshot) return;
+      // Deep copy to avoid reference issues
+      g.slots = JSON.parse(JSON.stringify(snapshot));
+      this.persistPlan();
     },
 
-    fillFromRoster(unitKey){
-      const g = this.plan.units.find(u=>u.key===unitKey);
-      if (!g) return;
-      for (let i=0;i<g.slots.length;i++){
-        const s = g.slots[i];
-        if (s.id || s.origStatus==="CLOSED") continue;
-        const pick = this.personnel.find(p=>!this.findAssignment(p.id));
-        if (!pick) break;
-        s.id = pick.id; s.name = pick.name; s.role ||= p.role || "";
-      }
-      this.persistPlan();
-    },
     resetPlan(){
-      this.plan.units = this.initPlanFromOrbat();
+      // full rebuild from ORBAT (and refresh "original")
+      this.plan.units = this.buildUnitsFromOrbat();
       this.persistPlan();
     },
+
     exportJson(){
       const payload = JSON.stringify(this.plan, null, 2);
       const blob = new Blob([payload], { type:"application/json" });
@@ -426,13 +472,11 @@ export default {
     },
   },
   watch: {
+    // If ORBAT changes, rebuild "original" and keep current plan unless empty
     orbat: { deep:true, handler(){
-      if (!this.plan?.units?.length) {
-        this.plan.units = this.initPlanFromOrbat();
-      } else {
-        // if ORBAT changes mid-session, ensure Chalk padding stays intact
-        this.padChalks(this.plan.units);
-      }
+      const rebuilt = this.buildUnitsFromOrbat();
+      if (!this.plan?.units?.length) this.plan.units = rebuilt;
+      this.persistPlan();
     }},
     members: { deep:true, handler(){ this.personnel = this.buildPersonnelPool(); } },
     plan: { deep:true, handler(){ this.persistPlan(); } },
@@ -451,16 +495,11 @@ export default {
   padding-left: 18px;
   padding-right: 18px;
 }
-@media (max-width: 1280px) {
-  #deploymentView { grid-template-columns: 1fr; }
-}
+@media (max-width: 1280px) { #deploymentView { grid-template-columns: 1fr; } }
 
 /* Make each window (section) honor the grid width, not a global cap */
 .deployment-window.section-container,
-.overview-window.section-container {
-  max-width: none !important;
-  width: auto;
-}
+.overview-window.section-container { max-width: none !important; width: auto; }
 .deployment-window { grid-column: 1; }
 .overview-window   { grid-column: 2; }
 
@@ -500,11 +539,7 @@ export default {
 .group-actions { display: flex; gap: .4rem; }
 
 /* slots grid */
-.slots-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(200px, 1fr));
-  gap: .7rem;
-}
+.slots-grid { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: .7rem; }
 @media (min-width: 1680px) { .slots-grid { grid-template-columns: repeat(6, minmax(200px, 1fr)); } }
 @media (max-width: 1500px) { .slots-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); } }
 @media (max-width: 1100px) { .slots-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); } }
