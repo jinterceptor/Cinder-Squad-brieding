@@ -22,7 +22,6 @@
             No squads found. Ensure ORBAT includes Chalks / Wyvern / Caladrius.
           </div>
 
-          <!-- Groups -->
           <div class="groups">
             <div v-for="g in plan.units" :key="g.key" class="group-card">
               <div class="group-head">
@@ -66,7 +65,6 @@
             </div>
           </div>
 
-          <!-- FOOTER ACTIONS -->
           <div class="actions-row">
             <button class="ghost" @click="resetPlan">Reset</button>
             <button class="ghost" @click="exportJson">Export JSON</button>
@@ -79,7 +77,6 @@
     <section id="deploy-overview" class="section-container overview-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
-          <!-- FIX: use an existing icon -->
           <img src="/icons/events.svg" alt="" />
           <h1>OVERVIEW</h1>
         </div>
@@ -127,7 +124,7 @@
       </div>
     </section>
 
-    <!-- PICKER MODAL (unchanged) -->
+    <!-- PICKER MODAL -->
     <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
       <div class="picker">
         <div class="picker-head">
@@ -199,18 +196,16 @@ export default {
     return {
       animateView: false,
       animationDelay: "0ms",
-
       plan: { units: [] },
-
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
-
       personnel: [],
       STORAGE_KEY: "deploymentPlan",
+      MIN_CHALK_SLOTS: 12, // why: allow over-fill capacity
     };
   },
   created() {
     this.personnel = this.buildPersonnelPool();
-    this.plan.units = this.loadOrInitPlan();
+    this.plan.units = this.loadOrInitPlan(); // auto-fills from ORBAT; Chalks padded to 12
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
@@ -282,10 +277,17 @@ export default {
     loadOrInitPlan() {
       const saved = sessionStorage.getItem(this.STORAGE_KEY);
       if (saved) {
-        try { const parsed = JSON.parse(saved); if (Array.isArray(parsed?.units)) return parsed.units; } catch {}
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed?.units)) {
+            this.padChalks(parsed.units); // why: ensure >=12 slots even if old save lacked them
+            return parsed.units;
+          }
+        } catch {}
       }
-      return this.initPlanFromOrbat();
+      return this.initPlanFromOrbat(); // fresh auto-fill from ORBAT
     },
+
     initPlanFromOrbat() {
       const units = [];
       this.selectedSquads.forEach((sq)=>{
@@ -304,10 +306,31 @@ export default {
             });
           });
         });
-        units.push({ key, title: sq.squad, slots });
+        const unit = { key, title: sq.squad, slots };
+        units.push(unit);
       });
+
+      // ensure Chalks have at least 12 slots (for over-fill capacity)
+      this.padChalks(units);
       return units;
     },
+
+    padChalks(units) {
+      const minN = this.MIN_CHALK_SLOTS;
+      for (const u of units) {
+        if (this.isChalk(u.title)) {
+          const need = Math.max(0, minN - u.slots.length);
+          for (let i = 0; i < need; i++) {
+            u.slots.push({ id: null, name: null, role: "", origStatus: "VACANT" });
+          }
+        }
+      }
+    },
+
+    isChalk(title) {
+      return /chalk\s*\d+/i.test(String(title || ""));
+    },
+
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
 
     keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
@@ -318,7 +341,7 @@ export default {
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g) return;
       const slot = g.slots[slotIdx];
-      if (slot?.origStatus==="CLOSED") return; // why: block closed slots
+      if (slot?.origStatus==="CLOSED") return;
       this.picker = { ...this.picker, open:true, unitKey, slotIdx, query:"", onlyFree:false };
     },
     closePicker(){ this.picker.open = false; },
@@ -403,7 +426,14 @@ export default {
     },
   },
   watch: {
-    orbat: { deep:true, handler(){ if (!this.plan?.units?.length) this.plan.units = this.initPlanFromOrbat(); } },
+    orbat: { deep:true, handler(){
+      if (!this.plan?.units?.length) {
+        this.plan.units = this.initPlanFromOrbat();
+      } else {
+        // if ORBAT changes mid-session, ensure Chalk padding stays intact
+        this.padChalks(this.plan.units);
+      }
+    }},
     members: { deep:true, handler(){ this.personnel = this.buildPersonnelPool(); } },
     plan: { deep:true, handler(){ this.persistPlan(); } },
   },
@@ -446,8 +476,11 @@ export default {
   padding: .8rem .9rem;
 }
 
-/* LEFT: groups */
+/* text */
 .muted { color: #9ec5e6; }
+.small { font-size: .86rem; }
+
+/* groups */
 .groups { display: grid; gap: 1rem; }
 .group-card {
   border: 1px solid rgba(30,144,255,0.28);
@@ -466,7 +499,7 @@ export default {
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
-/* Slots grid (roomy) */
+/* slots grid */
 .slots-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(200px, 1fr));
@@ -488,7 +521,7 @@ export default {
 .slot-name { color: #e6f3ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
 button.primary.pick { width: 100%; }
 
-/* RIGHT: overview */
+/* overview */
 .overview { display: grid; gap: .9rem; }
 .ov-subtitle { margin: .2rem 0; color: #cfe7ff; letter-spacing: .06em; }
 .summary { display: grid; gap: .25rem; }
@@ -500,13 +533,7 @@ button.primary.pick { width: 100%; }
 .free-list li { display: flex; gap: .4rem; color: #e6f3ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .free-list .meta { color: #9ec5e6; }
 
-/* Buttons */
-button { cursor: pointer; border-radius: .45rem; border: 1px solid rgba(30,144,255,0.38); background: rgba(0,10,30,0.35); color: #e6f3ff; padding: .34rem .6rem; font-size: .88rem; }
-button.primary { border-color: rgba(120,255,170,0.55); background: rgba(20,60,35,0.45); color: #cffff0; }
-button.ghost { border-color: rgba(30,144,255,0.28); background: rgba(0,0,0,0.2); color: #d9ebff; }
-button.small { padding: .25rem .5rem; font-size: .82rem; }
-
-/* Picker modal */
+/* modal + flicker */
 .picker-veil { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: grid; place-items: center; z-index: 50; }
 .picker { width: min(900px, 92vw); max-height: 80vh; overflow: hidden; border-radius: .8rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0, 10, 30, 0.95); display: grid; grid-template-rows: auto auto 1fr auto; }
 .picker-head { display: flex; align-items: center; justify-content: space-between; padding: .8rem .9rem; border-bottom: 1px solid rgba(30,144,255,0.25); }
@@ -520,7 +547,7 @@ button.small { padding: .25rem .5rem; font-size: .82rem; }
 .p-meta .subtle { color: #9ec5e6; font-size: .86rem; }
 .badge { color: #79ffba; border: 1px solid rgba(120,255,170,0.55); border-radius: 999px; padding: .1rem .5rem; font-size: .78rem; }
 
-/* Flicker for content only */
+/* Flicker */
 .section-content-container.animate { animation: contentEntry 260ms ease-out both; }
 @keyframes contentEntry {
   0% { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
