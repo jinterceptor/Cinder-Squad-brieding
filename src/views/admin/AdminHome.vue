@@ -7,11 +7,11 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
-      <!-- Narrow wrapper; inner header stays full so shapes render -->
+      <!-- Narrow wrapper; inner header uses same style as Promotions -->
       <div class="header-shell header-admin">
-        <div class="section-header clipped-medium-backward-pilot">
+        <div class="section-header clipped-medium-backward">
           <img src="/icons/protocol.svg" alt="" />
-          <h1>Admin</h1>
+          <h1>ADMIN</h1>
         </div>
         <div class="rhombus-back">&nbsp;</div>
       </div>
@@ -44,8 +44,8 @@
 
     <!-- RIGHT WINDOW -->
     <section class="section-container right-window">
-      <div class="header-shell header-right">
-        <div class="section-header clipped-medium-backward-pilot right-header">
+      <div class="header-shell">
+        <div class="section-header clipped-medium-backward">
           <img src="/icons/protocol.svg" alt="" />
           <h1>{{ windowTitle }}</h1>
           <div class="right-actions"></div>
@@ -236,8 +236,10 @@ export default {
   },
   data() {
     return {
+      // view flicker
       animateView: false,
       animationDelay: "0ms",
+
       activeKey: "promotions",
 
       // Promotions
@@ -674,51 +676,29 @@ export default {
 </script>
 
 <style scoped>
-/* Reserve space to avoid end-of-fade width snap */
+/* Prevent layout shift during fade */
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 .rows-scroll { scrollbar-gutter: stable; }
 
 /* Header alignment shell (matches other views) */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* Narrow the LEFT header wrapper */
+/* Narrow the LEFT header wrapper; inner header remains full-width shape */
 .header-admin {
-  width: 38%;
+  width: 38%;          /* adjust as preferred */
   min-width: 220px;
   display: inline-block;
+  overflow: hidden;     /* why: clip right chamfer/connector cleanly */
 }
 
-/* Make the right header wrapper slightly cropped for symmetry (optional tweak) */
-.header-right {
-  width: 72%;
-  min-width: 520px;
-  display: inline-block;
-}
-
-/* Prevent wrap & vertical drop of the Admin title */
+/* Keep title on one line & vertically centered */
 .header-admin .section-header { white-space: nowrap; }
 .header-admin .section-header h1 { line-height: 52px; }
-
-/* ✨ Recreate the right chamfer on the narrowed Admin plate */
-.header-admin .section-header {
-  /* match the usual left notch while adding a right diagonal cut */
-  --right-chamfer: 40px;
-  --left-notch: 24px;
-  position: relative;
-  clip-path: polygon(
-    0 0,
-    calc(100% - var(--right-chamfer)) 0,
-    100% 50%,
-    calc(100% - var(--right-chamfer)) 100%,
-    0 100%,
-    var(--left-notch) 50%
-  );
-}
 
 /* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
 
-/* (unchanged layout + visuals) */
+/* (existing layout + visuals) */
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
