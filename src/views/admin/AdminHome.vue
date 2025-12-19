@@ -8,12 +8,12 @@
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
       <div class="header-shell">
-        <!-- Same clipped style as Promotions, but narrowed via inner header -->
-        <div class="section-header clipped-medium-backward-pilot admin-header-plate">
+        <!-- Simple, compact plate: always shows text -->
+        <div class="section-header simple-admin-plate">
           <img src="/icons/protocol.svg" alt="" />
           <h1>ADMIN</h1>
         </div>
-        <div class="rhombus-back">&nbsp;</div>
+        <!-- no rhombus on the left plate to avoid overlap in narrow layouts -->
       </div>
 
       <div class="section-content-container">
@@ -109,7 +109,10 @@
                   <span class="td name">{{ row.name }}</span>
                   <span class="td rank">{{ row.rank }}</span>
                   <span class="td squad">{{ row.squad || '—' }}</span>
-                  <span class="td ops"><span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span><span v-else class="muted">N/A</span></span>
+                  <span class="td ops">
+                    <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                    <span v-else class="muted">N/A</span>
+                  </span>
                   <span class="td next">
                     <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
                     <span v-else class="muted">—</span>
@@ -237,8 +240,10 @@ export default {
   },
   data() {
     return {
+      // view flicker
       animateView: false,
       animationDelay: "0ms",
+
       activeKey: "promotions",
 
       // Promotions
@@ -675,20 +680,39 @@ export default {
 </script>
 
 <style scoped>
-/* Avoid layout snap during fade */
+/* Prevent layout shift during fade */
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 .rows-scroll { scrollbar-gutter: stable; }
 
-/* Header alignment shell (matches other views) */
+/* Header alignment shells */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* Admin plate: narrow the inner header, not the wrapper */
-.admin-header-plate {
-  width: 315px;              /* adjust to taste */
-  display: inline-block;     /* keep shape length fixed */
-  white-space: nowrap;       /* keep "ADMIN" on one line */
+/* SIMPLE ADMIN PLATE — readable in narrow columns */
+.simple-admin-plate {
+  position: relative;
+  z-index: 2;                 /* why: stay above content */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 14px;
+  min-height: 52px;
+  min-width: 180px;
+  max-width: 320px;           /* keeps it compact */
+  background: #214d45;        /* site green tone */
+  border-radius: 0 6px 6px 0; /* subtle right rounding */
 }
-.admin-header-plate h1 { line-height: 52px; }
+.simple-admin-plate img { width: 20px; height: 20px; }
+.simple-admin-plate h1 {
+  margin: 0;
+  line-height: 52px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #0a0a0a;            /* black like other headings */
+  white-space: nowrap;       /* avoid wrapping/cropping */
+}
+
+/* Keep right header untouched */
+.right-header h1 { white-space: nowrap; }
 
 /* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
