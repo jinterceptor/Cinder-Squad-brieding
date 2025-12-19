@@ -189,22 +189,27 @@ export default {
 </script>
 
 <style scoped>
-/* === Layout: two columns; left wide, right back to its column (not stuck to edge) === */
+/* === Layout: left wide, right ~20% thinner than before === */
 #trainingView {
   display: grid;
-  grid-template-columns: 1.7fr 1fr;  /* back to fractional layout */
+  grid-template-columns: 1.7fr 0.8fr;  /* right column ~20% thinner */
   gap: 1.2rem;
   align-items: start;
 
+  /* keep same offsets as other views */
   padding-top: 28px;
   padding-left: 18px;
-  padding-right: 18px;               /* right gutter so nothing hugs the edge */
+  padding-right: 18px;
 
+  /* ensure no horizontal scrollbar on this page */
   overflow-x: hidden;
 }
-#trainingView > .section-container { width: 100%; margin: 0; }
+#trainingView > .section-container { width: 100%; margin: 0; max-width: 100%; }
 #training { grid-column: 1; }
-#sshops  { grid-column: 2; }         /* no justify-self, no fixed max-width */
+#sshops  { grid-column: 2; }
+
+/* Prevent children from causing horizontal overflow */
+.section-container, .section-content-container, .panel { max-width: 100%; overflow-x: hidden; }
 
 /* Headers */
 .header-shell { height: 52px; overflow: hidden; }
@@ -217,6 +222,7 @@ export default {
   background: rgba(0,10,30,0.18);
   border-radius: .6rem;
   padding: .7rem .8rem;
+  box-sizing: border-box; /* why: avoid accidental overflow */
 }
 
 /* Grids */
@@ -275,12 +281,14 @@ export default {
 .label { color: #9ec5e6; font-size: .85rem; }
 .highlight { color: #79ffba; }
 
+/* Divider */
 .divider {
   height: 1px;
   background: linear-gradient(90deg, rgba(30,144,255,0.28), rgba(30,144,255,0.10) 60%, transparent);
   border-radius: 1px;
 }
 
+/* Constrain trainer list width + tidy rows */
 .trainers-block { width: 100%; max-width: clamp(160px, 78%, 220px); }
 .vlist {
   list-style: none;
@@ -302,6 +310,7 @@ export default {
   text-overflow: ellipsis;
 }
 
+/* S-Shop rows */
 .list .row {
   padding: .16rem 0;
   color: #e6f3ff;
