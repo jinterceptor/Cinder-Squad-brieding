@@ -7,9 +7,9 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
-      <!-- Narrow wrapper; inner header matches Promotions style -->
       <div class="header-shell header-admin">
-        <div class="section-header clipped-medium-backward-pilot">
+        <!-- Same clipping class as Promotions + narrow width -->
+        <div class="section-header clipped-medium-backward-pilot header-narrow">
           <img src="/icons/protocol.svg" alt="" />
           <h1>ADMIN</h1>
         </div>
@@ -44,7 +44,7 @@
 
     <!-- RIGHT WINDOW -->
     <section class="section-container right-window">
-      <!-- Reverted to the original Promotions header style -->
+      <!-- Promotions header unchanged -->
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot right-header">
           <img src="/icons/protocol.svg" alt="" />
@@ -109,7 +109,10 @@
                   <span class="td name">{{ row.name }}</span>
                   <span class="td rank">{{ row.rank }}</span>
                   <span class="td squad">{{ row.squad || '—' }}</span>
-                  <span class="td ops"><span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span><span v-else class="muted">N/A</span></span>
+                  <span class="td ops">
+                    <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
+                    <span v-else class="muted">N/A</span>
+                  </span>
                   <span class="td next">
                     <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
                     <span v-else class="muted">—</span>
@@ -247,7 +250,7 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API (Netlify proxy)
+      // Discipline API
       discEndpoint: adminEndpoint(),
       discSecret: adminSecret(),
       discLoading: false,
@@ -262,7 +265,7 @@ export default {
       csvStatusIndex: Object.create(null),
       csvTroopIndex: Object.create(null),
 
-      // Discipline filters + editor
+      // Discipline editor
       discSearch: "",
       edit: { memberId: null, notes: "", warn: [false, false, false] },
     };
@@ -682,22 +685,20 @@ export default {
 /* Header alignment shell */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* Make the ADMIN plate thinner but keep its original clipping shape */
-.header-admin {
-  width: 38%;        /* adjust as needed */
-  min-width: 220px;
-  display: inline-block;
-  overflow: hidden;  /* why: clip right chamfer/connector cleanly */
-}
-
-/* Keep title on one line & vertically centered */
+/* Admin header: keep the full shape; only the inner header is narrowed */
 .header-admin .section-header { white-space: nowrap; }
 .header-admin .section-header h1 { line-height: 52px; }
+
+/* Narrow size for Admin plate without cropping chamfer/connector */
+.header-narrow {
+  width: var(--admin-header-width, 280px); /* tweak here */
+  display: inline-block;
+}
 
 /* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
 
-/* Layout + visuals */
+/* Layout + visuals (unchanged) */
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
@@ -759,14 +760,6 @@ export default {
 .warn-2::before { background: rgba(255, 140, 60, 0.85); }
 .warn-3 { background: rgba(255, 90, 90, 0.10); }
 .warn-3::before { background: rgba(255, 90, 90, 0.9); }
-
-.warncells { display: flex; align-items: center; }
-.warn-badges { display: inline-flex; gap: .35rem; align-items: center; }
-.warn-badges .dot { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
-.warn-badges .dot.on { border-color: rgba(150,190,230,0.6); }
-.warn-badges.w1 .dot.on { background: rgba(255, 200, 80, 0.75); }
-.warn-badges.w2 .dot.on { background: rgba(255, 140, 60, 0.85); }
-.warn-badges.w3 .dot.on { background: rgba(255, 90, 90, 0.95); }
 
 .status-pill { padding: .1rem .5rem; border-radius: 999px; border: 1px solid rgba(150,190,230,0.35); background: rgba(0,10,30,0.25); font-size: .82rem; }
 .status-pill.st-active { border-color: rgba(120,255,170,0.7); }
