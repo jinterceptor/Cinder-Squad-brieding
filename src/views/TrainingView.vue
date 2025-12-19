@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- LEFT: TRAINING & CONTACTS (shifted down/right) -->
+    <!-- LEFT: TRAINING & CONTACTS (shifted away from edges) -->
     <section id="training" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -25,7 +25,6 @@
             <div v-for="role in trainers" :key="role.key" class="card">
               <div class="card-head">
                 <h3 class="title plain-title" :title="role.title">{{ role.title }}</h3>
-                <span v-if="role.lead" class="badge-lead" title="Lead trainer">LEAD</span>
               </div>
 
               <div class="body">
@@ -50,7 +49,7 @@
       </div>
     </section>
 
-    <!-- RIGHT: S-SHOP PERSONNEL -->
+    <!-- RIGHT: S-SHOP PERSONNEL (also shifted down) -->
     <section id="sshops" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -128,12 +127,12 @@ export default {
 
           const raw = this.readDown(table, 2, c).filter(this.isRealName);
 
-          // Build a unique-preserving list
+          // unique-preserving list; include contact inside trainers
           const uniq = [];
           for (const n of raw) if (!uniq.includes(n)) uniq.push(n);
 
           const lead = uniq[0] || "";
-          const trainersAll = uniq.slice(); // includes lead as well
+          const trainersAll = uniq.slice();
           trainers.push({ key: `role-${c}`, title, lead, trainers: trainersAll });
         }
 
@@ -192,7 +191,7 @@ export default {
 </script>
 
 <style scoped>
-/* === Layout: left wide, right narrow === */
+/* === Layout: two columns; left wide, right narrow === */
 #trainingView {
   display: grid;
   grid-template-columns: 1.7fr 1fr;
@@ -203,11 +202,9 @@ export default {
 #training { grid-column: 1; }
 #sshops  { grid-column: 2; }
 
-/* Shift the left window away from header + sidebar */
-#training {
-  padding-left: 18px;   /* move right */
-  margin-top: 10px;     /* move down */
-}
+/* Shift both windows down; keep left nudged right */
+#training { padding-left: 18px; margin-top: 24px; }
+#sshops  { margin-top: 24px; }
 
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
@@ -257,7 +254,6 @@ export default {
   gap: .5rem;
   margin: 0;
 }
-
 .title {
   margin: 0;
   color: #d9ebff;
@@ -271,18 +267,6 @@ export default {
   white-space: nowrap;
 }
 .plain-title { background: none !important; clip-path: none !important; padding: 0 !important; border: 0 !important; }
-
-.badge-lead {
-  flex: 0 0 auto;
-  font-size: .68rem;
-  letter-spacing: .12em;
-  border: 1px solid rgba(120,255,170,0.7);
-  color: #79ffba;
-  padding: .06rem .38rem;
-  border-radius: 999px;
-  background: rgba(10,50,20,0.35);
-  line-height: 1;
-}
 
 .body { display: grid; gap: .3rem; align-content: start; }
 
@@ -299,7 +283,6 @@ export default {
 
 /* Constrain trainer list width + tidy rows */
 .trainers-block { width: 100%; max-width: clamp(160px, 78%, 220px); }
-
 .vlist {
   list-style: none;
   margin: 0;
