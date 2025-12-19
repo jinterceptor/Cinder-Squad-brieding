@@ -79,7 +79,8 @@
     <section id="deploy-overview" class="section-container overview-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
-          <img src="/icons/scanner.svg" alt="" />
+          <!-- FIX: use an existing icon -->
+          <img src="/icons/events.svg" alt="" />
           <h1>OVERVIEW</h1>
         </div>
         <div class="rhombus-back">&nbsp;</div>
@@ -291,7 +292,7 @@ export default {
         const key = this.keyFromName(sq.squad);
         const slots = [];
         (sq.fireteams||[]).forEach(ft=>{
-          (ft.slots||[]).forEach(s=>{
+          (ft.slots||[]).forEach((s)=>{
             const status = String(s?.status || "FILLED").toUpperCase();
             const origStatus = ["VACANT","CLOSED"].includes(status) ? status : "FILLED";
             const member = s?.member;
@@ -317,7 +318,7 @@ export default {
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g) return;
       const slot = g.slots[slotIdx];
-      if (slot?.origStatus==="CLOSED") return;
+      if (slot?.origStatus==="CLOSED") return; // why: block closed slots
       this.picker = { ...this.picker, open:true, unitKey, slotIdx, query:"", onlyFree:false };
     },
     closePicker(){ this.picker.open = false; },
@@ -413,7 +414,7 @@ export default {
 /* PAGE GRID: two windows side-by-side, no overlap */
 #deploymentView {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); /* left big, right compact */
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   gap: 1.2rem;
   align-items: start;
   padding-top: 28px;
