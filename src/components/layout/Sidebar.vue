@@ -11,47 +11,32 @@
         :reduce="reduce"
         open
       >
-        <!-- STATUS -->
-        <router-link
-          class="clipped-bottom-right"
-          to="/status"
-          @click.native="playBrowse"
-        >
+        <router-link class="clipped-bottom-right" to="/status" @click.native="playBrowse">
           <img src="/icons/orbital.svg" />
           <span>Status</span>
         </router-link>
 
-        <!-- UNIT ROSTER -->
-        <router-link
-          class="clipped-bottom-right"
-          to="/pilots"
-          @click.native="playBrowse"
-        >
+        <router-link class="clipped-bottom-right" to="/pilots" @click.native="playBrowse">
           <img src="/icons/license.svg" />
           <span>Roster</span>
         </router-link>
 
-        <!-- LOGS / EVENTS -->
-        <router-link
-          class="clipped-bottom-right"
-          to="/events"
-          @click.native="playBrowse"
-        >
+        <router-link class="clipped-bottom-right" to="/events" @click.native="playBrowse">
           <img src="/icons/events.svg" />
           <span>Logs</span>
         </router-link>
 
-        <!-- TRAINING (NEW) -->
+        <!-- NEW: Deployment (Officer/Staff only) -->
         <router-link
+          v-if="isOfficerOrStaff"
           class="clipped-bottom-right"
-          to="/training"
+          to="/deployment"
           @click.native="playBrowse"
         >
           <img src="/icons/protocol.svg" />
-          <span>Training</span>
+          <span>Deployment</span>
         </router-link>
 
-        <!-- ADMIN (Officer/Staff only) -->
         <router-link
           v-if="isOfficerOrStaff"
           class="clipped-bottom-right"
@@ -68,24 +53,17 @@
 
 <script>
 import { useAdminAuth } from "@/composables/useAdminAuth";
-
 let browseAudio;
 
 export default {
   name: "Sidebar",
-  props: {
-    animate: { type: Boolean, required: true },
-  },
+  props: { animate: { type: Boolean, required: true } },
   setup() {
-    const { isOfficerOrStaff } = useAdminAuth(); // why: reactive auth gate
+    const { isOfficerOrStaff } = useAdminAuth();
     return { isOfficerOrStaff };
   },
   data() {
-    return {
-      expandOnHover: false,
-      mobile: "reduced",
-      reduce: false,
-    };
+    return { expandOnHover: false, mobile: "reduced", reduce: false };
   },
   mounted() {
     browseAudio = new Audio("/sound/Orbat Main Menu Browse.ogg");
@@ -94,10 +72,7 @@ export default {
   methods: {
     playBrowse() {
       if (!browseAudio) return;
-      try {
-        browseAudio.currentTime = 0;
-        browseAudio.play().catch(() => {});
-      } catch {}
+      try { browseAudio.currentTime = 0; browseAudio.play().catch(() => {}); } catch {}
     },
   },
 };
