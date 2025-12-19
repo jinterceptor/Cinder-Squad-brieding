@@ -7,9 +7,9 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
-      <!-- Narrow wrapper; inner header uses same style as Promotions -->
+      <!-- Narrow wrapper; inner header matches Promotions style -->
       <div class="header-shell header-admin">
-        <div class="section-header clipped-medium-backward">
+        <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
           <h1>ADMIN</h1>
         </div>
@@ -44,8 +44,9 @@
 
     <!-- RIGHT WINDOW -->
     <section class="section-container right-window">
+      <!-- Reverted to the original Promotions header style -->
       <div class="header-shell">
-        <div class="section-header clipped-medium-backward">
+        <div class="section-header clipped-medium-backward-pilot right-header">
           <img src="/icons/protocol.svg" alt="" />
           <h1>{{ windowTitle }}</h1>
           <div class="right-actions"></div>
@@ -236,10 +237,8 @@ export default {
   },
   data() {
     return {
-      // view flicker
       animateView: false,
       animationDelay: "0ms",
-
       activeKey: "promotions",
 
       // Promotions
@@ -680,15 +679,15 @@ export default {
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 .rows-scroll { scrollbar-gutter: stable; }
 
-/* Header alignment shell (matches other views) */
+/* Header alignment shell */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* Narrow the LEFT header wrapper; inner header remains full-width shape */
+/* Make the ADMIN plate thinner but keep its original clipping shape */
 .header-admin {
-  width: 38%;          /* adjust as preferred */
+  width: 38%;        /* adjust as needed */
   min-width: 220px;
   display: inline-block;
-  overflow: hidden;     /* why: clip right chamfer/connector cleanly */
+  overflow: hidden;  /* why: clip right chamfer/connector cleanly */
 }
 
 /* Keep title on one line & vertically centered */
@@ -698,7 +697,7 @@ export default {
 /* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
 
-/* (existing layout + visuals) */
+/* Layout + visuals */
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
