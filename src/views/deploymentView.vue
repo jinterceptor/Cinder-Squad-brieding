@@ -1,3 +1,4 @@
+<!-- src/views/DeploymentView.vue -->
 <template>
   <div
     id="deploymentView"
@@ -59,7 +60,7 @@
       </div>
     </section>
 
-    <!-- RIGHT COLUMN: (OPTIONAL) Help / Summary -->
+    <!-- RIGHT COLUMN: TOOLS / SUMMARY -->
     <section id="deploy-side" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -167,13 +168,12 @@
  * - UI-only draft planner for Chalks, Caladrius, Wyvern
  * - Swaps/assigns any soldier into any slot
  * - Persists to sessionStorage under "deploymentPlan"
- * - Integrate your roster: replace getAllPersonnel() with your real source
+ * - Integrate your roster later: replace getAllPersonnel() with real source
  */
 export default {
   name: "DeploymentView",
   props: {
-    // Optional: inject roster from parent; else falls back to demo data.
-    allPersonnel: { type: Array, default: null },
+    allPersonnel: { type: Array, default: null }, // optional injection
   },
   data() {
     return {
@@ -220,10 +220,7 @@ export default {
           (p.role || "").toLowerCase().includes(q)
         );
       });
-      if (this.picker.onlyFree) {
-        return rows.filter(p => !this.findAssignment(p.id));
-      }
-      return rows;
+      return this.picker.onlyFree ? rows.filter(p => !this.findAssignment(p.id)) : rows;
     },
   },
   methods: {
@@ -233,9 +230,9 @@ export default {
       this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
     },
 
-    // --- Personnel source (replace with your real roster loader later) ---
+    // --- Personnel source (replace with roster) ---
     getAllPersonnel() {
-      // TODO: wire to your Pilots/roster source. This is placeholder data.
+      // TODO: wire to your Pilots/roster source. Placeholder:
       const demo = [
         { id: "100", name: "M. Jinter", callsign: "JINTER", role: "Rifleman" },
         { id: "101", name: "A. Avery", callsign: "AVERY", role: "Grenadier" },
@@ -270,7 +267,7 @@ export default {
           if (Array.isArray(parsed?.units)) return parsed.units;
         } catch {}
       }
-      // New plan with sensible slot counts (adjust easily):
+      // New plan with slot counts (adjust as needed):
       return [
         { key: "chalk1", title: "Chalk 1", slots: this.makeEmptySlots(8) },
         { key: "chalk2", title: "Chalk 2", slots: this.makeEmptySlots(8) },
@@ -379,7 +376,6 @@ export default {
     },
     exportJson() {
       const payload = JSON.stringify(this.plan, null, 2);
-      // simple download
       const blob = new Blob([payload], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
