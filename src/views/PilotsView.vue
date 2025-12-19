@@ -1,11 +1,6 @@
 <!-- src/views/PilotsView.vue -->
 <template>
-  <section
-    id="members"
-    class="section-container"
-    :class="{ animate: animateView }"
-    :style="{ 'animation-delay': animationDelay }"
-  >
+  <section id="members" class="section-container">
     <div style="height: 52px; overflow: hidden">
       <div class="section-header clipped-medium-backward-pilot">
         <img src="/icons/license.svg" alt="Members Icon" />
@@ -14,7 +9,11 @@
       <div class="rhombus-back">&nbsp;</div>
     </div>
 
-    <div class="section-content-container">
+    <div
+      class="section-content-container"
+      :class="{ animate: animateView }"
+      :style="{ 'animation-delay': animationDelay }"
+    >
       <div class="orbat-wrapper">
         <div v-if="!orbat || !orbat.length">Loading squads and members...</div>
 
@@ -128,7 +127,7 @@
       </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Modal (not animated) -->
     <div v-if="activeSquad" class="squad-overlay" @click.self="closeSquad">
       <div class="squad-modal">
         <div class="squad-modal-header">
@@ -642,7 +641,7 @@ export default {
       return Number.isFinite(n) ? n : "—";
     },
 
-    /* view-entry flicker (non-invasive) */
+    /* view-entry flicker */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -689,7 +688,6 @@ export default {
 
 /* Modal shell */
 .squad-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-/* widened to better fit 5-up grid */
 .squad-modal { background-color: #050811; color: #dce6f1; width: 95vw; max-width: 1860px; max-height: 90vh; border-radius: 0.8rem; box-shadow: 0 0 24px rgba(0,0,0,0.9); padding: 1.5rem 2rem 2rem; display: flex; flex-direction: column; }
 .squad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
 .squad-close { background: transparent; border: 1px solid rgba(220,230,241,0.4); color: #dce6f1; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem; cursor: pointer; }
@@ -710,7 +708,7 @@ export default {
 .fireteam-count { color: #9ec5e6; font-size: .9rem; }
 .fireteam-divider { height: 1px; background: rgba(30,144,255,.28); margin: .9rem 0 1.2rem; }
 
-/* Cards grid – set to 5-up, with responsive fallbacks */
+/* Cards grid */
 .squad-members-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -733,7 +731,6 @@ export default {
 .member-card { position: relative; background: rgba(0, 10, 30, 0.95); border-radius: 0.4rem; border-left: 4px solid #1e90ff; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 0.9rem 1.1rem; display: flex; flex-direction: column; }
 .member-card.vacant, .member-card.closed { border-left-color: rgba(30,144,255,0.35); }
 
-/* VACANT: light stripes & dashed left border */
 .member-card.vacant {
   background:
     repeating-linear-gradient(45deg, rgba(30,144,255,0.06) 0, rgba(30,144,255,0.06) 10px, transparent 10px, transparent 20px),
@@ -741,7 +738,6 @@ export default {
   border-left-style: dashed;
 }
 
-/* CLOSED: darker, grayscaled, subtle crosshatch, muted text */
 .member-card.closed {
   filter: grayscale(85%);
   opacity: 0.6;
@@ -776,7 +772,6 @@ export default {
 .accent { color: #a3e7ff; }
 .accent-strong { color: #7fffd4; font-weight: 700; }
 
-/* Keep on one line */
 .join-date { white-space: nowrap; }
 .next-rank-line { white-space: nowrap; }
 
@@ -788,7 +783,7 @@ export default {
 .loadout-row { margin-top: 0.4rem; }
 .disposable { user-select: none; }
 .primary-label { display: block; margin-bottom: .15rem; font-size: .85rem; color: #9ec5e6; }
-.loadout-select { width: 100%; background: #040a14; border: 1px solid rgba(30,144,255,.45); color: #dce6f1; border-radius: .3rem; padding: .25rem .35rem; }
+.loadout-select { width: 100%; background: #040a14; border: 1px solid rgba(30,144,255,.45); color: #dce6f1; border-radius: .3rem; }
 
 /* Certs */
 .cert-list { display: grid; grid-template-columns: 20px 1fr; row-gap: .28rem; }
@@ -805,8 +800,8 @@ export default {
 /* Safety belt */
 :deep(.squad-modal img) { max-width: 100%; height: auto; }
 
-/* --- flicker animation (non-invasive) --- */
-.section-container.animate {
+/* --- flicker animation: scoped to content only --- */
+.section-content-container.animate {
   animation: contentEntry 260ms ease-out both;
 }
 @keyframes contentEntry {
