@@ -462,6 +462,10 @@ export default {
       return { valid: errors.length === 0, points, errors };
     },
   },
+  watch: {
+    // why: ensure flicker plays when navigating back to this route or changing params
+    $route() { this.triggerFlicker(0); },
+  },
   methods: {
     nameKey(name) {
       return String(name || "")
@@ -651,7 +655,11 @@ export default {
     },
   },
   mounted() {
-    this.triggerFlicker();
+    this.triggerFlicker(0);
+  },
+  activated() {
+    // why: ensure re-animate when returning via <keep-alive>
+    this.triggerFlicker(0);
   },
 };
 </script>
