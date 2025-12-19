@@ -41,6 +41,16 @@
           <span>Logs</span>
         </router-link>
 
+        <!-- TRAINING (NEW) -->
+        <router-link
+          class="clipped-bottom-right"
+          to="/training"
+          @click.native="playBrowse"
+        >
+          <img src="/icons/protocol.svg" />
+          <span>Training</span>
+        </router-link>
+
         <!-- ADMIN (Officer/Staff only) -->
         <router-link
           v-if="isOfficerOrStaff"
