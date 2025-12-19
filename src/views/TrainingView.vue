@@ -94,7 +94,7 @@ export default {
       loading: true,
       error: "",
 
-      // Wired to your RefData (gid=107253735)
+      // RefData (gid=107253735)
       refDataCsvUrl:
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
 
@@ -189,29 +189,38 @@ export default {
 </script>
 
 <style scoped>
-/* keep headers consistent with other views */
+/* Force one wide column and center each window */
+#trainingView {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.2rem;
+}
+.section-container {
+  width: min(95vw, 1600px);
+  margin: 0 auto;
+}
+.section-content-container { max-width: none; }
+
+/* Keep headers consistent */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
 .error { color: #ff9f9f; }
 
-/* widen the window content */
-.section-content-container { max-width: 1600px; }
-.panel-wide { width: 100%; }
-
-/* inner panel look */
+/* Inner window panel */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
   border-radius: .6rem;
   padding: .9rem 1rem;
 }
+.panel-wide { width: 100%; }
 
-/* responsive grids that use more horizontal space */
+/* Responsive grids that actually use the width */
 .cards-grid { display: grid; gap: .9rem; }
-.trainers-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.shops-grid    { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.trainers-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.shops-grid    { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 
-/* cards */
+/* Cards */
 .card {
   border: 1px solid rgba(30,144,255,0.28);
   background: rgba(0,10,30,0.28);
@@ -221,7 +230,6 @@ export default {
   grid-template-rows: auto 1fr;
   min-height: 148px;
 }
-
 .card-head {
   display: flex;
   align-items: center;
@@ -256,12 +264,7 @@ export default {
 
 .divider {
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(30,144,255,0.35),
-    rgba(30,144,255,0.15) 60%,
-    transparent
-  );
+  background: linear-gradient(90deg, rgba(30,144,255,0.35), rgba(30,144,255,0.15) 60%, transparent);
   border-radius: 1px;
 }
 
@@ -277,4 +280,11 @@ export default {
 
 .list .row { padding: .18rem 0; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .list .row:last-child { border-bottom: 0; }
+
+@media (max-width: 1280px) {
+  .section-container { width: min(96vw, 1300px); }
+}
+@media (max-width: 900px) {
+  .section-container { width: 96vw; }
+}
 </style>
