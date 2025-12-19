@@ -1,6 +1,4 @@
-<!-- =========================================
-File: src/views/TrainingView.vue
-========================================= -->
+<!-- src/views/TrainingView.vue -->
 <template>
   <div
     id="trainingView"
@@ -11,7 +9,7 @@ File: src/views/TrainingView.vue
     <!-- TRAINING & CONTACTS -->
     <section id="training" class="section-container">
       <div class="header-shell">
-        <div class="section-header clipped-medium-backward">
+        <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
           <h1>TRAINING & CONTACTS</h1>
         </div>
@@ -20,18 +18,23 @@ File: src/views/TrainingView.vue
 
       <div class="section-content-container">
         <div v-if="loading" class="muted">Loading RefData…</div>
-        <div v-else class="cards-grid">
-          <div v-for="role in trainers" :key="role.key" class="card">
-            <div class="card-head">
-              <h3 class="title">{{ role.title }}</h3>
-              <div v-if="role.lead" class="lead">Lead: <span class="highlight">{{ role.lead }}</span></div>
-            </div>
-            <div class="body">
-              <div class="label">Trainers</div>
-              <div v-if="role.others.length" class="chips">
-                <span v-for="n in role.others" :key="n" class="chip">{{ n }}</span>
+
+        <div v-else class="panel">
+          <div class="cards-grid">
+            <div v-for="role in trainers" :key="role.key" class="card">
+              <div class="card-head">
+                <h3 class="title">{{ role.title }}</h3>
+                <div v-if="role.lead" class="lead">
+                  Lead: <span class="highlight">{{ role.lead }}</span>
+                </div>
               </div>
-              <div v-else class="muted">None listed</div>
+              <div class="body">
+                <div class="label">Trainers</div>
+                <div v-if="role.others.length" class="chips">
+                  <span v-for="n in role.others" :key="n" class="chip">{{ n }}</span>
+                </div>
+                <div v-else class="muted">None listed</div>
+              </div>
             </div>
           </div>
         </div>
@@ -41,7 +44,7 @@ File: src/views/TrainingView.vue
     <!-- S-SHOP PERSONNEL -->
     <section id="sshops" class="section-container">
       <div class="header-shell">
-        <div class="section-header clipped-medium-backward">
+        <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
           <h1>S-SHOP PERSONNEL</h1>
         </div>
@@ -50,16 +53,19 @@ File: src/views/TrainingView.vue
 
       <div class="section-content-container">
         <div v-if="loading" class="muted">Loading RefData…</div>
-        <div v-else class="cards-grid cols-2">
-          <div v-for="s in shops" :key="s.key" class="card">
-            <div class="card-head">
-              <h3 class="title">{{ s.title }}</h3>
-            </div>
-            <div class="body">
-              <div v-if="s.people.length" class="list">
-                <div v-for="n in s.people" :key="n" class="row">{{ n }}</div>
+
+        <div v-else class="panel">
+          <div class="cards-grid cols-2">
+            <div v-for="s in shops" :key="s.key" class="card">
+              <div class="card-head">
+                <h3 class="title">{{ s.title }}</h3>
               </div>
-              <div v-else class="muted">None listed</div>
+              <div class="body">
+                <div v-if="s.people.length" class="list">
+                  <div v-for="n in s.people" :key="n" class="row">{{ n }}</div>
+                </div>
+                <div v-else class="muted">None listed</div>
+              </div>
             </div>
           </div>
         </div>
@@ -80,9 +86,7 @@ export default {
       animationDelay: "0ms",
       loading: true,
 
-      // TODO: replace with your actual RefData published CSV URL (the “RefData” sheet gid).
-      // Example pattern:
-      // https://docs.google.com/spreadsheets/d/e/<PUB_ID>/pub?gid=<GID>&single=true&output=csv
+      // TODO: replace with your actual RefData “publish to web” CSV URL (sheet with V..AI)
       refDataCsvUrl:
         "https://docs.google.com/spreadsheets/d/e/REPLACE_ME/pub?gid=REPLACE_ME&single=true&output=csv",
 
@@ -97,6 +101,7 @@ export default {
     this.triggerFlicker();
   },
   methods: {
+    /* flicker */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -109,44 +114,32 @@ export default {
         const csv = await res.text();
         const table = this.parseCsv(csv);
 
-        // Expect headers at row index 1 (Row 2 in Sheets).
+        // Headers are row 2 (index 1)
         const headerRow = table[1] || [];
 
-        // Columns: V..AE (1-based 22..31) -> 0-based 21..30
+        // Trainers: V..AE (1-based 22..31) -> 0-based 21..30
         const TRAINER_COLS = this.range(21, 30);
-        // Columns: AF..AI (1-based 32..35) -> 0-based 31..34
+        // S-Shops: AF..AI (1-based 32..35) -> 0-based 31..34
         const SSHOP_COLS = this.range(31, 34);
 
         // Build Trainers
         const trainers = [];
         for (const c of TRAINER_COLS) {
-          const rawHeader = this.cleanHeader(headerRow[c] || "");
-          if (!rawHeader) continue;
-
-          // Names start from row 3 (index 2) until blank
+          const title = this.cleanHeader(headerRow[c] || "");
+          if (!title) continue;
           const names = this.readDown(table, 2, c);
           const lead = names[0] || "";
           const others = names.slice(1);
-          trainers.push({
-            key: `role-${c}`,
-            title: rawHeader,
-            lead,
-            others,
-          });
+          trainers.push({ key: `role-${c}`, title, lead, others });
         }
 
         // Build S-Shops
         const shops = [];
         for (const c of SSHOP_COLS) {
-          const rawHeader = this.cleanHeader(headerRow[c] || "");
-          if (!rawHeader) continue;
-
+          const title = this.cleanHeader(headerRow[c] || "");
+          if (!title) continue;
           const people = this.readDown(table, 2, c);
-          shops.push({
-            key: `shop-${c}`,
-            title: rawHeader,
-            people,
-          });
+          shops.push({ key: `shop-${c}`, title, people });
         }
 
         this.trainers = trainers;
@@ -158,14 +151,8 @@ export default {
       }
     },
 
-    // Inclusive integer range
-    range(a, b) {
-      const out = [];
-      for (let i = a; i <= b; i++) out.push(i);
-      return out;
-    },
-
-    // Read non-empty strings down a column from row 'startRow'
+    /* helpers */
+    range(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; },
     readDown(table, startRow, colIndex) {
       const out = [];
       for (let r = startRow; r < table.length; r++) {
@@ -175,59 +162,29 @@ export default {
       }
       return out;
     },
+    cleanHeader(s) { return String(s).replace(/^"+|"+$/g, "").replace(/\s+/g, " ").trim(); },
+    cleanName(s) { return String(s).replace(/\s+/g, " ").trim(); },
 
-    // Normalize header text
-    cleanHeader(s) {
-      return String(s)
-        .replace(/^"+|"+$/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-    },
-
-    // Normalize person names
-    cleanName(s) {
-      return String(s).replace(/\s+/g, " ").trim();
-    },
-
-    // Lightweight CSV parser compatible with your other views
+    // minimal CSV parser (matches other views’ style)
     parseCsv(text) {
       const rows = [];
-      let cur = [];
-      let val = "";
-      let inQ = false;
+      let cur = [], val = "", inQ = false;
       for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (inQ) {
           if (ch === '"') {
-            if (i + 1 < text.length && text[i + 1] === '"') {
-              val += '"';
-              i++;
-            } else {
-              inQ = false;
-            }
-          } else {
-            val += ch;
-          }
+            if (text[i + 1] === '"') { val += '"'; i++; }
+            else { inQ = false; }
+          } else { val += ch; }
         } else {
           if (ch === '"') inQ = true;
-          else if (ch === ",") {
-            cur.push(val);
-            val = "";
-          } else if (ch === "\n") {
-            cur.push(val);
-            rows.push(cur);
-            cur = [];
-            val = "";
-          } else if (ch === "\r") {
-            /* ignore */
-          } else {
-            val += ch;
-          }
+          else if (ch === ",") { cur.push(val); val = ""; }
+          else if (ch === "\n") { cur.push(val); rows.push(cur); cur = []; val = ""; }
+          else if (ch !== "\r") { val += ch; }
         }
       }
-      cur.push(val);
-      rows.push(cur);
-      if (rows.length && rows[rows.length - 1].every((x) => String(x).length === 0)) rows.pop();
+      cur.push(val); rows.push(cur);
+      if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
       return rows;
     },
   },
@@ -235,21 +192,29 @@ export default {
 </script>
 
 <style scoped>
+/* match other views’ header scaffolding */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
 
+/* a bordered inner “window” so content sits inside the section window */
+.panel {
+  border: 1px dashed rgba(30,144,255,0.35);
+  background: rgba(0,10,30,0.18);
+  border-radius: .5rem;
+  padding: .7rem;
+}
+
+/* cards inside the panel */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: .8rem;
 }
-.cards-grid.cols-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
+.cards-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .card {
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.25);
+  border: 1px solid rgba(30,144,255,0.28);
+  background: rgba(0,10,30,0.28);
   border-radius: .5rem;
   padding: .6rem .7rem;
 }
