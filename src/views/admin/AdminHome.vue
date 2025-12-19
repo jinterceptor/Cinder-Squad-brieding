@@ -7,9 +7,9 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
-      <div class="header-shell header-admin">
-        <!-- Same clipping class as Promotions + narrow width -->
-        <div class="section-header clipped-medium-backward-pilot header-narrow">
+      <div class="header-shell">
+        <!-- Same clipped style as Promotions, but narrowed via inner header -->
+        <div class="section-header clipped-medium-backward-pilot admin-header-plate">
           <img src="/icons/protocol.svg" alt="" />
           <h1>ADMIN</h1>
         </div>
@@ -109,10 +109,7 @@
                   <span class="td name">{{ row.name }}</span>
                   <span class="td rank">{{ row.rank }}</span>
                   <span class="td squad">{{ row.squad || '—' }}</span>
-                  <span class="td ops">
-                    <span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span>
-                    <span v-else class="muted">N/A</span>
-                  </span>
+                  <span class="td ops"><span v-if="isFiniteNum(row.ops)">{{ row.ops }}</span><span v-else class="muted">N/A</span></span>
                   <span class="td next">
                     <span v-if="row.nextRank">{{ row.nextRank }} <small v-if="row.nextAt">({{ row.nextAt }})</small></span>
                     <span v-else class="muted">—</span>
@@ -250,7 +247,7 @@ export default {
       sortKey: "rank",
       onlyPromotable: false,
 
-      // Discipline API
+      // Discipline API (Netlify proxy)
       discEndpoint: adminEndpoint(),
       discSecret: adminSecret(),
       discLoading: false,
@@ -265,7 +262,7 @@ export default {
       csvStatusIndex: Object.create(null),
       csvTroopIndex: Object.create(null),
 
-      // Discipline editor
+      // Discipline filters + editor
       discSearch: "",
       edit: { memberId: null, notes: "", warn: [false, false, false] },
     };
@@ -678,27 +675,25 @@ export default {
 </script>
 
 <style scoped>
-/* Prevent layout shift during fade */
+/* Avoid layout snap during fade */
 .right-window .section-content-container.right-content { scrollbar-gutter: stable; }
 .rows-scroll { scrollbar-gutter: stable; }
 
-/* Header alignment shell */
+/* Header alignment shell (matches other views) */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* Admin header: keep the full shape; only the inner header is narrowed */
-.header-admin .section-header { white-space: nowrap; }
-.header-admin .section-header h1 { line-height: 52px; }
-
-/* Narrow size for Admin plate without cropping chamfer/connector */
-.header-narrow {
-  width: var(--admin-header-width, 280px); /* tweak here */
-  display: inline-block;
+/* Admin plate: narrow the inner header, not the wrapper */
+.admin-header-plate {
+  width: 315px;              /* adjust to taste */
+  display: inline-block;     /* keep shape length fixed */
+  white-space: nowrap;       /* keep "ADMIN" on one line */
 }
+.admin-header-plate h1 { line-height: 52px; }
 
 /* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
 
-/* Layout + visuals (unchanged) */
+/* Layout + visuals */
 .windows-grid { display: grid; grid-template-columns: 380px minmax(1080px, 1fr); column-gap: 2.4rem; align-items: start; width: 100%; }
 .windows-grid > .section-container { position: relative !important; width: 100%; max-width: none; align-self: start; }
 .left-window { height: auto !important; max-height: none !important; }
