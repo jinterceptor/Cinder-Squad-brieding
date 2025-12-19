@@ -24,8 +24,7 @@
           <div v-else class="cards-grid trainers-grid">
             <div v-for="role in trainers" :key="role.key" class="card">
               <div class="card-head">
-                <!-- Plain title, NO green plate -->
-                <h3 class="title plain-title">{{ role.title }}</h3>
+                <h3 class="title plain-title" :title="role.title">{{ role.title }}</h3>
                 <span v-if="role.lead" class="badge-lead" title="Lead trainer">LEAD</span>
               </div>
 
@@ -35,13 +34,13 @@
                   <span class="highlight">{{ role.lead }}</span>
                 </div>
 
-                <div class="divider" />
+                <div v-if="role.others.length" class="divider" />
 
-                <div class="label">Trainers</div>
+                <div v-if="role.others.length" class="label">Trainers</div>
                 <ul v-if="role.others.length" class="vlist">
                   <li v-for="n in role.others" :key="n">{{ n }}</li>
                 </ul>
-                <div v-else class="muted">None listed</div>
+                <div v-else class="muted">No trainers listed</div>
               </div>
             </div>
           </div>
@@ -67,8 +66,7 @@
           <div v-else class="cards-grid shops-grid">
             <div v-for="s in shops" :key="s.key" class="card slim">
               <div class="card-head">
-                <!-- Plain subheader, NO green plate -->
-                <h3 class="title plain-title">{{ s.title }}</h3>
+                <h3 class="title plain-title" :title="s.title">{{ s.title }}</h3>
               </div>
 
               <div class="body list-body">
@@ -125,15 +123,23 @@ export default {
         for (const c of TRAINER_COLS) {
           const title = this.cleanHeader(headerRow[c] || "");
           if (!title) continue;
-          const names = this.readDown(table, 2, c);
-          trainers.push({ key: `role-${c}`, title, lead: names[0] || "", others: names.slice(1) });
+
+          // read names, then strip blanks and "Vacant"
+          const raw = this.readDown(table, 2, c);
+          const cleaned = raw.filter((x) => this.isRealName(x));
+
+          const lead = this.isRealName(cleaned[0]) ? cleaned[0] : "";
+          const others = (lead ? cleaned.slice(1) : cleaned).filter(this.isRealName);
+
+          trainers.push({ key: `role-${c}`, title, lead, others });
         }
 
         const shops = [];
         for (const c of SSHOP_COLS) {
           const title = this.cleanHeader(headerRow[c] || "");
           if (!title) continue;
-          shops.push({ key: `shop-${c}`, title, people: this.readDown(table, 2, c) });
+          const people = this.readDown(table, 2, c).filter(this.isRealName);
+          shops.push({ key: `shop-${c}`, title, people });
         }
 
         this.trainers = trainers;
@@ -158,6 +164,10 @@ export default {
     },
     cleanHeader(s) { return String(s).replace(/^"+|"+$/g, "").replace(/\s+/g, " ").trim(); },
     cleanName(s)   { return String(s).replace(/\s+/g, " ").trim(); },
+    isRealName(s)  {
+      const v = String(s || "").trim();
+      return v && v.toLowerCase() !== "vacant";
+    },
 
     parseCsv(text) {
       const rows = []; let cur = []; let val = ""; let inQ = false;
@@ -182,7 +192,7 @@ export default {
 </script>
 
 <style scoped>
-/* === Layout: two columns; left wide, right narrow === */
+/* Layout: left wide, right narrow */
 #trainingView {
   display: grid;
   grid-template-columns: 1.7fr 1fr;
@@ -193,7 +203,6 @@ export default {
 #training { grid-column: 1; }
 #sshops  { grid-column: 2; }
 
-/* Headers */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
 .error { color: #ff9f9f; }
@@ -203,92 +212,17 @@ export default {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
   border-radius: .6rem;
-  padding: .9rem 1rem;
+  padding: .8rem .9rem;
 }
 
 /* Grids */
-.cards-grid { display: grid; gap: .9rem; }
+.cards-grid { display: grid; gap: .8rem; }
 .trainers-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .shops-grid    { grid-template-columns: 1fr; }
 
-/* Cards */
-.card {
-  border: 1px solid rgba(30,144,255,0.28);
-  background: rgba(0,10,30,0.28);
-  border-radius: .6rem;
-  padding: .8rem .9rem;
-  display: grid;
-  grid-template-rows: auto 1fr;
-}
-.card.slim { padding: .7rem .8rem; }
-
-.card-head {
-  display: flex; align-items: center; gap: .6rem; margin-bottom: .35rem;
-}
-
-/* Neutralize any global “green plate” styles from titles */
-.title {
-  margin: 0;
-  color: #d9ebff;
-  text-transform: uppercase;
-  letter-spacing: .14em;
-  font-size: 1.02rem;
-  line-height: 1.2;
-}
-.plain-title {
-  background: none !important;
-  clip-path: none !important;
-  padding: 0 !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-.badge-lead {
-  margin-left: auto; font-size: .72rem; letter-spacing: .12em;
-  border: 1px solid rgba(120,255,170,0.7); color: #79ffba;
-  padding: .08rem .45rem; border-radius: 999px; background: rgba(10,50,20,0.35);
-}
-
-.body { display: grid; gap: .4rem; }
-.list-body { align-content: start; }
-
-.lead { color: #9ec5e6; }
-.label { color: #9ec5e6; font-size: .9rem; }
-.highlight { color: #79ffba; }
-
-.divider {
-  height: 1px;
-  background: linear-gradient(90deg, rgba(30,144,255,0.35), rgba(30,144,255,0.15) 60%, transparent);
-  border-radius: 1px;
-}
-
-/* Vertical trainer list */
-.vlist {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; gap: .24rem;
-}
-.vlist li {
-  color: #e6f3ff;
-  border: 1px solid rgba(30,144,255,0.28);
-  background: rgba(0,10,30,0.24);
-  border-radius: .45rem;
-  padding: .28rem .5rem;
-}
-
-/* S-Shop list rows */
-.list .row {
-  padding: .18rem 0; color: #e6f3ff;
-  border-bottom: 1px dashed rgba(30,144,255,0.18);
-}
-.list .row:last-child { border-bottom: 0; }
-
 /* Responsive fallbacks */
-@media (max-width: 1700px) {
-  .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-@media (max-width: 1400px) {
-  .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
+@media (max-width: 1700px) { .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1400px) { .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1100px) {
   #trainingView { grid-template-columns: 1fr; }
   .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -297,4 +231,86 @@ export default {
   .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shops-grid    { grid-template-columns: 1fr; }
 }
+
+/* Cards */
+.card {
+  border: 1px solid rgba(30,144,255,0.28);
+  background: rgba(0,10,30,0.28);
+  border-radius: .6rem;
+  padding: .7rem .8rem;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: .5rem;              /* tighter to avoid overlap */
+}
+.card.slim { padding: .65rem .75rem; }
+
+.card-head {
+  display: flex;
+  align-items: center;     /* keeps LEAD vertically centered */
+  gap: .6rem;
+  margin: 0;               /* remove extra gap contributing to collisions */
+}
+.title {
+  margin: 0;
+  color: #d9ebff;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-size: 1.02rem;
+  line-height: 1.2;
+  flex: 1 1 auto;          /* take remaining space */
+  overflow: hidden;
+  text-overflow: ellipsis; /* prevent wrapping into the badge */
+  white-space: nowrap;
+}
+.plain-title { background: none !important; clip-path: none !important; padding: 0 !important; border: 0 !important; }
+
+.badge-lead {
+  flex: 0 0 auto;
+  font-size: .72rem;
+  letter-spacing: .12em;
+  border: 1px solid rgba(120,255,170,0.7);
+  color: #79ffba;
+  padding: .08rem .45rem;
+  border-radius: 999px;
+  background: rgba(10,50,20,0.35);
+  line-height: 1;          /* exact center */
+}
+
+.body { display: grid; gap: .35rem; }
+.list-body { align-content: start; }
+
+.lead { color: #9ec5e6; }
+.label { color: #9ec5e6; font-size: .9rem; }
+.highlight { color: #79ffba; }
+
+/* subtle divider; reduces heavy stacked borders */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(30,144,255,0.30), rgba(30,144,255,0.10) 60%, transparent);
+  border-radius: 1px;
+}
+
+/* Vertical trainer list — lighter look (no thick blue “bars”) */
+.vlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .22rem;
+}
+.vlist li {
+  color: #e6f3ff;
+  background: rgba(0,10,30,0.18);
+  border: 1px solid rgba(30,144,255,0.22);
+  border-radius: .4rem;
+  padding: .24rem .5rem;
+}
+
+/* S-Shop rows (keep light) */
+.list .row {
+  padding: .16rem 0;
+  color: #e6f3ff;
+  border-bottom: 1px dashed rgba(30,144,255,0.18);
+}
+.list .row:last-child { border-bottom: 0; }
 </style>
