@@ -6,8 +6,8 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- MAIN: DEPLOYMENT (make the actual window wider) -->
-    <section id="deploy-main" class="section-container deployment-wide">
+    <!-- MAIN: DEPLOYMENT (the window itself is widened via 'deployment-window') -->
+    <section id="deploy-main" class="section-container deployment-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
@@ -22,6 +22,7 @@
             No squads found. Ensure ORBAT includes Chalks / Wyvern / Caladrius.
           </div>
 
+          <!-- Groups -->
           <div class="groups">
             <div v-for="g in plan.units" :key="g.key" class="group-card">
               <div class="group-head">
@@ -65,6 +66,7 @@
             </div>
           </div>
 
+          <!-- FOOTER ACTIONS -->
           <div class="actions-row">
             <button class="ghost" @click="resetPlan">Reset</button>
             <button class="ghost" @click="exportJson">Export JSON</button>
@@ -134,7 +136,6 @@
 </template>
 
 <script>
-/* logic unchanged */
 export default {
   name: "DeploymentView",
   props: {
@@ -186,6 +187,7 @@ export default {
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(()=>requestAnimationFrame(()=>this.animateView = true));
     },
+
     buildPersonnelPool() {
       const pool = [];
       if (this.members?.length) {
@@ -215,9 +217,12 @@ export default {
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
+
     loadOrInitPlan() {
       const saved = sessionStorage.getItem(this.STORAGE_KEY);
-      if (saved) { try { const parsed = JSON.parse(saved); if (Array.isArray(parsed?.units)) return parsed.units; } catch {} }
+      if (saved) {
+        try { const parsed = JSON.parse(saved); if (Array.isArray(parsed?.units)) return parsed.units; } catch {}
+      }
       return this.initPlanFromOrbat();
     },
     initPlanFromOrbat() {
@@ -243,9 +248,11 @@ export default {
       return units;
     },
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
+
     keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
     filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
     displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
+
     openPicker(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g) return;
@@ -254,6 +261,7 @@ export default {
       this.picker = { ...this.picker, open:true, unitKey, slotIdx, query:"", onlyFree:false };
     },
     closePicker(){ this.picker.open = false; },
+
     findAssignment(personId){
       for (const g of this.plan.units) {
         const idx = g.slots.findIndex(s=>s.id===personId);
@@ -262,6 +270,7 @@ export default {
       return null;
     },
     formatAssignment(a){ return `${a.title} #${a.slotIdx+1}`; },
+
     selectPersonnel(p){
       if (!this.picker.open) return;
       const from = this.findAssignment(p.id);
@@ -306,6 +315,7 @@ export default {
       this.clearSlot(this.picker.unitKey, this.picker.slotIdx);
       this.closePicker();
     },
+
     fillFromRoster(unitKey){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g) return;
@@ -314,7 +324,7 @@ export default {
         if (s.id || s.origStatus==="CLOSED") continue;
         const pick = this.personnel.find(p=>!this.findAssignment(p.id));
         if (!pick) break;
-        s.id = pick.id; s.name = pick.name; s.role ||= pick.role || "";
+        s.id = pick.id; s.name = pick.name; s.role ||= p.role || "";
       }
       this.persistPlan();
     },
@@ -351,42 +361,29 @@ export default {
   padding-right: 18px;
 }
 
-/* hard widen the ACTUAL window (section) */
-:deep(#deploymentView .section-container.deployment-wide) {
-  width: min(1700px, 96vw) !important;   /* widen the container itself */
-  max-width: none !important;
+/* WIDEN THE ACTUAL WINDOW (the section with the border & header) */
+.deployment-window {
+  grid-column: 1 / -1;                 /* span full grid */
+  width: min(1700px, 96vw);            /* widen the window itself */
+  max-width: none !important;          /* override theme cap on .section-container */
+  margin-left: 18px;                   /* align with site gutter; tweak if desired */
 }
-:deep(#deploymentView .section-container.deployment-wide .section-header),
-:deep(#deploymentView .section-container.deployment-wide .panel) {
-  width: 100%;
+.deployment-window > .header-shell,
+.deployment-window > .section-content-container,
+.deployment-window > .section-header {
+  width: 100%;                         /* let header & body fill the widened window */
 }
 
-/* shells + visuals */
+/* shells + visuals (unchanged) */
 .header-shell { height: 52px; overflow: hidden; }
-.panel {
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.18);
-  border-radius: .6rem;
-  padding: .8rem .9rem;
-}
+.panel { border: 1px dashed rgba(30,144,255,0.35); background: rgba(0,10,30,0.18); border-radius: .6rem; padding: .8rem .9rem; }
 .muted { color: #9ec5e6; }
 
 /* groups */
 .groups { display: grid; gap: 1rem; }
-.group-card {
-  border: 1px solid rgba(30,144,255,0.28);
-  background: rgba(0,10,30,0.28);
-  border-radius: .6rem;
-  padding: .7rem .8rem;
-  display: grid;
-  gap: .6rem;
-}
+.group-card { border: 1px solid rgba(30,144,255,0.28); background: rgba(0,10,30,0.28); border-radius: .6rem; padding: .7rem .8rem; display: grid; gap: .6rem; }
 .group-head { display: flex; align-items: baseline; gap: .6rem; }
-.group-title {
-  margin: 0; color: #d9ebff; text-transform: uppercase; letter-spacing: .12em;
-  font-size: 1.12rem; line-height: 1.2;
-  flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+.group-title { margin: 0; color: #d9ebff; text-transform: uppercase; letter-spacing: .12em; font-size: 1.12rem; line-height: 1.2; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
