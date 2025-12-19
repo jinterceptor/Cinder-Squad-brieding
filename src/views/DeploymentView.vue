@@ -19,7 +19,7 @@
       <div class="section-content-container" :class="{ animate: animateView }">
         <div class="panel">
           <div v-if="!plan.units.length" class="muted">
-            No eligible elements found. (Reserves / Fillers / Recruits are excluded.)
+            No eligible elements found.
           </div>
 
           <div class="groups">
@@ -30,9 +30,9 @@
                   <span class="subcount">({{ filledCount(g) }}/{{ g.slots.length }})</span>
                 </h2>
                 <div class="group-actions">
-                  <button class="ghost small" @click="clearGroup(g.key)">Clear</button>
-                  <button class="ghost small" @click="addSlot(g.key)">Add slot</button>
-                  <button class="ghost small" @click="fillFromRoster(g.key)">Auto-fill</button>
+                  <button type="button" class="ghost small" @click.stop="clearGroup(g.key)">Clear</button>
+                  <button type="button" class="ghost small" @click.stop="addSlot(g.key)">Add slot</button>
+                  <button type="button" class="ghost small" @click.stop="fillFromRoster(g.key)">Auto-fill</button>
                 </div>
               </div>
 
@@ -47,8 +47,8 @@
                     <span class="slot-tag">#{{ sIdx + 1 }}</span>
                     <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
                     <div style="display:flex; gap:.35rem;">
-                      <button class="ghost xsmall" v-if="slot.id" @click="clearSlot(g.key, sIdx)">Clear</button>
-                      <button class="ghost xsmall" @click="removeSlot(g.key, sIdx)">–</button>
+                      <button type="button" class="ghost xsmall" v-if="slot.id" @click.stop="clearSlot(g.key, sIdx)">Clear</button>
+                      <button type="button" class="ghost xsmall" @click.stop="removeSlot(g.key, sIdx)">–</button>
                     </div>
                   </div>
 
@@ -57,9 +57,10 @@
                       {{ displayName(slot) }}
                     </div>
                     <button
+                      type="button"
                       class="primary pick"
                       :disabled="slot.origStatus === 'CLOSED'"
-                      @click="openPicker(g.key, sIdx)"
+                      @click.stop="openPicker(g.key, sIdx)"
                     >
                       {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
                     </button>
@@ -71,9 +72,9 @@
 
           <!-- FOOTER ACTIONS -->
           <div class="actions-row" style="display:flex; gap:.6rem; flex-wrap:wrap;">
-            <button class="ghost" @click="resetPlan">Reset</button>
-            <button class="ghost" @click="fillAllFromRoster">Auto-fill All</button>
-            <button class="ghost" @click="exportJson">Export JSON</button>
+            <button type="button" class="ghost" @click.stop="resetPlan">Reset</button>
+            <button type="button" class="ghost" @click.stop="fillAllFromRoster">Auto-fill All</button>
+            <button type="button" class="ghost" @click.stop="exportJson">Export JSON</button>
           </div>
         </div>
       </div>
@@ -109,8 +110,8 @@
             </div>
 
             <div class="ov-actions">
-              <button class="ghost small" @click="resetPlan">Reset Plan</button>
-              <button class="ghost small" @click="exportJson">Export JSON</button>
+              <button type="button" class="ghost small" @click.stop="resetPlan">Reset Plan</button>
+              <button type="button" class="ghost small" @click.stop="exportJson">Export JSON</button>
             </div>
 
             <div class="ov-free" v-if="freePersonnel.length">
@@ -138,7 +139,7 @@
             {{ currentSlotTitle }}
             <span class="muted">— select soldier</span>
           </h3>
-          <button class="ghost" @click="closePicker">Close</button>
+          <button type="button" class="ghost" @click="closePicker">Close</button>
         </div>
 
         <div class="picker-controls">
@@ -176,13 +177,13 @@
             </div>
 
             <div class="pick-actions">
-              <button class="primary small" @click="selectPersonnel(p)">Select</button>
+              <button type="button" class="primary small" @click.stop="selectPersonnel(p)">Select</button>
             </div>
           </div>
         </div>
 
         <div class="picker-foot">
-          <button class="ghost" @click="clearCurrentSlot">Clear slot</button>
+          <button type="button" class="ghost" @click="clearCurrentSlot">Clear slot</button>
           <span class="muted">Selecting someone already assigned will swap them.</span>
         </div>
       </div>
@@ -192,19 +193,14 @@
 
 <script>
 /**
- * Notes:
- * - If parent provides `orbat` (same as PilotsView), we use it.
- * - Optional CSV fallback: pass prop `orbatCsvUrl` or set env `VITE_ORBAT_CSV_URL`.
- * - Excludes squad titles: Reserves / Fillers / Recruits (case-insensitive).
- * - Only includes members that are "active":
- *   - member.active === true  OR  member.status === 'ACTIVE' (case-insensitive).
+ * This view expects `orbat` prop (same shape PilotsView produces from your CSV),
+ * filtered upstream to exclude Reserves/Fillers/Recruits and only ACTIVE members.
  */
 export default {
   name: "DeploymentView",
   props: {
-    animate: { type: Boolean, default: true },
-    orbat: { type: Array, default: () => [] },           // preferred (from PilotsView feed)
-    orbatCsvUrl: { type: String, default: "" },          // optional fallback URL
+    animate:  { type: Boolean, default: true },
+    orbat:    { type: Array,   default: () => [] },
   },
   data() {
     return {
@@ -216,23 +212,16 @@ export default {
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
 
       personnel: [],
-      rawOrbat: [],
-
       STORAGE_KEY: "deploymentPlan2",
       MIN_CHALK_SLOTS: 12,
-      EXCLUDE_SQUADS: new Set(["reserves", "fillers", "recruits"]),
     };
   },
-  async created() {
-    // Load ORBAT: prefer prop; else CSV fallback (if provided)
-    await this.ensureOrbatLoaded();
-
-    // Build personnel pool (active only)
-    this.personnel = this.buildPersonnelPool(this.rawOrbat);
-
+  created() {
+    // Build personnel pool from current ORBAT
+    this.personnel = this.buildPersonnelPool(this.orbat);
     // Load saved plan or init from ORBAT
     const saved = this.loadSaved();
-    this.plan.units = saved ?? this.buildUnitsFromOrbat(this.rawOrbat);
+    this.plan.units = saved ?? this.buildUnitsFromOrbat(this.orbat);
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
@@ -258,20 +247,10 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
-    /* ---- lifecycle helpers ---- */
-    async ensureOrbatLoaded() {
-      if (Array.isArray(this.orbat) && this.orbat.length) {
-        this.rawOrbat = this.filterOrbatSquads(this.orbat);
-        return;
-      }
-      const url = this.orbatCsvUrl || import.meta.env.VITE_ORBAT_CSV_URL || "";
-      if (!url) { this.rawOrbat = []; return; }
-      try {
-        const text = await fetch(url, { cache: "no-store" }).then(r => r.text());
-        this.rawOrbat = this.filterOrbatSquads(this.parseOrbatCsv(text));
-      } catch {
-        this.rawOrbat = [];
-      }
+    triggerFlicker(delayMs = 0) {
+      this.animateView = false;
+      this.animationDelay = `${delayMs}ms`;
+      this.$nextTick(()=>requestAnimationFrame(()=>this.animateView = true));
     },
 
     loadSaved() {
@@ -283,98 +262,17 @@ export default {
       } catch {}
       return null;
     },
-
     persistPlan() {
       try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {}
     },
 
-    triggerFlicker(delayMs = 0) {
-      this.animateView = false;
-      this.animationDelay = `${delayMs}ms`;
-      this.$nextTick(()=>requestAnimationFrame(()=>this.animateView = true));
-    },
-
-    /* ---- CSV parsing (fallback) ---- */
-    parseOrbatCsv(text) {
-      // Minimal CSV parser -> array of rows (naive, assumes no quoted commas)
-      const rows = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(r => r.split(","));
-      if (!rows.length) return [];
-
-      // This part is **project-specific**. We approximate a common structure:
-      // Expect columns like: squad, fireteam, role, member_id, member_name, member_callsign, member_status, slot_status
-      // Adjust as needed to match PilotsView if schema differs.
-      const header = rows[0].map(h => h.trim().toLowerCase());
-      const idx = (name) => header.indexOf(name);
-
-      const cSquad = idx("squad");
-      const cFT = idx("fireteam");
-      const cRole = idx("role");
-      const cId = idx("member_id");
-      const cName = idx("member_name");
-      const cCall = idx("member_callsign");
-      const cMStatus = idx("member_status");
-      const cSStatus = idx("slot_status");
-
-      const bySquad = new Map();
-
-      for (let i=1; i<rows.length; i++) {
-        const r = rows[i];
-        const squad = (r[cSquad] || "").trim();
-        const ft = (r[cFT] || "").trim();
-        const role = (r[cRole] || "").trim();
-        const mId = (r[cId] || "").trim();
-        const mName = (r[cName] || "").trim();
-        const mCall = (r[cCall] || "").trim();
-        const mStatus = (r[cMStatus] || "").trim();
-        const slotStatus = (r[cSStatus] || "").trim();
-
-        if (!bySquad.has(squad)) bySquad.set(squad, { squad, fireteams: [] });
-        const sq = bySquad.get(squad);
-
-        let team = sq.fireteams.find(x => x.name === ft);
-        if (!team) { team = { name: ft, slots: [] }; sq.fireteams.push(team); }
-
-        const member = (mId || mName) ? {
-          id: mId || undefined,
-          name: mName || undefined,
-          callsign: mCall || undefined,
-          status: mStatus || undefined,
-          active: String(mStatus||"").toUpperCase() === "ACTIVE"
-        } : null;
-
-        team.slots.push({
-          role,
-          status: slotStatus || (member ? "FILLED" : "VACANT"),
-          member
-        });
-      }
-
-      return Array.from(bySquad.values());
-    },
-
-    /* ---- ORBAT transforms ---- */
-    filterOrbatSquads(orbat) {
-      // Exclude Reserves / Fillers / Recruits (case-insensitive)
-      return (orbat || []).filter(sq => {
-        const n = String(sq?.squad || "").trim().toLowerCase();
-        return !this.EXCLUDE_SQUADS.has(n);
-      });
-    },
-
-    isActiveMember(member) {
-      if (!member) return false;
-      const stat = String(member.status || "").toUpperCase();
-      if (typeof member.active === "boolean") return member.active;
-      return stat === "ACTIVE";
-    },
-
-    /* Build a personnel pool (for picker) from ORBAT, active only */
+    /* Build personnel pool (from active members only) */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq=>{
         (sq.fireteams||[]).forEach(ft=>{
           (ft.slots||[]).forEach((s,idx)=>{
-            if (s?.member && this.isActiveMember(s.member)) {
+            if (s?.member) {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
               const nm = String(s.member.name || "Unknown");
               const cs = String(s.member.callsign || "");
@@ -384,25 +282,22 @@ export default {
           });
         });
       });
-      // Deduplicate by id
       const seen = new Set(); const out=[];
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
 
-    /* Build the working plan from ORBAT (active-only) */
+    /* Build units from ORBAT */
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach((sq)=>{
         const key = this.keyFromName(sq.squad);
         const slots = [];
-
         (sq.fireteams||[]).forEach(ft=>{
           (ft.slots||[]).forEach(s=>{
             const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
             const origStatus = ["VACANT","CLOSED"].includes(status) ? status : "FILLED";
-            const member = this.isActiveMember(s?.member) ? s.member : null;
-
+            const member = s?.member || null;
             slots.push({
               id: member?.id ? String(member.id) : null,
               name: member?.name || null,
@@ -411,13 +306,9 @@ export default {
             });
           });
         });
-
-        // Keep as-is (no longer forcing only Chalks), as requested: “every element except …”
-        // For Chalks, we still want capacity to over-fill -> pad to MIN_CHALK_SLOTS
         const finalSlots = this.isChalk(sq.squad)
           ? this.padSlots(slots, this.MIN_CHALK_SLOTS)
           : slots;
-
         units.push({ key, title: sq.squad, slots: finalSlots });
       });
       return units;
@@ -432,8 +323,7 @@ export default {
         (ft.slots||[]).forEach(s=>{
           const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
           const origStatus = ["VACANT","CLOSED"].includes(status) ? status : "FILLED";
-          const member = this.isActiveMember(s?.member) ? s.member : null;
-
+          const member = s?.member || null;
           slots.push({
             id: member?.id ? String(member.id) : null,
             name: member?.name || null,
@@ -460,12 +350,12 @@ export default {
       return out;
     },
 
-    /* ---- small utils ---- */
+    /* Small utils */
     keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
     filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
     displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
 
-    /* ---- picker + assignment ---- */
+    /* Picker + assignment */
     openPicker(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g || g.slots[slotIdx]?.origStatus==="CLOSED") return;
@@ -475,7 +365,7 @@ export default {
 
     findAssignment(personId){
       for (const g of this.plan.units) {
-        const idx = g.slots.findIndex(s=>s.id===personId);
+        const idx = g.slots.findIndex(s=>String(s.id)===String(personId));
         if (idx>=0) return { unitKey:g.key, slotIdx:idx, title:g.title };
       }
       return null;
@@ -490,7 +380,7 @@ export default {
       const g = this.plan.units[gIdx];
       const target = g.slots[this.picker.slotIdx];
 
-      // Swap across groups if needed (immutable updates for Vue reactivity)
+      // immutable updates (guarantee re-render)
       if (from && target?.id && !(from.unitKey===g.key && from.slotIdx===this.picker.slotIdx)) {
         const srcIdx = this.plan.units.findIndex(u=>u.key===from.unitKey);
         const srcGroup = this.plan.units[srcIdx];
@@ -560,27 +450,29 @@ export default {
       this.persistPlan();
     },
 
-    /* ---- Auto-fill ---- */
+    /* Auto-fill (rebuild from current ORBAT and REPLACE unit object) */
     fillFromRoster(unitKey){
-      const rebuilt = this.buildUnitFromOrbatByKey(this.rawOrbat, unitKey);
+      const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       const idx = this.plan.units.findIndex(u=>u.key===unitKey);
       if (idx < 0 || !rebuilt) return;
-      // Keep current length if larger (over-filled): re-pad to max(current, rebuilt)
-      const len = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
-      while (rebuilt.slots.length < len) rebuilt.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
 
+      // If current unit was over-filled, keep length
+      const keepLen = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
+      while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
+
+      // Replace whole unit -> guarantees re-render
       this.plan.units = this.plan.units.map((u,i)=> i===idx ? rebuilt : u);
       this.persistPlan();
       this.triggerFlicker(0);
     },
 
     fillAllFromRoster(){
-      const rebuilt = this.buildUnitsFromOrbat(this.rawOrbat);
-      // Preserve any over-fill lengths already present
+      const rebuilt = this.buildUnitsFromOrbat(this.orbat);
+      // Honor any over-filled lengths already present
       const out = rebuilt.map(u=>{
         const prev = this.plan.units.find(x=>x.key===u.key);
-        const len = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
-        while (u.slots.length < len) u.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
+        const keepLen = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
+        while (u.slots.length < keepLen) u.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
         return u;
       });
       this.plan.units = out;
@@ -589,7 +481,7 @@ export default {
     },
 
     resetPlan(){
-      this.plan.units = this.buildUnitsFromOrbat(this.rawOrbat);
+      this.plan.units = this.buildUnitsFromOrbat(this.orbat);
       this.persistPlan();
       this.triggerFlicker(0);
     },
@@ -604,12 +496,10 @@ export default {
     },
   },
   watch: {
-    // If parent updates orbat, rebuild base but keep current plan unless you reset.
-    orbat: { deep:true, immediate:false, handler(newV){
+    // If the parent loads ORBAT later, refresh personnel; keep current plan unless reset
+    orbat: { deep:true, handler(newV){
       if (Array.isArray(newV) && newV.length) {
-        this.rawOrbat = this.filterOrbatSquads(newV);
-        // Also update personnel list
-        this.personnel = this.buildPersonnelPool(this.rawOrbat);
+        this.personnel = this.buildPersonnelPool(newV);
       }
     }},
     plan: { deep:true, handler(){ this.persistPlan(); } },
@@ -618,7 +508,6 @@ export default {
 </script>
 
 <style scoped>
-/* PAGE GRID: two windows side-by-side, no overlap */
 #deploymentView {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
@@ -632,17 +521,14 @@ export default {
   #deploymentView { grid-template-columns: 1fr; }
 }
 
-/* each window respects grid */
 .deployment-window.section-container,
 .overview-window.section-container { max-width: none !important; width: auto; }
 .deployment-window { grid-column: 1; }
 .overview-window   { grid-column: 2; }
 
-/* section scaffolding */
 .header-shell { height: 52px; overflow: hidden; }
 .section-header, .section-content-container { width: 100%; }
 
-/* panels */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
@@ -650,11 +536,9 @@ export default {
   padding: .8rem .9rem;
 }
 
-/* text */
 .muted { color: #9ec5e6; }
 .small { font-size: .86rem; }
 
-/* groups */
 .groups { display: grid; gap: 1rem; }
 .group-card {
   border: 1px solid rgba(30,144,255,0.28);
@@ -673,7 +557,6 @@ export default {
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
-/* slots grid */
 .slots-grid { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: .7rem; }
 @media (min-width: 1680px) { .slots-grid { grid-template-columns: repeat(6, minmax(200px, 1fr)); } }
 @media (max-width: 1500px) { .slots-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); } }
@@ -703,9 +586,9 @@ button.primary.pick { width: 100%; }
 .free-list li { display: flex; gap: .4rem; color: #e6f3ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .free-list .meta { color: #9ec5e6; }
 
-/* modal + flicker */
-.picker-veil { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: grid; place-items: center; z-index: 50; }
-.picker { width: min(900px, 92vw); max-height: 80vh; overflow: hidden; border-radius: .8rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0, 10, 30, 0.95); display: grid; grid-template-rows: auto auto 1fr auto; }
+/* modal (ensure on top) */
+.picker-veil { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: grid; place-items: center; z-index: 1000; }
+.picker { width: min(900px, 92vw); max-height: 80vh; overflow: hidden; border-radius: .8rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0, 10, 30, 0.98); display: grid; grid-template-rows: auto auto 1fr auto; }
 .picker-head { display: flex; align-items: center; justify-content: space-between; padding: .8rem .9rem; border-bottom: 1px solid rgba(30,144,255,0.25); }
 .picker-controls { display: flex; gap: .8rem; align-items: center; padding: .6rem .9rem; border-bottom: 1px solid rgba(30,144,255,0.18); }
 .picker-controls .search { flex: 1 1 auto; padding: .5rem .6rem; border-radius: .45rem; border: 1px solid rgba(30,144,255,0.3); background: rgba(0,10,30,0.3); color: #e6f3ff; }
@@ -717,7 +600,7 @@ button.primary.pick { width: 100%; }
 .p-meta .subtle { color: #9ec5e6; font-size: .86rem; }
 .badge { color: #79ffba; border: 1px solid rgba(120,255,170,0.55); border-radius: 999px; padding: .1rem .5rem; font-size: .78rem; }
 
-/* Flicker */
+/* flicker */
 .section-content-container.animate { animation: contentEntry 260ms ease-out both; }
 @keyframes contentEntry {
   0% { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
