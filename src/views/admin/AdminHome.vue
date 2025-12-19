@@ -8,12 +8,12 @@
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
       <div class="header-shell">
-        <!-- Simple, compact plate: always shows text -->
-        <div class="section-header simple-admin-plate">
+        <!-- Compact plate with clipped right end (same feel as Promotions) -->
+        <div class="section-header simple-admin-plate admin-plate--clipped">
           <img src="/icons/protocol.svg" alt="" />
           <h1>ADMIN</h1>
         </div>
-        <!-- no rhombus on the left plate to avoid overlap in narrow layouts -->
+        <div class="admin-plate-connector" aria-hidden="true"></div>
       </div>
 
       <div class="section-content-container">
@@ -44,7 +44,6 @@
 
     <!-- RIGHT WINDOW -->
     <section class="section-container right-window">
-      <!-- Promotions header unchanged -->
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot right-header">
           <img src="/icons/protocol.svg" alt="" />
@@ -240,10 +239,8 @@ export default {
   },
   data() {
     return {
-      // view flicker
       animateView: false,
       animationDelay: "0ms",
-
       activeKey: "promotions",
 
       // Promotions
@@ -687,19 +684,17 @@ export default {
 /* Header alignment shells */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* SIMPLE ADMIN PLATE — readable in narrow columns */
+/* SIMPLE ADMIN PLATE — fixed length, readable in narrow column */
 .simple-admin-plate {
   position: relative;
-  z-index: 2;                 /* why: stay above content */
+  z-index: 2;               /* why: keep above content */
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
   padding: 0 14px;
-  min-height: 52px;
-  min-width: 180px;
-  max-width: 320px;           /* keeps it compact */
-  background: #214d45;        /* site green tone */
-  border-radius: 0 6px 6px 0; /* subtle right rounding */
+  height: 52px;
+  width: 315px;             /* exact length you liked */
+  background: #214d45;      /* site green tone */
 }
 .simple-admin-plate img { width: 20px; height: 20px; }
 .simple-admin-plate h1 {
@@ -707,8 +702,23 @@ export default {
   line-height: 52px;
   font-weight: 700;
   letter-spacing: 0.18em;
-  color: #0a0a0a;            /* black like other headings */
-  white-space: nowrap;       /* avoid wrapping/cropping */
+  color: #0a0a0a;          /* black like other headings */
+  white-space: nowrap;
+}
+
+/* Add clipped right end to match Promotions’ vibe (local, non-invasive) */
+.admin-plate--clipped {
+  /* create a chamfered right edge; tweak 22px to match look */
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 26px, calc(100% - 22px) 52px, 0 52px);
+}
+
+/* Tiny connector diamond, positioned after the plate, same as the small notch */
+.admin-plate-connector {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: #214d45;
+  transform: translateX(4px) translateY(19px) rotate(45deg);
 }
 
 /* Keep right header untouched */
