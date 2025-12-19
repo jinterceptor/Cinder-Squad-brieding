@@ -49,7 +49,7 @@
       </div>
     </section>
 
-    <!-- RIGHT: S-SHOP PERSONNEL -->
+    <!-- RIGHT: S-SHOP PERSONNEL (thinner) -->
     <section id="sshops" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -126,14 +126,11 @@ export default {
           if (!title) continue;
 
           const raw = this.readDown(table, 2, c).filter(this.isRealName);
-
-          // unique-preserving list; include contact in trainers
           const uniq = [];
           for (const n of raw) if (!uniq.includes(n)) uniq.push(n);
 
           const lead = uniq[0] || "";
-          const trainersAll = uniq.slice();
-
+          const trainersAll = uniq.slice(); // includes contact
           trainers.push({ key: `role-${c}`, title, lead, trainers: trainersAll });
         }
 
@@ -192,20 +189,32 @@ export default {
 </script>
 
 <style scoped>
-/* === Layout: two columns; left wide, right narrow === */
+/* === Layout: wide left, slimmer right === */
 #trainingView {
   display: grid;
-  grid-template-columns: 1.7fr 1fr;
+  grid-template-columns: 1fr 360px; /* thinner right pane */
   gap: 1.2rem;
   align-items: start;
 
-  /* Offset the entire page (matches other views’ spacing feel) */
-  padding-top: 28px;   /* move both windows down from the header */
-  padding-left: 18px;  /* nudge away from sidebar edge */
+  /* same global offsets used earlier */
+  padding-top: 28px;
+  padding-left: 18px;
+
+  overflow-x: hidden; /* ensure no horizontal scroll */
 }
 #trainingView > .section-container { width: 100%; margin: 0; }
 #training { grid-column: 1; }
 #sshops  { grid-column: 2; }
+
+/* Slightly smaller on medium screens */
+@media (max-width: 1500px) {
+  #trainingView { grid-template-columns: 1fr 320px; }
+}
+
+/* Stack on small screens */
+@media (max-width: 1100px) {
+  #trainingView { grid-template-columns: 1fr; padding-left: 12px; }
+}
 
 /* Headers */
 .header-shell { height: 52px; overflow: hidden; }
@@ -225,17 +234,10 @@ export default {
 .trainers-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .shops-grid    { grid-template-columns: 1fr; }
 
-/* Responsive fallbacks */
+/* Trainers responsive */
 @media (max-width: 1700px) { .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 1400px) { .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 1100px) {
-  #trainingView { grid-template-columns: 1fr; padding-left: 12px; }
-  .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 800px) {
-  .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .shops-grid    { grid-template-columns: 1fr; }
-}
+@media (max-width: 800px)  { .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Cards */
 .card {
@@ -276,7 +278,7 @@ export default {
 .label { color: #9ec5e6; font-size: .85rem; }
 .highlight { color: #79ffba; }
 
-/* divider */
+/* Divider */
 .divider {
   height: 1px;
   background: linear-gradient(90deg, rgba(30,144,255,0.28), rgba(30,144,255,0.10) 60%, transparent);
