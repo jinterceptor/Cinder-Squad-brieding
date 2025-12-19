@@ -16,7 +16,7 @@
         <div class="rhombus-back">&nbsp;</div>
       </div>
 
-      <!-- SCROLL HAPPENS INSIDE THIS CONTENT WRAPPER -->
+      <!-- internal scroller -->
       <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
           <div v-if="!plan.units.length" class="muted">
@@ -263,6 +263,7 @@ export default {
       try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {}
     },
 
+    /* --- role sorting --- */
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -290,6 +291,7 @@ export default {
         .map(x => x.s);
     },
 
+    /* --- units/personnel --- */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq=>{
@@ -310,9 +312,15 @@ export default {
       return out;
     },
 
+    isHiddenUnit(name) {
+      return /(reserves?|fillers?|recruits?)/i.test(String(name || ""));
+    },
+
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach((sq)=>{
+        if (this.isHiddenUnit(sq.squad)) return; // hide unwanted sections
+
         const key = this.keyFromName(sq.squad);
         const slots = [];
         (sq.fireteams||[]).forEach(ft=>{
@@ -337,7 +345,7 @@ export default {
 
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
-      if (!unit) return null;
+      if (!unit || this.isHiddenUnit(unit.squad)) return null; // hidden also blocked
 
       const slots = [];
       (unit.fireteams||[]).forEach(ft=>{
@@ -373,6 +381,7 @@ export default {
     filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
     displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
 
+    /* --- picker & assignment --- */
     openPicker(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g || g.slots[slotIdx]?.origStatus==="CLOSED") return;
@@ -466,6 +475,7 @@ export default {
       this.persistPlan();
     },
 
+    /* --- auto-fill --- */
     fillFromRoster(unitKey){
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       const idx = this.plan.units.findIndex(u=>u.key===unitKey);
@@ -519,21 +529,17 @@ export default {
 </script>
 
 <style scoped>
-/* PAGE GRID (no page-level scrolling now) */
+/* Page grid */
 #deploymentView {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   gap: 1.2rem;
   align-items: start;
-
-  /* fix the viewport area and hide outer scroll */
   height: calc(100vh - 100px);
   overflow: hidden;
   padding: 28px 18px 18px;
 }
-@media (max-width: 1280px) {
-  #deploymentView { grid-template-columns: 1fr; }
-}
+@media (max-width: 1280px) { #deploymentView { grid-template-columns: 1fr; } }
 
 .deployment-window.section-container,
 .overview-window.section-container { max-width: none !important; width: auto; }
@@ -543,13 +549,12 @@ export default {
 .header-shell { height: 52px; overflow: hidden; }
 .section-header, .section-content-container { width: 100%; }
 
-/* INTERNAL SCROLLER FOR LEFT PANEL */
+/* Left panel internal scroll */
 .deploy-scroll {
-  /* header = 52px, plus some breathing room; tweak as needed */
   max-height: calc(100vh - 100px - 52px - 24px);
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;
-  padding-bottom: 18px; /* keep content off the bottom edge */
+  padding-bottom: 18px;
 }
 
 .panel {
