@@ -192,10 +192,6 @@
 </template>
 
 <script>
-/**
- * This view expects `orbat` prop (same shape PilotsView produces from your CSV),
- * filtered upstream to exclude Reserves/Fillers/Recruits and only ACTIVE members.
- */
 export default {
   name: "DeploymentView",
   props: {
@@ -214,12 +210,14 @@ export default {
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
       MIN_CHALK_SLOTS: 12,
+
+      // Desired top→bottom priority:
+      // 1) Squad Lead, 2) Team Lead, 3) Corpsman 1, 4) Corpsman 2, 5) everyone else
+      ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
     };
   },
   created() {
-    // Build personnel pool from current ORBAT
     this.personnel = this.buildPersonnelPool(this.orbat);
-    // Load saved plan or init from ORBAT
     const saved = this.loadSaved();
     this.plan.units = saved ?? this.buildUnitsFromOrbat(this.orbat);
   },
@@ -266,7 +264,51 @@ export default {
       try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {}
     },
 
-    /* Build personnel pool (from active members only) */
+    /* ---------- Role sorting ---------- */
+    normalizeRole(txt) {
+      const t = String(txt || "").toLowerCase().trim();
+
+      // Squad Lead / SL / Actual
+      if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
+
+      // Team Lead / TL
+      if (/\bteam\s*lead(er)?\b|\btl\b/.test(t)) return "team leader";
+
+      // Corpsman / Medic (detect #1 / #2 if present)
+      if (/\b(corps?man|medic)\b/.test(t)) {
+        // try to extract an index if named "Corpsman 1" or "Medic 2"
+        const m = t.match(/\b(corps?man|medic)\s*(\d+)\b/);
+        if (m && m[2]) {
+          const n = Number(m[2]);
+          if (n === 1) return "corpsman 1";
+          if (n === 2) return "corpsman 2";
+        }
+        // if no number, treat first medic as corpsman 1 (sort-wise)
+        return "corpsman 1";
+      }
+
+      return t; // everyone else
+    },
+    rolePriority(role, seenCounts) {
+      const key = this.normalizeRole(role);
+      const idx = this.ROLE_ORDER.indexOf(key);
+      if (idx !== -1) return idx;
+
+      // Untyped medics that came after the first will effectively fall after "corpsman 1"
+      // by returning a value between corpsman 1 and corpsman 2 if needed, but we keep it simple:
+      return 10_000; // rest of squad
+    },
+    sortSlotsByRole(slots) {
+      // stable sort with original index tie-break
+      return slots
+        .map((s, i) => {
+          return { s, i, p: this.rolePriority(s.role) };
+        })
+        .sort((a, b) => a.p - b.p || a.i - b.i)
+        .map(x => x.s);
+    },
+
+    /* ---------- Personnel & Units ---------- */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq=>{
@@ -287,7 +329,6 @@ export default {
       return out;
     },
 
-    /* Build units from ORBAT */
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach((sq)=>{
@@ -306,9 +347,8 @@ export default {
             });
           });
         });
-        const finalSlots = this.isChalk(sq.squad)
-          ? this.padSlots(slots, this.MIN_CHALK_SLOTS)
-          : slots;
+        let finalSlots = this.sortSlotsByRole(slots);
+        if (this.isChalk(sq.squad)) finalSlots = this.padSlots(finalSlots, this.MIN_CHALK_SLOTS);
         units.push({ key, title: sq.squad, slots: finalSlots });
       });
       return units;
@@ -333,10 +373,8 @@ export default {
         });
       });
 
-      const finalSlots = this.isChalk(unit.squad)
-        ? this.padSlots(slots, this.MIN_CHALK_SLOTS)
-        : slots;
-
+      let finalSlots = this.sortSlotsByRole(slots);
+      if (this.isChalk(unit.squad)) finalSlots = this.padSlots(finalSlots, this.MIN_CHALK_SLOTS);
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
@@ -350,12 +388,11 @@ export default {
       return out;
     },
 
-    /* Small utils */
     keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
     filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
     displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
 
-    /* Picker + assignment */
+    /* ---------- Picker + assignment ---------- */
     openPicker(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g || g.slots[slotIdx]?.origStatus==="CLOSED") return;
@@ -380,7 +417,6 @@ export default {
       const g = this.plan.units[gIdx];
       const target = g.slots[this.picker.slotIdx];
 
-      // immutable updates (guarantee re-render)
       if (from && target?.id && !(from.unitKey===g.key && from.slotIdx===this.picker.slotIdx)) {
         const srcIdx = this.plan.units.findIndex(u=>u.key===from.unitKey);
         const srcGroup = this.plan.units[srcIdx];
@@ -389,17 +425,17 @@ export default {
         const newTarget = { ...target, id: p.id, name: p.name, role: target.role || p.role || "" };
         const newSrcSlots = srcGroup.slots.slice();
         newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name };
-        const newSrc = { ...srcGroup, slots: newSrcSlots };
+        const newSrc = { ...srcGroup, slots: this.sortSlotsByRole(newSrcSlots) };
 
         const newGSlots = g.slots.slice();
         newGSlots[this.picker.slotIdx] = newTarget;
-        const newG = { ...g, slots: newGSlots };
+        const newG = { ...g, slots: this.sortSlotsByRole(newGSlots) };
 
         this.plan.units = this.plan.units.map((u,i)=> i===gIdx ? newG : (i===srcIdx ? newSrc : u));
       } else {
         const newSlots = g.slots.slice();
         newSlots[this.picker.slotIdx] = { ...target, id: p.id, name: p.name, role: target.role || p.role || "" };
-        const newG = { ...g, slots: newSlots };
+        const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
         this.plan.units = this.plan.units.map((u,i)=> i===gIdx ? newG : u);
       }
 
@@ -413,7 +449,7 @@ export default {
       const g = this.plan.units[idx];
       const newSlots = g.slots.slice();
       newSlots[slotIdx] = { ...newSlots[slotIdx], id:null, name:null };
-      const newG = { ...g, slots: newSlots };
+      const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
       this.persistPlan();
     },
@@ -422,7 +458,8 @@ export default {
       const idx = this.plan.units.findIndex(u=>u.key===unitKey);
       if (idx < 0) return;
       const g = this.plan.units[idx];
-      const newG = { ...g, slots: g.slots.map(s=>({ ...s, id:null, name:null })) };
+      const emptied = g.slots.map(s=>({ ...s, id:null, name:null }));
+      const newG = { ...g, slots: this.sortSlotsByRole(emptied) };
       this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
       this.persistPlan();
     },
@@ -433,7 +470,7 @@ export default {
       const g = this.plan.units[idx];
       const newSlots = g.slots.slice();
       newSlots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
-      const newG = { ...g, slots: newSlots };
+      const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
       this.persistPlan();
     },
@@ -442,25 +479,23 @@ export default {
       const idx = this.plan.units.findIndex(u=>u.key===unitKey);
       if (idx < 0) return;
       const g = this.plan.units[idx];
-      if (g.slots.length <= 1) return;
       const newSlots = g.slots.slice();
       newSlots.splice(slotIdx, 1);
-      const newG = { ...g, slots: newSlots };
+      const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
       this.persistPlan();
     },
 
-    /* Auto-fill (rebuild from current ORBAT and REPLACE unit object) */
+    /* ---------- Auto-fill ---------- */
     fillFromRoster(unitKey){
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       const idx = this.plan.units.findIndex(u=>u.key===unitKey);
       if (idx < 0 || !rebuilt) return;
 
-      // If current unit was over-filled, keep length
+      // keep any extra capacity already added
       const keepLen = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
       while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
 
-      // Replace whole unit -> guarantees re-render
       this.plan.units = this.plan.units.map((u,i)=> i===idx ? rebuilt : u);
       this.persistPlan();
       this.triggerFlicker(0);
@@ -468,7 +503,6 @@ export default {
 
     fillAllFromRoster(){
       const rebuilt = this.buildUnitsFromOrbat(this.orbat);
-      // Honor any over-filled lengths already present
       const out = rebuilt.map(u=>{
         const prev = this.plan.units.find(x=>x.key===u.key);
         const keepLen = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
@@ -496,7 +530,6 @@ export default {
     },
   },
   watch: {
-    // If the parent loads ORBAT later, refresh personnel; keep current plan unless reset
     orbat: { deep:true, handler(newV){
       if (Array.isArray(newV) && newV.length) {
         this.personnel = this.buildPersonnelPool(newV);
@@ -557,6 +590,7 @@ export default {
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
+/* slots grid */
 .slots-grid { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: .7rem; }
 @media (min-width: 1680px) { .slots-grid { grid-template-columns: repeat(6, minmax(200px, 1fr)); } }
 @media (max-width: 1500px) { .slots-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); } }
@@ -586,7 +620,7 @@ button.primary.pick { width: 100%; }
 .free-list li { display: flex; gap: .4rem; color: #e6f3ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .free-list .meta { color: #9ec5e6; }
 
-/* modal (ensure on top) */
+/* modal (on top) */
 .picker-veil { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: grid; place-items: center; z-index: 1000; }
 .picker { width: min(900px, 92vw); max-height: 80vh; overflow: hidden; border-radius: .8rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0, 10, 30, 0.98); display: grid; grid-template-rows: auto auto 1fr auto; }
 .picker-head { display: flex; align-items: center; justify-content: space-between; padding: .8rem .9rem; border-bottom: 1px solid rgba(30,144,255,0.25); }
