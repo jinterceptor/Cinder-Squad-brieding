@@ -50,7 +50,7 @@
     </section>
 
     <!-- RIGHT: S-SHOP PERSONNEL -->
-    <section id="sshops" class="section-container right-col">
+    <section id="sshops" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
@@ -189,28 +189,22 @@ export default {
 </script>
 
 <style scoped>
-/* === Layout: keep left stable, actually slim the right === */
+/* === Layout: two columns; left wide, right back to its column (not stuck to edge) === */
 #trainingView {
   display: grid;
-  grid-template-columns: 1.6fr 0.8fr; /* softer ratio; avoids ballooning left */
+  grid-template-columns: 1.7fr 1fr;  /* back to fractional layout */
   gap: 1.2rem;
   align-items: start;
 
   padding-top: 28px;
   padding-left: 18px;
+  padding-right: 18px;               /* right gutter so nothing hugs the edge */
 
   overflow-x: hidden;
 }
 #trainingView > .section-container { width: 100%; margin: 0; }
 #training { grid-column: 1; }
-#sshops  { grid-column: 2; }
-
-/* Cap the right column’s width and align it to the edge */
-#sshops {
-  max-width: 320px;   /* <- slimmer */
-  width: 100%;
-  justify-self: end;  /* stick to the right; left keeps its space */
-}
+#sshops  { grid-column: 2; }         /* no justify-self, no fixed max-width */
 
 /* Headers */
 .header-shell { height: 52px; overflow: hidden; }
@@ -230,15 +224,11 @@ export default {
 .trainers-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .shops-grid    { grid-template-columns: 1fr; }
 
-/* Responsive tweaks */
-@media (max-width: 1500px) {
-  #sshops { max-width: 300px; }
-}
+/* Trainers responsive */
 @media (max-width: 1700px) { .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 1400px) { .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1100px) {
-  #trainingView { grid-template-columns: 1fr; padding-left: 12px; }
-  #sshops { max-width: none; justify-self: stretch; }
+  #trainingView { grid-template-columns: 1fr; padding-left: 12px; padding-right: 12px; }
   .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 800px) {
@@ -246,7 +236,7 @@ export default {
   .shops-grid    { grid-template-columns: 1fr; }
 }
 
-/* Cards & typography (unchanged from your last working version) */
+/* Cards */
 .card {
   box-sizing: border-box;
   border: 1px solid rgba(30,144,255,0.28);
