@@ -7,7 +7,7 @@
   >
     <!-- LEFT WINDOW: Admin nav -->
     <section class="section-container left-window">
-      <!-- Shrink the wrapper to clip the full green plate correctly -->
+      <!-- Narrow wrapper; inner header stays full so shapes render -->
       <div class="header-shell header-admin">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
@@ -44,7 +44,7 @@
 
     <!-- RIGHT WINDOW -->
     <section class="section-container right-window">
-      <div class="header-shell">
+      <div class="header-shell header-right">
         <div class="section-header clipped-medium-backward-pilot right-header">
           <img src="/icons/protocol.svg" alt="" />
           <h1>{{ windowTitle }}</h1>
@@ -236,10 +236,8 @@ export default {
   },
   data() {
     return {
-      // view flicker
       animateView: false,
       animationDelay: "0ms",
-
       activeKey: "promotions",
 
       // Promotions
@@ -683,16 +681,39 @@ export default {
 /* Header alignment shell (matches other views) */
 .header-shell { height: 52px; overflow: hidden; }
 
-/* ✅ Shrink only the wrapper to keep chamfer/connector intact */
+/* Narrow the LEFT header wrapper */
 .header-admin {
-  width: 38%;          /* tweak as needed */
+  width: 38%;
   min-width: 220px;
   display: inline-block;
 }
 
-/* Prevent wrap & vertical drop of the title */
+/* Make the right header wrapper slightly cropped for symmetry (optional tweak) */
+.header-right {
+  width: 72%;
+  min-width: 520px;
+  display: inline-block;
+}
+
+/* Prevent wrap & vertical drop of the Admin title */
 .header-admin .section-header { white-space: nowrap; }
 .header-admin .section-header h1 { line-height: 52px; }
+
+/* ✨ Recreate the right chamfer on the narrowed Admin plate */
+.header-admin .section-header {
+  /* match the usual left notch while adding a right diagonal cut */
+  --right-chamfer: 40px;
+  --left-notch: 24px;
+  position: relative;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--right-chamfer)) 0,
+    100% 50%,
+    calc(100% - var(--right-chamfer)) 100%,
+    0 100%,
+    var(--left-notch) 50%
+  );
+}
 
 /* Help compositor */
 .content-container { will-change: opacity, filter; contain: paint; }
