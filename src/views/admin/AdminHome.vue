@@ -514,6 +514,7 @@ export default {
     },
   },
   methods: {
+    /* --- Flicker --- */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -521,6 +522,8 @@ export default {
         requestAnimationFrame(() => { this.animateView = true; });
       });
     },
+
+    /* --- Utils --- */
     isFiniteNum(v) { return Number.isFinite(v); },
     getOps(member) {
       if (member?.id != null && this.attendanceMap[`ID:${member.id}`] !== undefined) return this.attendanceMap[`ID:${member.id}`];
@@ -541,6 +544,8 @@ export default {
       if (s === 'discharged') return 'discharged';
       return 'unknown';
     },
+
+    /* --- Reference data --- */
     async fetchTroopStatusCsv() {
       try {
         const res = await fetch(this.troopStatusCsvUrl, { method: 'GET' });
@@ -590,6 +595,8 @@ export default {
       if (rows.length && rows[rows.length - 1].every(x => String(x).length === 0)) rows.pop();
       return rows;
     },
+
+    /* --- Discipline load/edit --- */
     async loadDiscipline() {
       if (!this.discEndpoint || !this.discSecret) return;
       this.discLoading = true; this.discError = ""; this.discOK = false;
@@ -637,6 +644,39 @@ export default {
       return out.join(', ');
     },
     toggleWarn(i) { const next = [...this.edit.warn]; next[i] = !next[i]; this.edit.warn = next; },
+
+    /* --- Audit helpers (non-blocking) --- */
+    getAdminIdentity() {
+      try {
+        const raw = sessionStorage.getItem("admin");
+        if (!raw) return { who: "unknown", role: "member" };
+        const a = JSON.parse(raw);
+        return {
+          who: a?.displayName || a?.username || "unknown",
+          role: a?.role || "officer",
+        };
+      } catch { return { who: "unknown", role: "member" }; }
+    },
+    async sha256Hex(text) {
+      try {
+        const buf = new TextEncoder().encode(String(text || ""));
+        const hash = await crypto.subtle.digest("SHA-256", buf);
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
+      } catch { return ""; } // why: Safari/private-mode/etc.
+    },
+    async auditLog(entry) {
+      try {
+        const ident = this.getAdminIdentity();
+        const body = JSON.stringify({ ...ident, ...entry });
+        await fetch("/.netlify/functions/audit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+      } catch { /* swallow: never block UI */ }
+    },
+
+    /* --- Save with audit --- */
     async saveDiscipline() {
       this.discError = ""; this.discOK = false;
       const m = (this.members || []).find(x => String(x.id || '') === String(this.edit.memberId));
@@ -644,11 +684,19 @@ export default {
       if (!this.isInTroopList(m)) { this.discError = "Member not in Troop List."; return; }
       if (this.isDischarged(this.memberStatusOf(m))) { this.discError = "Cannot edit a discharged member."; return; }
 
+      // Capture previous state for diff BEFORE save
+      const nk = this.nameKey(this.cleanMemberName(m.name || ''));
+      const prev = (this.disciplineRows || []).find(r => r.nameKey === nk) || { notes: "", warnings: "N, N, N" };
+      const prevBits = (prev.warnings || "N, N, N").split(",").map(s => s.trim().toUpperCase() === "Y");
+      const newBits = [!!this.edit.warn[0], !!this.edit.warn[1], !!this.edit.warn[2]];
+      const prevNotes = String(prev.notes || "");
+      const newNotes  = String((this.edit.notes || "").trim());
+
       const payload = {
         secret: this.discSecret,
         name: m.name || '',
-        nameKey: this.nameKey(this.cleanMemberName(m.name || '')),
-        notes: (this.edit.notes || '').trim(),
+        nameKey: nk,
+        notes: newNotes,
         warnings: this.warnArrayToString(this.edit.warn),
       };
 
@@ -665,6 +713,37 @@ export default {
         if (!data?.ok) throw new Error(data?.error || 'Save failed');
 
         this.discOK = true;
+
+        // ---- AUDIT (non-blocking) ----
+        // Warnings: emit per-slot add/remove
+        const tasks = [];
+        [0,1,2].forEach((i) => {
+          if (prevBits[i] !== newBits[i]) {
+            const op = newBits[i] ? "warning.add" : "warning.remove";
+            tasks.push(this.auditLog({
+              entity: "discipline",
+              op,
+              memberId: String(m.id || ""),
+              memberName: m.name || "",
+              data: { level: i + 1 }, // 1..3
+            }));
+          }
+        });
+        // Notes: emit update only if changed
+        if (prevNotes !== newNotes) {
+          const notesHash = await this.sha256Hex(newNotes);
+          tasks.push(this.auditLog({
+            entity: "discipline",
+            op: "notes.update",
+            memberId: String(m.id || ""),
+            memberName: m.name || "",
+            data: { bytes: newNotes.length },
+            notesHash,
+          }));
+        }
+        await Promise.allSettled(tasks);
+        // -------------------------------
+
         await this.refreshDiscipline();
       } catch (e) { this.discError = String(e?.message || e); }
       finally {
