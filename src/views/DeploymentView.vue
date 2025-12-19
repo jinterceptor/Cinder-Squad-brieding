@@ -211,8 +211,6 @@ export default {
       STORAGE_KEY: "deploymentPlan2",
       MIN_CHALK_SLOTS: 12,
 
-      // Desired top→bottom priority:
-      // 1) Squad Lead, 2) Team Lead, 3) Corpsman 1, 4) Corpsman 2, 5) everyone else
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
     };
   },
@@ -264,51 +262,33 @@ export default {
       try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {}
     },
 
-    /* ---------- Role sorting ---------- */
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
-
-      // Squad Lead / SL / Actual
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
-
-      // Team Lead / TL
       if (/\bteam\s*lead(er)?\b|\btl\b/.test(t)) return "team leader";
-
-      // Corpsman / Medic (detect #1 / #2 if present)
       if (/\b(corps?man|medic)\b/.test(t)) {
-        // try to extract an index if named "Corpsman 1" or "Medic 2"
         const m = t.match(/\b(corps?man|medic)\s*(\d+)\b/);
         if (m && m[2]) {
           const n = Number(m[2]);
           if (n === 1) return "corpsman 1";
           if (n === 2) return "corpsman 2";
         }
-        // if no number, treat first medic as corpsman 1 (sort-wise)
         return "corpsman 1";
       }
-
-      return t; // everyone else
+      return t;
     },
-    rolePriority(role, seenCounts) {
+    rolePriority(role) {
       const key = this.normalizeRole(role);
       const idx = this.ROLE_ORDER.indexOf(key);
-      if (idx !== -1) return idx;
-
-      // Untyped medics that came after the first will effectively fall after "corpsman 1"
-      // by returning a value between corpsman 1 and corpsman 2 if needed, but we keep it simple:
-      return 10_000; // rest of squad
+      return idx === -1 ? 10_000 : idx;
     },
     sortSlotsByRole(slots) {
-      // stable sort with original index tie-break
       return slots
-        .map((s, i) => {
-          return { s, i, p: this.rolePriority(s.role) };
-        })
+        .map((s, i) => ({ s, i, p: this.rolePriority(s.role) }))
         .sort((a, b) => a.p - b.p || a.i - b.i)
         .map(x => x.s);
     },
 
-    /* ---------- Personnel & Units ---------- */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq=>{
@@ -392,7 +372,6 @@ export default {
     filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
     displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
 
-    /* ---------- Picker + assignment ---------- */
     openPicker(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g || g.slots[slotIdx]?.origStatus==="CLOSED") return;
@@ -486,13 +465,11 @@ export default {
       this.persistPlan();
     },
 
-    /* ---------- Auto-fill ---------- */
     fillFromRoster(unitKey){
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       const idx = this.plan.units.findIndex(u=>u.key===unitKey);
       if (idx < 0 || !rebuilt) return;
 
-      // keep any extra capacity already added
       const keepLen = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
       while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
 
@@ -541,14 +518,20 @@ export default {
 </script>
 
 <style scoped>
+/* === PAGE SCROLL ===
+   Reserve some space for header and let this page scroll.
+   Adjust the 100px if your header is taller/shorter. */
 #deploymentView {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   gap: 1.2rem;
   align-items: start;
-  padding-top: 28px;
-  padding-left: 18px;
-  padding-right: 18px;
+
+  /* scrolling + bottom padding to avoid sticking out */
+  height: calc(100vh - 100px);
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  padding: 28px 18px 36px; /* top, sides, bottom */
 }
 @media (max-width: 1280px) {
   #deploymentView { grid-template-columns: 1fr; }
@@ -590,7 +573,6 @@ export default {
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
-/* slots grid */
 .slots-grid { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: .7rem; }
 @media (min-width: 1680px) { .slots-grid { grid-template-columns: repeat(6, minmax(200px, 1fr)); } }
 @media (max-width: 1500px) { .slots-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); } }
