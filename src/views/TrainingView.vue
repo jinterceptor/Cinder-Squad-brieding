@@ -49,8 +49,8 @@
       </div>
     </section>
 
-    <!-- RIGHT: S-SHOP PERSONNEL (thinner) -->
-    <section id="sshops" class="section-container">
+    <!-- RIGHT: S-SHOP PERSONNEL -->
+    <section id="sshops" class="section-container right-col">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
@@ -189,31 +189,27 @@ export default {
 </script>
 
 <style scoped>
-/* === Layout: wide left, slimmer right === */
+/* === Layout: keep left stable, actually slim the right === */
 #trainingView {
   display: grid;
-  grid-template-columns: 1fr 360px; /* thinner right pane */
+  grid-template-columns: 1.6fr 0.8fr; /* softer ratio; avoids ballooning left */
   gap: 1.2rem;
   align-items: start;
 
-  /* same global offsets used earlier */
   padding-top: 28px;
   padding-left: 18px;
 
-  overflow-x: hidden; /* ensure no horizontal scroll */
+  overflow-x: hidden;
 }
 #trainingView > .section-container { width: 100%; margin: 0; }
 #training { grid-column: 1; }
 #sshops  { grid-column: 2; }
 
-/* Slightly smaller on medium screens */
-@media (max-width: 1500px) {
-  #trainingView { grid-template-columns: 1fr 320px; }
-}
-
-/* Stack on small screens */
-@media (max-width: 1100px) {
-  #trainingView { grid-template-columns: 1fr; padding-left: 12px; }
+/* Cap the right column’s width and align it to the edge */
+#sshops {
+  max-width: 320px;   /* <- slimmer */
+  width: 100%;
+  justify-self: end;  /* stick to the right; left keeps its space */
 }
 
 /* Headers */
@@ -234,12 +230,23 @@ export default {
 .trainers-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .shops-grid    { grid-template-columns: 1fr; }
 
-/* Trainers responsive */
+/* Responsive tweaks */
+@media (max-width: 1500px) {
+  #sshops { max-width: 300px; }
+}
 @media (max-width: 1700px) { .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 1400px) { .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 800px)  { .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1100px) {
+  #trainingView { grid-template-columns: 1fr; padding-left: 12px; }
+  #sshops { max-width: none; justify-self: stretch; }
+  .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shops-grid    { grid-template-columns: 1fr; }
+}
 
-/* Cards */
+/* Cards & typography (unchanged from your last working version) */
 .card {
   box-sizing: border-box;
   border: 1px solid rgba(30,144,255,0.28);
@@ -278,14 +285,12 @@ export default {
 .label { color: #9ec5e6; font-size: .85rem; }
 .highlight { color: #79ffba; }
 
-/* Divider */
 .divider {
   height: 1px;
   background: linear-gradient(90deg, rgba(30,144,255,0.28), rgba(30,144,255,0.10) 60%, transparent);
   border-radius: 1px;
 }
 
-/* Constrain trainer list width + tidy rows */
 .trainers-block { width: 100%; max-width: clamp(160px, 78%, 220px); }
 .vlist {
   list-style: none;
@@ -307,7 +312,6 @@ export default {
   text-overflow: ellipsis;
 }
 
-/* S-Shop rows */
 .list .row {
   padding: .16rem 0;
   color: #e6f3ff;
