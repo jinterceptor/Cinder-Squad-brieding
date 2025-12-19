@@ -17,18 +17,25 @@
       </div>
 
       <div class="section-content-container">
-        <div class="panel">
+        <div class="panel panel-wide">
           <div v-if="loading" class="muted">Loading RefData…</div>
           <div v-else-if="error" class="error">{{ error }}</div>
-          <div v-else class="cards-grid">
+
+          <div v-else class="cards-grid trainers-grid">
             <div v-for="role in trainers" :key="role.key" class="card">
               <div class="card-head">
                 <h3 class="title">{{ role.title }}</h3>
-                <div v-if="role.lead" class="lead">
-                  Lead: <span class="highlight">{{ role.lead }}</span>
-                </div>
+                <span v-if="role.lead" class="badge-lead" title="Lead trainer">LEAD</span>
               </div>
+
               <div class="body">
+                <div v-if="role.lead" class="lead">
+                  <span class="label">Contact:</span>
+                  <span class="highlight">{{ role.lead }}</span>
+                </div>
+
+                <div class="divider" />
+
                 <div class="label">Trainers</div>
                 <div v-if="role.others.length" class="chips">
                   <span v-for="n in role.others" :key="n" class="chip">{{ n }}</span>
@@ -52,15 +59,17 @@
       </div>
 
       <div class="section-content-container">
-        <div class="panel">
+        <div class="panel panel-wide">
           <div v-if="loading" class="muted">Loading RefData…</div>
           <div v-else-if="error" class="error">{{ error }}</div>
-          <div v-else class="cards-grid cols-2">
+
+          <div v-else class="cards-grid shops-grid">
             <div v-for="s in shops" :key="s.key" class="card">
               <div class="card-head">
                 <h3 class="title">{{ s.title }}</h3>
               </div>
-              <div class="body">
+
+              <div class="body list-body">
                 <div v-if="s.people.length" class="list">
                   <div v-for="n in s.people" :key="n" class="row">{{ n }}</div>
                 </div>
@@ -77,9 +86,7 @@
 <script>
 export default {
   name: "TrainingView",
-  props: {
-    animate: { type: Boolean, default: true },
-  },
+  props: { animate: { type: Boolean, default: true } },
   data() {
     return {
       animateView: false,
@@ -95,14 +102,9 @@ export default {
       shops: [],    // [{key,title,people:[]}]
     };
   },
-  created() {
-    this.loadRefData();
-  },
-  mounted() {
-    this.triggerFlicker();
-  },
+  created() { this.loadRefData(); },
+  mounted() { this.triggerFlicker(); },
   methods: {
-    // why: ensure consistent view fade-in like other pages
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -116,15 +118,13 @@ export default {
         const csv = await res.text();
         const table = this.parseCsv(csv);
 
-        // Headers are row 2 (index 1)
         const headerRow = table[1] || [];
 
-        // Trainers: V..AE (1-based 22..31) -> 0-based 21..30
+        // Trainers: V..AE (22..31) -> 0-based 21..30
         const TRAINER_COLS = this.range(21, 30);
-        // S-Shops: AF..AI (1-based 32..35) -> 0-based 31..34
-        const SSHOP_COLS = this.range(31, 34);
+        // S-Shops: AF..AI (32..35) -> 0-based 31..34
+        const SSHOP_COLS   = this.range(31, 34);
 
-        // Build Trainers
         const trainers = [];
         for (const c of TRAINER_COLS) {
           const title = this.cleanHeader(headerRow[c] || "");
@@ -135,7 +135,6 @@ export default {
           trainers.push({ key: `role-${c}`, title, lead, others });
         }
 
-        // Build S-Shops
         const shops = [];
         for (const c of SSHOP_COLS) {
           const title = this.cleanHeader(headerRow[c] || "");
@@ -154,31 +153,26 @@ export default {
       }
     },
 
-    // helpers
     range(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; },
-    readDown(table, startRow, colIndex) {
+    readDown(table, startRow, col) {
       const out = [];
       for (let r = startRow; r < table.length; r++) {
-        const v = this.cleanName(table[r]?.[colIndex] || "");
-        if (!v) break; // stop at first empty
+        const v = this.cleanName(table[r]?.[col] || "");
+        if (!v) break;
         out.push(v);
       }
       return out;
     },
     cleanHeader(s) { return String(s).replace(/^"+|"+$/g, "").replace(/\s+/g, " ").trim(); },
-    cleanName(s) { return String(s).replace(/\s+/g, " ").trim(); },
+    cleanName(s)   { return String(s).replace(/\s+/g, " ").trim(); },
 
-    // minimal CSV parser (mirrors other views)
     parseCsv(text) {
-      const rows = [];
-      let cur = [], val = "", inQ = false;
+      const rows = []; let cur = []; let val = ""; let inQ = false;
       for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (inQ) {
-          if (ch === '"') {
-            if (text[i + 1] === '"') { val += '"'; i++; }
-            else { inQ = false; }
-          } else { val += ch; }
+          if (ch === '"') { if (text[i + 1] === '"') { val += '"'; i++; } else { inQ = false; } }
+          else { val += ch; }
         } else {
           if (ch === '"') inQ = true;
           else if (ch === ",") { cur.push(val); val = ""; }
@@ -195,48 +189,92 @@ export default {
 </script>
 
 <style scoped>
+/* keep headers consistent with other views */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
 .error { color: #ff9f9f; }
 
+/* widen the window content */
+.section-content-container { max-width: 1600px; }
+.panel-wide { width: 100%; }
+
+/* inner panel look */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
-  border-radius: .5rem;
-  padding: .7rem;
+  border-radius: .6rem;
+  padding: .9rem 1rem;
 }
 
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .8rem;
-}
-.cards-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* responsive grids that use more horizontal space */
+.cards-grid { display: grid; gap: .9rem; }
+.trainers-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.shops-grid    { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 
+/* cards */
 .card {
   border: 1px solid rgba(30,144,255,0.28);
   background: rgba(0,10,30,0.28);
-  border-radius: .5rem;
-  padding: .6rem .7rem;
+  border-radius: .6rem;
+  padding: .8rem .9rem;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 148px;
 }
-.card-head { margin-bottom: .4rem; }
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-bottom: .4rem;
+}
 .title {
   margin: 0;
   color: #d9ebff;
   text-transform: uppercase;
   letter-spacing: .14em;
-  font-size: 1.05rem;
+  font-size: 1.02rem;
+  line-height: 1.2;
 }
-.lead { color: #9ec5e6; margin-top: .15rem; }
+.badge-lead {
+  margin-left: auto;
+  font-size: .72rem;
+  letter-spacing: .12em;
+  border: 1px solid rgba(120,255,170,0.7);
+  color: #79ffba;
+  padding: .08rem .45rem;
+  border-radius: 999px;
+  background: rgba(10,50,20,0.35);
+}
+
+.body { display: grid; gap: .4rem; }
+.list-body { align-content: start; }
+
+.lead { color: #9ec5e6; }
+.label { color: #9ec5e6; font-size: .9rem; }
 .highlight { color: #79ffba; }
-.label { color: #9ec5e6; margin-bottom: .25rem; font-size: .9rem; }
 
-.list .row { padding: .18rem 0; color: #e6f3ff; }
+.divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(30,144,255,0.35),
+    rgba(30,144,255,0.15) 60%,
+    transparent
+  );
+  border-radius: 1px;
+}
 
-@media (max-width: 1200px) {
-  .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.chip {
+  padding: .18rem .55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(30,144,255,0.45);
+  background: rgba(0,10,30,0.35);
+  color: #e6f3ff;
+  font-size: .88rem;
 }
-@media (max-width: 900px) {
-  .cards-grid, .cards-grid.cols-2 { grid-template-columns: 1fr; }
-}
+
+.list .row { padding: .18rem 0; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
+.list .row:last-child { border-bottom: 0; }
 </style>
