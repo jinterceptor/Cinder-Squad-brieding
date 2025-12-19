@@ -73,7 +73,7 @@
       </div>
     </section>
 
-    <!-- PICKER MODAL (unchanged) -->
+    <!-- PICKER MODAL -->
     <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
       <div class="picker">
         <div class="picker-head">
@@ -145,11 +145,8 @@ export default {
     return {
       animateView: false,
       animationDelay: "0ms",
-
       plan: { units: [] },
-
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
-
       personnel: [],
       STORAGE_KEY: "deploymentPlan",
     };
@@ -258,7 +255,7 @@ export default {
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g) return;
       const slot = g.slots[slotIdx];
-      if (slot?.origStatus==="CLOSED") return;
+      if (slot?.origStatus==="CLOSED") return; // why: block closed slots
       this.picker = { ...this.picker, open:true, unitKey, slotIdx, query:"", onlyFree:false };
     },
     closePicker(){ this.picker.open = false; },
@@ -362,15 +359,17 @@ export default {
   padding-right: 18px;
 }
 
-/* Make the MAIN panel wide */
+/* WIDTH CONTROL
+   - Wrapper sets total usable width
+   - Panel takes full width so the border expands with content */
 .deploy-width {
-  display: flex;               /* why: allow child sizing */
-  justify-content: flex-start; /* keep aligned with left content gutter */
+  display: flex;
+  justify-content: flex-start;
+  width: min(1600px, 95vw);      /* <-- overall window width */
+  max-width: 100%;
 }
 .deploy-width > .panel {
-  /* Wide, but respect viewport; removes the skinny look */
-  width: min(1400px, 88vw);
-  max-width: 100%;
+  width: 100%;                   /* <-- make the bordered window fill wrapper */
 }
 
 /* common shells */
@@ -402,7 +401,7 @@ export default {
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
-/* Slots grid: roomy and grows on wide screens */
+/* Slots grid */
 .slots-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(200px, 1fr));
@@ -487,7 +486,7 @@ button.xsmall { padding: .18rem .4rem; font-size: .76rem; }
 .pick-actions { display: flex; align-items: center; }
 .picker-foot { display: flex; align-items: center; justify-content: space-between; padding: .6rem .9rem; border-top: 1px solid rgba(30,144,255,0.18); }
 
-/* Subtle content fade-in (only content) */
+/* Content fade-in */
 .section-content-container.animate { animation: contentEntry 260ms ease-out both; }
 @keyframes contentEntry {
   0% { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
