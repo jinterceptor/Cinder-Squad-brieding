@@ -16,7 +16,8 @@
         <div class="rhombus-back">&nbsp;</div>
       </div>
 
-      <div class="section-content-container" :class="{ animate: animateView }">
+      <!-- SCROLL HAPPENS INSIDE THIS CONTENT WRAPPER -->
+      <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
           <div v-if="!plan.units.length" class="muted">
             No eligible elements found.
@@ -80,7 +81,7 @@
       </div>
     </section>
 
-    <!-- RIGHT: OVERVIEW -->
+    <!-- RIGHT: OVERVIEW (non-scrolling) -->
     <section id="deploy-overview" class="section-container overview-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -518,20 +519,17 @@ export default {
 </script>
 
 <style scoped>
-/* === PAGE SCROLL ===
-   Reserve some space for header and let this page scroll.
-   Adjust the 100px if your header is taller/shorter. */
+/* PAGE GRID (no page-level scrolling now) */
 #deploymentView {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   gap: 1.2rem;
   align-items: start;
 
-  /* scrolling + bottom padding to avoid sticking out */
+  /* fix the viewport area and hide outer scroll */
   height: calc(100vh - 100px);
-  overflow-y: auto;
-  scrollbar-gutter: stable both-edges;
-  padding: 28px 18px 36px; /* top, sides, bottom */
+  overflow: hidden;
+  padding: 28px 18px 18px;
 }
 @media (max-width: 1280px) {
   #deploymentView { grid-template-columns: 1fr; }
@@ -544,6 +542,15 @@ export default {
 
 .header-shell { height: 52px; overflow: hidden; }
 .section-header, .section-content-container { width: 100%; }
+
+/* INTERNAL SCROLLER FOR LEFT PANEL */
+.deploy-scroll {
+  /* header = 52px, plus some breathing room; tweak as needed */
+  max-height: calc(100vh - 100px - 52px - 24px);
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  padding-bottom: 18px; /* keep content off the bottom edge */
+}
 
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
@@ -573,6 +580,7 @@ export default {
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
+/* slots grid */
 .slots-grid { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: .7rem; }
 @media (min-width: 1680px) { .slots-grid { grid-template-columns: repeat(6, minmax(200px, 1fr)); } }
 @media (max-width: 1500px) { .slots-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); } }
