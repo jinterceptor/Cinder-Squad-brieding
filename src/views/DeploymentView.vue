@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- MAIN: DEPLOYMENT (widened window) -->
+    <!-- LEFT: DEPLOYMENT (own window) -->
     <section id="deploy-main" class="section-container deployment-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -17,113 +17,112 @@
       </div>
 
       <div class="section-content-container">
-        <!-- Two-column layout INSIDE the widened window -->
-        <div class="deploy-columns">
-          <!-- LEFT: Deployment groups (dominant) -->
-          <div class="panel">
-            <div v-if="!selectedSquads.length" class="muted">
-              No squads found. Ensure ORBAT includes Chalks / Wyvern / Caladrius.
-            </div>
+        <div class="panel">
+          <div v-if="!selectedSquads.length" class="muted">
+            No squads found. Ensure ORBAT includes Chalks / Wyvern / Caladrius.
+          </div>
 
-            <div class="groups">
-              <div v-for="g in plan.units" :key="g.key" class="group-card">
-                <div class="group-head">
-                  <h2 class="group-title" :title="g.title">
-                    {{ g.title }}
-                    <span class="subcount">({{ filledCount(g) }}/{{ g.slots.length }})</span>
-                  </h2>
-
-                  <div class="group-actions">
-                    <button class="ghost small" @click="clearGroup(g.key)">Clear</button>
-                    <button class="ghost small" @click="fillFromRoster(g.key)">Auto-fill</button>
-                  </div>
+          <!-- Groups -->
+          <div class="groups">
+            <div v-for="g in plan.units" :key="g.key" class="group-card">
+              <div class="group-head">
+                <h2 class="group-title" :title="g.title">
+                  {{ g.title }}
+                  <span class="subcount">({{ filledCount(g) }}/{{ g.slots.length }})</span>
+                </h2>
+                <div class="group-actions">
+                  <button class="ghost small" @click="clearGroup(g.key)">Clear</button>
+                  <button class="ghost small" @click="fillFromRoster(g.key)">Auto-fill</button>
                 </div>
+              </div>
 
-                <div class="slots-grid">
-                  <div
-                    v-for="(slot, sIdx) in g.slots"
-                    :key="`slot-${g.key}-${sIdx}`"
-                    class="slot"
-                    :class="{
-                      vacant: slot.origStatus === 'VACANT',
-                      closed: slot.origStatus === 'CLOSED'
-                    }"
-                  >
-                    <div class="slot-topline">
-                      <span class="slot-tag">#{{ sIdx + 1 }}</span>
-                      <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
-                      <button class="ghost xsmall" v-if="slot.id" @click="clearSlot(g.key, sIdx)">Clear</button>
-                    </div>
+              <div class="slots-grid">
+                <div
+                  v-for="(slot, sIdx) in g.slots"
+                  :key="`slot-${g.key}-${sIdx}`"
+                  class="slot"
+                  :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
+                >
+                  <div class="slot-topline">
+                    <span class="slot-tag">#{{ sIdx + 1 }}</span>
+                    <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
+                    <button class="ghost xsmall" v-if="slot.id" @click="clearSlot(g.key, sIdx)">Clear</button>
+                  </div>
 
-                    <div class="slot-body">
-                      <div class="slot-name" :title="displayName(slot)">
-                        {{ displayName(slot) }}
-                      </div>
-                      <button
-                        class="primary pick"
-                        :disabled="slot.origStatus === 'CLOSED'"
-                        @click="openPicker(g.key, sIdx)"
-                      >
-                        {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
-                      </button>
+                  <div class="slot-body">
+                    <div class="slot-name" :title="displayName(slot)">
+                      {{ displayName(slot) }}
                     </div>
+                    <button
+                      class="primary pick"
+                      :disabled="slot.origStatus === 'CLOSED'"
+                      @click="openPicker(g.key, sIdx)"
+                    >
+                      {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
+                    </button>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div class="actions-row">
-              <button class="ghost" @click="resetPlan">Reset</button>
-              <button class="ghost" @click="exportJson">Export JSON</button>
             </div>
           </div>
 
-          <!-- RIGHT: Overview (smaller window) -->
-          <div class="panel panel-right">
-            <div class="overview">
-              <h3 class="ov-title">Overview</h3>
+          <!-- FOOTER ACTIONS -->
+          <div class="actions-row">
+            <button class="ghost" @click="resetPlan">Reset</button>
+            <button class="ghost" @click="exportJson">Export JSON</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
-              <div class="summary">
-                <div
-                  v-for="g in plan.units"
-                  :key="`sum-${g.key}`"
-                  class="summary-row"
-                >
-                  <span class="label">{{ g.title }}</span>
-                  <span class="value">{{ filledCount(g) }} / {{ g.slots.length }}</span>
-                </div>
+    <!-- RIGHT: OVERVIEW (own window) -->
+    <section id="deploy-overview" class="section-container overview-window">
+      <div class="header-shell">
+        <div class="section-header clipped-medium-backward-pilot">
+          <img src="/icons/scanner.svg" alt="" />
+          <h1>OVERVIEW</h1>
+        </div>
+        <div class="rhombus-back">&nbsp;</div>
+      </div>
 
-                <div class="summary-row total">
-                  <span class="label">Assigned</span>
-                  <span class="value">{{ totalAssigned }} / {{ totalSlots }}</span>
-                </div>
-                <div class="summary-row total">
-                  <span class="label">Unassigned pool</span>
-                  <span class="value">{{ unassignedCount }}</span>
-                </div>
+      <div class="section-content-container">
+        <div class="panel">
+          <div class="overview">
+            <div class="summary">
+              <div v-for="g in plan.units" :key="`sum-${g.key}`" class="summary-row">
+                <span class="label">{{ g.title }}</span>
+                <span class="value">{{ filledCount(g) }} / {{ g.slots.length }}</span>
               </div>
 
-              <div class="ov-actions">
-                <button class="ghost small" @click="resetPlan">Reset Plan</button>
-                <button class="ghost small" @click="exportJson">Export JSON</button>
+              <div class="summary-row total">
+                <span class="label">Assigned</span>
+                <span class="value">{{ totalAssigned }} / {{ totalSlots }}</span>
               </div>
+              <div class="summary-row total">
+                <span class="label">Unassigned pool</span>
+                <span class="value">{{ unassignedCount }}</span>
+              </div>
+            </div>
 
-              <div class="ov-free" v-if="freePersonnel.length">
-                <h4 class="ov-subtitle">Free Personnel ({{ freePersonnel.length }})</h4>
-                <ul class="free-list">
-                  <li v-for="p in freePersonnel.slice(0, 12)" :key="`free-${p.id}`">
-                    <span class="name" :title="p.name">{{ p.name }}</span>
-                    <span class="meta" v-if="p.role">· {{ p.role }}</span>
-                  </li>
-                </ul>
-                <div v-if="freePersonnel.length > 12" class="muted small">
-                  +{{ freePersonnel.length - 12 }} more…
-                </div>
+            <div class="ov-actions">
+              <button class="ghost small" @click="resetPlan">Reset Plan</button>
+              <button class="ghost small" @click="exportJson">Export JSON</button>
+            </div>
+
+            <div class="ov-free" v-if="freePersonnel.length">
+              <h4 class="ov-subtitle">Free Personnel ({{ freePersonnel.length }})</h4>
+              <ul class="free-list">
+                <li v-for="p in freePersonnel.slice(0, 16)" :key="`free-${p.id}`">
+                  <span class="name" :title="p.name">{{ p.name }}</span>
+                  <span class="meta" v-if="p.role">· {{ p.role }}</span>
+                </li>
+              </ul>
+              <div v-if="freePersonnel.length > 16" class="muted small">
+                +{{ freePersonnel.length - 16 }} more…
               </div>
             </div>
           </div>
         </div>
-        <!-- /deploy-columns -->
       </div>
     </section>
 
@@ -188,7 +187,6 @@
 </template>
 
 <script>
-/* logic unchanged, only added small computed helpers for overview */
 export default {
   name: "DeploymentView",
   props: {
@@ -237,19 +235,11 @@ export default {
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
 
-    // Overview helpers
-    totalSlots() {
-      return this.plan.units.reduce((n, g) => n + g.slots.length, 0);
-    },
-    totalAssigned() {
-      return this.plan.units.reduce((n, g) => n + g.slots.filter(s => !!s.id).length, 0);
-    },
-    freePersonnel() {
-      return this.personnel.filter(p => !this.findAssignment(p.id));
-    },
-    unassignedCount() {
-      return this.freePersonnel.length;
-    },
+    /* Overview helpers */
+    totalSlots() { return this.plan.units.reduce((n,g)=>n+g.slots.length,0); },
+    totalAssigned() { return this.plan.units.reduce((n,g)=>n+g.slots.filter(s=>!!s.id).length,0); },
+    freePersonnel() { return this.personnel.filter(p=>!this.findAssignment(p.id)); },
+    unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
     triggerFlicker(delayMs = 0) {
@@ -327,7 +317,7 @@ export default {
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g) return;
       const slot = g.slots[slotIdx];
-      if (slot?.origStatus==="CLOSED") return; // guard
+      if (slot?.origStatus==="CLOSED") return;
       this.picker = { ...this.picker, open:true, unitKey, slotIdx, query:"", onlyFree:false };
     },
     closePicker(){ this.picker.open = false; },
@@ -420,54 +410,43 @@ export default {
 </script>
 
 <style scoped>
-/* baseline */
+/* PAGE GRID: two windows side-by-side, no overlap */
 #deploymentView {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); /* left big, right compact */
   gap: 1.2rem;
   align-items: start;
   padding-top: 28px;
   padding-left: 18px;
   padding-right: 18px;
 }
+@media (max-width: 1280px) {
+  #deploymentView { grid-template-columns: 1fr; }
+}
 
-/* widen the ACTUAL window (border + header) */
-.deployment-window {
-  grid-column: 1 / -1;
-  width: min(1700px, 96vw);
+/* Make each window (section) honor the grid width, not a global cap */
+.deployment-window.section-container,
+.overview-window.section-container {
   max-width: none !important;
-  margin-left: 18px;
+  width: auto;
 }
-.deployment-window > .header-shell,
-.deployment-window > .section-content-container,
-.deployment-window > .section-header { width: 100%; }
+.deployment-window { grid-column: 1; }
+.overview-window   { grid-column: 2; }
 
-/* internal two-column layout */
-.deploy-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.38fr); /* ~72/28 split */
-  gap: 1.2rem;
-  align-items: start;
-}
-@media (max-width: 1200px) {
-  .deploy-columns { grid-template-columns: 1fr; }
-}
-
-/* panels, visuals */
+/* section scaffolding */
 .header-shell { height: 52px; overflow: hidden; }
+.section-header, .section-content-container { width: 100%; }
+
+/* panels */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
   border-radius: .6rem;
   padding: .8rem .9rem;
 }
-.panel-right { position: sticky; top: 88px; } /* keeps overview visible while browsing */
 
-/* text */
+/* LEFT: groups */
 .muted { color: #9ec5e6; }
-.small { font-size: .86rem; }
-
-/* groups */
 .groups { display: grid; gap: 1rem; }
 .group-card {
   border: 1px solid rgba(30,144,255,0.28);
@@ -486,7 +465,7 @@ export default {
 .subcount { color: #9ec5e6; font-size: .9rem; margin-left: .5rem; }
 .group-actions { display: flex; gap: .4rem; }
 
-/* slots grid */
+/* Slots grid (roomy) */
 .slots-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(200px, 1fr));
@@ -508,9 +487,8 @@ export default {
 .slot-name { color: #e6f3ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
 button.primary.pick { width: 100%; }
 
-/* overview panel */
-.overview { display: grid; gap: .8rem; }
-.ov-title { margin: 0; color: #d9ebff; letter-spacing: .1em; text-transform: uppercase; }
+/* RIGHT: overview */
+.overview { display: grid; gap: .9rem; }
 .ov-subtitle { margin: .2rem 0; color: #cfe7ff; letter-spacing: .06em; }
 .summary { display: grid; gap: .25rem; }
 .summary-row { display: flex; justify-content: space-between; color: #e6f3ff; }
@@ -521,14 +499,13 @@ button.primary.pick { width: 100%; }
 .free-list li { display: flex; gap: .4rem; color: #e6f3ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .free-list .meta { color: #9ec5e6; }
 
-/* buttons */
+/* Buttons */
 button { cursor: pointer; border-radius: .45rem; border: 1px solid rgba(30,144,255,0.38); background: rgba(0,10,30,0.35); color: #e6f3ff; padding: .34rem .6rem; font-size: .88rem; }
 button.primary { border-color: rgba(120,255,170,0.55); background: rgba(20,60,35,0.45); color: #cffff0; }
 button.ghost { border-color: rgba(30,144,255,0.28); background: rgba(0,0,0,0.2); color: #d9ebff; }
 button.small { padding: .25rem .5rem; font-size: .82rem; }
-button.xsmall { padding: .18rem .4rem; font-size: .76rem; }
 
-/* picker */
+/* Picker modal */
 .picker-veil { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: grid; place-items: center; z-index: 50; }
 .picker { width: min(900px, 92vw); max-height: 80vh; overflow: hidden; border-radius: .8rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0, 10, 30, 0.95); display: grid; grid-template-rows: auto auto 1fr auto; }
 .picker-head { display: flex; align-items: center; justify-content: space-between; padding: .8rem .9rem; border-bottom: 1px solid rgba(30,144,255,0.25); }
@@ -541,10 +518,8 @@ button.xsmall { padding: .18rem .4rem; font-size: .76rem; }
 .p-name { color: #e6f3ff; font-weight: 600; }
 .p-meta .subtle { color: #9ec5e6; font-size: .86rem; }
 .badge { color: #79ffba; border: 1px solid rgba(120,255,170,0.55); border-radius: 999px; padding: .1rem .5rem; font-size: .78rem; }
-.pick-actions { display: flex; align-items: center; }
-.picker-foot { display: flex; align-items: center; justify-content: space-between; padding: .6rem .9rem; border-top: 1px solid rgba(30,144,255,0.18); }
 
-/* flicker */
+/* Flicker for content only */
 .section-content-container.animate { animation: contentEntry 260ms ease-out both; }
 @keyframes contentEntry {
   0% { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
