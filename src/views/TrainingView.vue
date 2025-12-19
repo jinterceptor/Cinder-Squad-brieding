@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- LEFT: TRAINING & CONTACTS -->
+    <!-- LEFT: TRAINING & CONTACTS (shifted down/right) -->
     <section id="training" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -34,13 +34,12 @@
                   <span class="highlight">{{ role.lead }}</span>
                 </div>
 
-                <div v-if="role.others.length" class="divider" />
+                <div v-if="role.trainers.length" class="divider" />
 
-                <!-- NEW: keep trainer rows narrow to prevent overlaps -->
-                <div v-if="role.others.length" class="trainers-block">
+                <div v-if="role.trainers.length" class="trainers-block">
                   <div class="label">Trainers</div>
                   <ul class="vlist">
-                    <li v-for="n in role.others" :key="n" :title="n">{{ n }}</li>
+                    <li v-for="n in role.trainers" :key="n" :title="n">{{ n }}</li>
                   </ul>
                 </div>
                 <div v-else class="muted">No trainers listed</div>
@@ -127,14 +126,15 @@ export default {
           const title = this.cleanHeader(headerRow[c] || "");
           if (!title) continue;
 
-          // read names, then strip blanks and "Vacant"
-          const raw = this.readDown(table, 2, c);
-          const cleaned = raw.filter((x) => this.isRealName(x));
+          const raw = this.readDown(table, 2, c).filter(this.isRealName);
 
-          const lead = this.isRealName(cleaned[0]) ? cleaned[0] : "";
-          const others = (lead ? cleaned.slice(1) : cleaned).filter(this.isRealName);
+          // Build a unique-preserving list
+          const uniq = [];
+          for (const n of raw) if (!uniq.includes(n)) uniq.push(n);
 
-          trainers.push({ key: `role-${c}`, title, lead, others });
+          const lead = uniq[0] || "";
+          const trainersAll = uniq.slice(); // includes lead as well
+          trainers.push({ key: `role-${c}`, title, lead, trainers: trainersAll });
         }
 
         const shops = [];
@@ -192,7 +192,7 @@ export default {
 </script>
 
 <style scoped>
-/* Layout: left wide, right narrow */
+/* === Layout: left wide, right narrow === */
 #trainingView {
   display: grid;
   grid-template-columns: 1.7fr 1fr;
@@ -202,6 +202,12 @@ export default {
 #trainingView > .section-container { width: 100%; margin: 0; }
 #training { grid-column: 1; }
 #sshops  { grid-column: 2; }
+
+/* Shift the left window away from header + sidebar */
+#training {
+  padding-left: 18px;   /* move right */
+  margin-top: 10px;     /* move down */
+}
 
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
@@ -284,18 +290,15 @@ export default {
 .label { color: #9ec5e6; font-size: .85rem; }
 .highlight { color: #79ffba; }
 
-/* keep divider subtle */
+/* divider */
 .divider {
   height: 1px;
   background: linear-gradient(90deg, rgba(30,144,255,0.28), rgba(30,144,255,0.10) 60%, transparent);
   border-radius: 1px;
 }
 
-/* NEW: constrain trainer list width + tidy rows */
-.trainers-block {
-  width: 100%;
-  max-width: clamp(160px, 78%, 220px); /* hard cap so names area never spans too wide */
-}
+/* Constrain trainer list width + tidy rows */
+.trainers-block { width: 100%; max-width: clamp(160px, 78%, 220px); }
 
 .vlist {
   list-style: none;
@@ -312,9 +315,9 @@ export default {
   padding: .2rem .45rem;
   font-size: .9rem;
   line-height: 1.15;
-  white-space: nowrap;        /* single line */
-  overflow: hidden;           /* trim long names */
-  text-overflow: ellipsis;    /* show … when too long */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* S-Shop rows */
