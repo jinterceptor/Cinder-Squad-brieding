@@ -84,7 +84,7 @@
           <img src="/icons/events.svg" alt="" />
           <h1>OVERVIEW</h1>
         </div>
-      <div class="rhombus-back">&nbsp;</div>
+        <div class="rhombus-back">&nbsp;</div>
       </div>
 
       <div class="section-content-container" :class="{ animate: animateView }">
@@ -500,15 +500,14 @@ export default {
 </script>
 
 <style scoped>
-/* Page grid */
+/* Page grid: use 90vh instead of 100vh to keep ~10% gap at bottom */
 #deploymentView {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   gap: 1.2rem;
   align-items: start;
-  height: calc(100vh - 100px);
+  height: calc(90vh - 100px);  /* was: calc(100vh - 100px) */
   overflow: hidden;
-  /* increased bottom padding to lift content a bit */
   padding: 28px 18px 32px;
 }
 @media (max-width: 1280px) { #deploymentView { grid-template-columns: 1fr; } }
@@ -521,10 +520,9 @@ export default {
 .header-shell { height: 52px; overflow: hidden; }
 .section-header, .section-content-container { width: 100%; }
 
-/* Left panel internal scroll (shortened slightly to avoid bottom bleed) */
+/* Left panel internal scroll: match 90vh math */
 .deploy-scroll {
-  /* header (52px) + increased bottom safety (now 36px) */
-  max-height: calc(100vh - 100px - 52px - 36px);
+  max-height: calc(90vh - 100px - 52px - 36px); /* was 100vh… */
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;
   padding-bottom: 18px;
