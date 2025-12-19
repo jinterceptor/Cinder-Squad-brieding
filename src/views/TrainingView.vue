@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- LEFT: TRAINING & CONTACTS (WIDE) -->
+    <!-- LEFT: TRAINING & CONTACTS (slightly narrower) -->
     <section id="training" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -37,9 +37,9 @@
                 <div class="divider" />
 
                 <div class="label">Trainers</div>
-                <div v-if="role.others.length" class="chips">
-                  <span v-for="n in role.others" :key="n" class="chip">{{ n }}</span>
-                </div>
+                <ul v-if="role.others.length" class="vlist">
+                  <li v-for="n in role.others" :key="n">{{ n }}</li>
+                </ul>
                 <div v-else class="muted">None listed</div>
               </div>
             </div>
@@ -48,7 +48,7 @@
       </div>
     </section>
 
-    <!-- RIGHT: S-SHOP PERSONNEL (NARROW) -->
+    <!-- RIGHT: S-SHOP PERSONNEL -->
     <section id="sshops" class="section-container right-col">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -94,18 +94,16 @@ export default {
       loading: true,
       error: "",
 
-      // RefData (gid=107253735)
       refDataCsvUrl:
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
 
-      trainers: [], // [{key,title,lead,others:[]}]
-      shops: [],    // [{key,title,people:[]}]
+      trainers: [],
+      shops: [],
     };
   },
   created() { this.loadRefData(); },
   mounted() { this.triggerFlicker(); },
   methods: {
-    // why: consistent page fade-in
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -120,11 +118,8 @@ export default {
         const table = this.parseCsv(csv);
 
         const headerRow = table[1] || [];
-
-        // Trainers: V..AE (22..31) -> 0-based 21..30
-        const TRAINER_COLS = this.range(21, 30);
-        // S-Shops: AF..AI (32..35) -> 0-based 31..34
-        const SSHOP_COLS   = this.range(31, 34);
+        const TRAINER_COLS = this.range(21, 30); // V..AE
+        const SSHOP_COLS   = this.range(31, 34); // AF..AI
 
         const trainers = [];
         for (const c of TRAINER_COLS) {
@@ -190,10 +185,10 @@ export default {
 </script>
 
 <style scoped>
-/* === Layout: 2 columns (wide left, narrow right) === */
+/* 2-column layout: left slightly smaller than before */
 #trainingView {
   display: grid;
-  grid-template-columns: 2fr 1fr;    /* left takes majority */
+  grid-template-columns: 1.7fr 1fr; /* was 2fr 1fr */
   gap: 1.2rem;
   align-items: start;
 }
@@ -201,12 +196,12 @@ export default {
 #training { grid-column: 1; }
 #sshops  { grid-column: 2; }
 
-/* Keep headers consistent */
+/* Headers */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
 .error { color: #ff9f9f; }
 
-/* Panels (windows) */
+/* Windows */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
@@ -214,13 +209,26 @@ export default {
   padding: .9rem 1rem;
 }
 
-/* Right column can stick for convenience */
-.right-col { position: sticky; top: 70px; align-self: start; }
-
-/* Grids use available width nicely */
+/* Trainers grid: exactly 5 columns on large screens */
 .cards-grid { display: grid; gap: .9rem; }
-.trainers-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.shops-grid    { grid-template-columns: 1fr; } /* stacked lists in the narrow column */
+.trainers-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.shops-grid    { grid-template-columns: 1fr; }
+
+/* Responsive fallbacks */
+@media (max-width: 1700px) {
+  .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1400px) {
+  .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  #trainingView { grid-template-columns: 1fr; } /* stack */
+  .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shops-grid    { grid-template-columns: 1fr; }
+}
 
 /* Cards */
 .card {
@@ -257,20 +265,16 @@ export default {
   border-radius: 1px;
 }
 
-.chips { display: flex; flex-wrap: wrap; gap: .35rem; }
-.chip {
-  padding: .18rem .55rem; border-radius: 999px;
-  border: 1px solid rgba(30,144,255,0.45);
-  background: rgba(0,10,30,0.35); color: #e6f3ff; font-size: .88rem;
+/* Vertical list of trainers */
+.vlist { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; }
+.vlist li {
+  color: #e6f3ff;
+  border: 1px solid rgba(30,144,255,0.28);
+  background: rgba(0,10,30,0.24);
+  border-radius: .45rem;
+  padding: .28rem .5rem;
 }
 
 .list .row { padding: .18rem 0; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .list .row:last-child { border-bottom: 0; }
-
-/* Responsive: collapse to single column on narrow screens */
-@media (max-width: 1200px) {
-  #trainingView { grid-template-columns: 1fr; }
-  .right-col { position: static; }
-  .shops-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-}
 </style>
