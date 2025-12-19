@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- LEFT: TRAINING & CONTACTS (slightly narrower) -->
+    <!-- LEFT: TRAINING & CONTACTS -->
     <section id="training" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -24,7 +24,8 @@
           <div v-else class="cards-grid trainers-grid">
             <div v-for="role in trainers" :key="role.key" class="card">
               <div class="card-head">
-                <h3 class="title">{{ role.title }}</h3>
+                <!-- Plain title, NO green plate -->
+                <h3 class="title plain-title">{{ role.title }}</h3>
                 <span v-if="role.lead" class="badge-lead" title="Lead trainer">LEAD</span>
               </div>
 
@@ -49,7 +50,7 @@
     </section>
 
     <!-- RIGHT: S-SHOP PERSONNEL -->
-    <section id="sshops" class="section-container right-col">
+    <section id="sshops" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
@@ -64,9 +65,10 @@
           <div v-else-if="error" class="error">{{ error }}</div>
 
           <div v-else class="cards-grid shops-grid">
-            <div v-for="s in shops" :key="s.key" class="card">
+            <div v-for="s in shops" :key="s.key" class="card slim">
               <div class="card-head">
-                <h3 class="title">{{ s.title }}</h3>
+                <!-- Plain subheader, NO green plate -->
+                <h3 class="title plain-title">{{ s.title }}</h3>
               </div>
 
               <div class="body list-body">
@@ -93,10 +95,8 @@ export default {
       animationDelay: "0ms",
       loading: true,
       error: "",
-
       refDataCsvUrl:
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
-
       trainers: [],
       shops: [],
     };
@@ -112,7 +112,7 @@ export default {
 
     async loadRefData() {
       try {
-        const res = await fetch(this.refDataCsvUrl, { method: "GET" });
+        const res = await fetch(this.refDataCsvUrl);
         if (!res.ok) throw new Error(`Failed to fetch RefData (HTTP ${res.status}).`);
         const csv = await res.text();
         const table = this.parseCsv(csv);
@@ -126,17 +126,14 @@ export default {
           const title = this.cleanHeader(headerRow[c] || "");
           if (!title) continue;
           const names = this.readDown(table, 2, c);
-          const lead = names[0] || "";
-          const others = names.slice(1);
-          trainers.push({ key: `role-${c}`, title, lead, others });
+          trainers.push({ key: `role-${c}`, title, lead: names[0] || "", others: names.slice(1) });
         }
 
         const shops = [];
         for (const c of SSHOP_COLS) {
           const title = this.cleanHeader(headerRow[c] || "");
           if (!title) continue;
-          const people = this.readDown(table, 2, c);
-          shops.push({ key: `shop-${c}`, title, people });
+          shops.push({ key: `shop-${c}`, title, people: this.readDown(table, 2, c) });
         }
 
         this.trainers = trainers;
@@ -185,10 +182,10 @@ export default {
 </script>
 
 <style scoped>
-/* 2-column layout: left slightly smaller than before */
+/* === Layout: two columns; left wide, right narrow === */
 #trainingView {
   display: grid;
-  grid-template-columns: 1.7fr 1fr; /* was 2fr 1fr */
+  grid-template-columns: 1.7fr 1fr;
   gap: 1.2rem;
   align-items: start;
 }
@@ -209,26 +206,10 @@ export default {
   padding: .9rem 1rem;
 }
 
-/* Trainers grid: exactly 5 columns on large screens */
+/* Grids */
 .cards-grid { display: grid; gap: .9rem; }
 .trainers-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .shops-grid    { grid-template-columns: 1fr; }
-
-/* Responsive fallbacks */
-@media (max-width: 1700px) {
-  .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-@media (max-width: 1400px) {
-  .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 1100px) {
-  #trainingView { grid-template-columns: 1fr; } /* stack */
-  .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 800px) {
-  .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .shops-grid    { grid-template-columns: 1fr; }
-}
 
 /* Cards */
 .card {
@@ -239,13 +220,29 @@ export default {
   display: grid;
   grid-template-rows: auto 1fr;
 }
+.card.slim { padding: .7rem .8rem; }
+
 .card-head {
-  display: flex; align-items: center; gap: .6rem; margin-bottom: .4rem;
+  display: flex; align-items: center; gap: .6rem; margin-bottom: .35rem;
 }
+
+/* Neutralize any global “green plate” styles from titles */
 .title {
-  margin: 0; color: #d9ebff; text-transform: uppercase; letter-spacing: .14em;
-  font-size: 1.02rem; line-height: 1.2;
+  margin: 0;
+  color: #d9ebff;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-size: 1.02rem;
+  line-height: 1.2;
 }
+.plain-title {
+  background: none !important;
+  clip-path: none !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
 .badge-lead {
   margin-left: auto; font-size: .72rem; letter-spacing: .12em;
   border: 1px solid rgba(120,255,170,0.7); color: #79ffba;
@@ -265,8 +262,11 @@ export default {
   border-radius: 1px;
 }
 
-/* Vertical list of trainers */
-.vlist { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; }
+/* Vertical trainer list */
+.vlist {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: .24rem;
+}
 .vlist li {
   color: #e6f3ff;
   border: 1px solid rgba(30,144,255,0.28);
@@ -275,6 +275,26 @@ export default {
   padding: .28rem .5rem;
 }
 
-.list .row { padding: .18rem 0; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
+/* S-Shop list rows */
+.list .row {
+  padding: .18rem 0; color: #e6f3ff;
+  border-bottom: 1px dashed rgba(30,144,255,0.18);
+}
 .list .row:last-child { border-bottom: 0; }
+
+/* Responsive fallbacks */
+@media (max-width: 1700px) {
+  .trainers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1400px) {
+  .trainers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  #trainingView { grid-template-columns: 1fr; }
+  .shops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .trainers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shops-grid    { grid-template-columns: 1fr; }
+}
 </style>
