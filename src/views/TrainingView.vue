@@ -36,10 +36,13 @@
 
                 <div v-if="role.others.length" class="divider" />
 
-                <div v-if="role.others.length" class="label">Trainers</div>
-                <ul v-if="role.others.length" class="vlist">
-                  <li v-for="n in role.others" :key="n">{{ n }}</li>
-                </ul>
+                <!-- NEW: keep trainer rows narrow to prevent overlaps -->
+                <div v-if="role.others.length" class="trainers-block">
+                  <div class="label">Trainers</div>
+                  <ul class="vlist">
+                    <li v-for="n in role.others" :key="n" :title="n">{{ n }}</li>
+                  </ul>
+                </div>
                 <div v-else class="muted">No trainers listed</div>
               </div>
             </div>
@@ -71,7 +74,7 @@
 
               <div class="body list-body">
                 <div v-if="s.people.length" class="list">
-                  <div v-for="n in s.people" :key="n" class="row">{{ n }}</div>
+                  <div v-for="n in s.people" :key="n" class="row" :title="n">{{ n }}</div>
                 </div>
                 <div v-else class="muted">None listed</div>
               </div>
@@ -164,10 +167,7 @@ export default {
     },
     cleanHeader(s) { return String(s).replace(/^"+|"+$/g, "").replace(/\s+/g, " ").trim(); },
     cleanName(s)   { return String(s).replace(/\s+/g, " ").trim(); },
-    isRealName(s)  {
-      const v = String(s || "").trim();
-      return v && v.toLowerCase() !== "vacant";
-    },
+    isRealName(s)  { const v = String(s || "").trim(); return v && v.toLowerCase() !== "vacant"; },
 
     parseCsv(text) {
       const rows = []; let cur = []; let val = ""; let inQ = false;
@@ -212,11 +212,11 @@ export default {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
   border-radius: .6rem;
-  padding: .8rem .9rem;
+  padding: .7rem .8rem;
 }
 
 /* Grids */
-.cards-grid { display: grid; gap: .8rem; }
+.cards-grid { display: grid; gap: .7rem; }
 .trainers-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .shops-grid    { grid-template-columns: 1fr; }
 
@@ -234,83 +234,97 @@ export default {
 
 /* Cards */
 .card {
+  box-sizing: border-box;
   border: 1px solid rgba(30,144,255,0.28);
   background: rgba(0,10,30,0.28);
   border-radius: .6rem;
-  padding: .7rem .8rem;
+  padding: .6rem .7rem;
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: .5rem;              /* tighter to avoid overlap */
+  gap: .45rem;
 }
-.card.slim { padding: .65rem .75rem; }
+.card.slim { padding: .55rem .65rem; }
 
 .card-head {
   display: flex;
-  align-items: center;     /* keeps LEAD vertically centered */
-  gap: .6rem;
-  margin: 0;               /* remove extra gap contributing to collisions */
+  align-items: center;
+  gap: .5rem;
+  margin: 0;
 }
+
 .title {
   margin: 0;
   color: #d9ebff;
   text-transform: uppercase;
   letter-spacing: .14em;
-  font-size: 1.02rem;
-  line-height: 1.2;
-  flex: 1 1 auto;          /* take remaining space */
+  font-size: 1rem;
+  line-height: 1.15;
+  flex: 1 1 auto;
   overflow: hidden;
-  text-overflow: ellipsis; /* prevent wrapping into the badge */
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .plain-title { background: none !important; clip-path: none !important; padding: 0 !important; border: 0 !important; }
 
 .badge-lead {
   flex: 0 0 auto;
-  font-size: .72rem;
+  font-size: .68rem;
   letter-spacing: .12em;
   border: 1px solid rgba(120,255,170,0.7);
   color: #79ffba;
-  padding: .08rem .45rem;
+  padding: .06rem .38rem;
   border-radius: 999px;
   background: rgba(10,50,20,0.35);
-  line-height: 1;          /* exact center */
+  line-height: 1;
 }
 
-.body { display: grid; gap: .35rem; }
-.list-body { align-content: start; }
+.body { display: grid; gap: .3rem; align-content: start; }
 
-.lead { color: #9ec5e6; }
-.label { color: #9ec5e6; font-size: .9rem; }
+.lead { color: #9ec5e6; font-size: .9rem; }
+.label { color: #9ec5e6; font-size: .85rem; }
 .highlight { color: #79ffba; }
 
-/* subtle divider; reduces heavy stacked borders */
+/* keep divider subtle */
 .divider {
   height: 1px;
-  background: linear-gradient(90deg, rgba(30,144,255,0.30), rgba(30,144,255,0.10) 60%, transparent);
+  background: linear-gradient(90deg, rgba(30,144,255,0.28), rgba(30,144,255,0.10) 60%, transparent);
   border-radius: 1px;
 }
 
-/* Vertical trainer list — lighter look (no thick blue “bars”) */
+/* NEW: constrain trainer list width + tidy rows */
+.trainers-block {
+  width: 100%;
+  max-width: clamp(160px, 78%, 220px); /* hard cap so names area never spans too wide */
+}
+
 .vlist {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: .22rem;
+  gap: .18rem;
 }
 .vlist li {
   color: #e6f3ff;
-  background: rgba(0,10,30,0.18);
-  border: 1px solid rgba(30,144,255,0.22);
-  border-radius: .4rem;
-  padding: .24rem .5rem;
+  background: rgba(0,10,30,0.16);
+  border: 1px solid rgba(30,144,255,0.20);
+  border-radius: .35rem;
+  padding: .2rem .45rem;
+  font-size: .9rem;
+  line-height: 1.15;
+  white-space: nowrap;        /* single line */
+  overflow: hidden;           /* trim long names */
+  text-overflow: ellipsis;    /* show … when too long */
 }
 
-/* S-Shop rows (keep light) */
+/* S-Shop rows */
 .list .row {
   padding: .16rem 0;
   color: #e6f3ff;
   border-bottom: 1px dashed rgba(30,144,255,0.18);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .list .row:last-child { border-bottom: 0; }
 </style>
