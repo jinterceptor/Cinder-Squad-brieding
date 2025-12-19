@@ -19,9 +19,7 @@
       <!-- internal scroller -->
       <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
-          <div v-if="!plan.units.length" class="muted">
-            No eligible elements found.
-          </div>
+          <div v-if="!plan.units.length" class="muted">No eligible elements found.</div>
 
           <div class="groups">
             <div v-for="g in plan.units" :key="g.key" class="group-card">
@@ -54,9 +52,7 @@
                   </div>
 
                   <div class="slot-body">
-                    <div class="slot-name" :title="displayName(slot)">
-                      {{ displayName(slot) }}
-                    </div>
+                    <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
                     <button
                       type="button"
                       class="primary pick"
@@ -88,7 +84,7 @@
           <img src="/icons/events.svg" alt="" />
           <h1>OVERVIEW</h1>
         </div>
-        <div class="rhombus-back">&nbsp;</div>
+      <div class="rhombus-back">&nbsp;</div>
       </div>
 
       <div class="section-content-container" :class="{ animate: animateView }">
@@ -203,15 +199,11 @@ export default {
     return {
       animateView: false,
       animationDelay: "0ms",
-
       plan: { units: [] },
-
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
-
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
       MIN_CHALK_SLOTS: 12,
-
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
     };
   },
@@ -237,7 +229,6 @@ export default {
       );
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
-
     totalSlots() { return this.plan.units.reduce((n,g)=>n+g.slots.length,0); },
     totalAssigned() { return this.plan.units.reduce((n,g)=>n+g.slots.filter(s=>!!s.id).length,0); },
     freePersonnel() { return this.personnel.filter(p=>!this.findAssignment(p.id)); },
@@ -249,7 +240,6 @@ export default {
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(()=>requestAnimationFrame(()=>this.animateView = true));
     },
-
     loadSaved() {
       try {
         const saved = sessionStorage.getItem(this.STORAGE_KEY);
@@ -262,8 +252,6 @@ export default {
     persistPlan() {
       try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {}
     },
-
-    /* --- role sorting --- */
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -290,8 +278,6 @@ export default {
         .sort((a, b) => a.p - b.p || a.i - b.i)
         .map(x => x.s);
     },
-
-    /* --- units/personnel --- */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq=>{
@@ -311,16 +297,20 @@ export default {
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
-
-    isHiddenUnit(name) {
-      return /(reserves?|fillers?|recruits?)/i.test(String(name || ""));
+    isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
+    padSlots(arr, min) {
+      const out = arr.slice();
+      const need = Math.max(0, min - out.length);
+      for (let i = 0; i < need; i++) out.push({ id: null, name: null, role: "", origStatus: "VACANT" });
+      return out;
     },
+    keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
+    filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
+    displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
 
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach((sq)=>{
-        if (this.isHiddenUnit(sq.squad)) return; // hide unwanted sections
-
         const key = this.keyFromName(sq.squad);
         const slots = [];
         (sq.fireteams||[]).forEach(ft=>{
@@ -345,7 +335,7 @@ export default {
 
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
-      if (!unit || this.isHiddenUnit(unit.squad)) return null; // hidden also blocked
+      if (!unit) return null;
 
       const slots = [];
       (unit.fireteams||[]).forEach(ft=>{
@@ -367,28 +357,12 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
-    padSlots(arr, min) {
-      const out = arr.slice();
-      const need = Math.max(0, min - out.length);
-      for (let i = 0; i < need; i++) {
-        out.push({ id: null, name: null, role: "", origStatus: "VACANT" });
-      }
-      return out;
-    },
-
-    keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
-    filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
-    displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
-
-    /* --- picker & assignment --- */
     openPicker(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
       if (!g || g.slots[slotIdx]?.origStatus==="CLOSED") return;
       this.picker = { ...this.picker, open:true, unitKey, slotIdx, query:"", onlyFree:false };
     },
     closePicker(){ this.picker.open = false; },
-
     findAssignment(personId){
       for (const g of this.plan.units) {
         const idx = g.slots.findIndex(s=>String(s.id)===String(personId));
@@ -475,7 +449,6 @@ export default {
       this.persistPlan();
     },
 
-    /* --- auto-fill --- */
     fillFromRoster(unitKey){
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       const idx = this.plan.units.findIndex(u=>u.key===unitKey);
@@ -519,9 +492,7 @@ export default {
   },
   watch: {
     orbat: { deep:true, handler(newV){
-      if (Array.isArray(newV) && newV.length) {
-        this.personnel = this.buildPersonnelPool(newV);
-      }
+      if (Array.isArray(newV) && newV.length) this.personnel = this.buildPersonnelPool(newV);
     }},
     plan: { deep:true, handler(){ this.persistPlan(); } },
   },
@@ -537,7 +508,8 @@ export default {
   align-items: start;
   height: calc(100vh - 100px);
   overflow: hidden;
-  padding: 28px 18px 18px;
+  /* increased bottom padding to lift content a bit */
+  padding: 28px 18px 32px;
 }
 @media (max-width: 1280px) { #deploymentView { grid-template-columns: 1fr; } }
 
@@ -549,9 +521,10 @@ export default {
 .header-shell { height: 52px; overflow: hidden; }
 .section-header, .section-content-container { width: 100%; }
 
-/* Left panel internal scroll */
+/* Left panel internal scroll (shortened slightly to avoid bottom bleed) */
 .deploy-scroll {
-  max-height: calc(100vh - 100px - 52px - 24px);
+  /* header (52px) + increased bottom safety (now 36px) */
+  max-height: calc(100vh - 100px - 52px - 36px);
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;
   padding-bottom: 18px;
