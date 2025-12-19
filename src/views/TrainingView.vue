@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- TRAINING & CONTACTS -->
+    <!-- LEFT: TRAINING & CONTACTS (WIDE) -->
     <section id="training" class="section-container">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -17,7 +17,7 @@
       </div>
 
       <div class="section-content-container">
-        <div class="panel panel-wide">
+        <div class="panel">
           <div v-if="loading" class="muted">Loading RefData…</div>
           <div v-else-if="error" class="error">{{ error }}</div>
 
@@ -48,8 +48,8 @@
       </div>
     </section>
 
-    <!-- S-SHOP PERSONNEL -->
-    <section id="sshops" class="section-container">
+    <!-- RIGHT: S-SHOP PERSONNEL (NARROW) -->
+    <section id="sshops" class="section-container right-col">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
@@ -59,7 +59,7 @@
       </div>
 
       <div class="section-content-container">
-        <div class="panel panel-wide">
+        <div class="panel">
           <div v-if="loading" class="muted">Loading RefData…</div>
           <div v-else-if="error" class="error">{{ error }}</div>
 
@@ -105,6 +105,7 @@ export default {
   created() { this.loadRefData(); },
   mounted() { this.triggerFlicker(); },
   methods: {
+    // why: consistent page fade-in
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -189,36 +190,37 @@ export default {
 </script>
 
 <style scoped>
-/* Force one wide column and center each window */
+/* === Layout: 2 columns (wide left, narrow right) === */
 #trainingView {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 2fr 1fr;    /* left takes majority */
   gap: 1.2rem;
+  align-items: start;
 }
-.section-container {
-  width: min(95vw, 1600px);
-  margin: 0 auto;
-}
-.section-content-container { max-width: none; }
+#trainingView > .section-container { width: 100%; margin: 0; }
+#training { grid-column: 1; }
+#sshops  { grid-column: 2; }
 
 /* Keep headers consistent */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
 .error { color: #ff9f9f; }
 
-/* Inner window panel */
+/* Panels (windows) */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
   border-radius: .6rem;
   padding: .9rem 1rem;
 }
-.panel-wide { width: 100%; }
 
-/* Responsive grids that actually use the width */
+/* Right column can stick for convenience */
+.right-col { position: sticky; top: 70px; align-self: start; }
+
+/* Grids use available width nicely */
 .cards-grid { display: grid; gap: .9rem; }
 .trainers-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.shops-grid    { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.shops-grid    { grid-template-columns: 1fr; } /* stacked lists in the narrow column */
 
 /* Cards */
 .card {
@@ -228,31 +230,18 @@ export default {
   padding: .8rem .9rem;
   display: grid;
   grid-template-rows: auto 1fr;
-  min-height: 148px;
 }
 .card-head {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  margin-bottom: .4rem;
+  display: flex; align-items: center; gap: .6rem; margin-bottom: .4rem;
 }
 .title {
-  margin: 0;
-  color: #d9ebff;
-  text-transform: uppercase;
-  letter-spacing: .14em;
-  font-size: 1.02rem;
-  line-height: 1.2;
+  margin: 0; color: #d9ebff; text-transform: uppercase; letter-spacing: .14em;
+  font-size: 1.02rem; line-height: 1.2;
 }
 .badge-lead {
-  margin-left: auto;
-  font-size: .72rem;
-  letter-spacing: .12em;
-  border: 1px solid rgba(120,255,170,0.7);
-  color: #79ffba;
-  padding: .08rem .45rem;
-  border-radius: 999px;
-  background: rgba(10,50,20,0.35);
+  margin-left: auto; font-size: .72rem; letter-spacing: .12em;
+  border: 1px solid rgba(120,255,170,0.7); color: #79ffba;
+  padding: .08rem .45rem; border-radius: 999px; background: rgba(10,50,20,0.35);
 }
 
 .body { display: grid; gap: .4rem; }
@@ -270,21 +259,18 @@ export default {
 
 .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
 .chip {
-  padding: .18rem .55rem;
-  border-radius: 999px;
+  padding: .18rem .55rem; border-radius: 999px;
   border: 1px solid rgba(30,144,255,0.45);
-  background: rgba(0,10,30,0.35);
-  color: #e6f3ff;
-  font-size: .88rem;
+  background: rgba(0,10,30,0.35); color: #e6f3ff; font-size: .88rem;
 }
 
 .list .row { padding: .18rem 0; color: #e6f3ff; border-bottom: 1px dashed rgba(30,144,255,0.18); }
 .list .row:last-child { border-bottom: 0; }
 
-@media (max-width: 1280px) {
-  .section-container { width: min(96vw, 1300px); }
-}
-@media (max-width: 900px) {
-  .section-container { width: 96vw; }
+/* Responsive: collapse to single column on narrow screens */
+@media (max-width: 1200px) {
+  #trainingView { grid-template-columns: 1fr; }
+  .right-col { position: static; }
+  .shops-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 }
 </style>
