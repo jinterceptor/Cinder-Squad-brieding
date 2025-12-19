@@ -17,10 +17,10 @@
       </div>
 
       <div class="section-content-container">
-        <div v-if="loading" class="muted">Loading RefData…</div>
-
-        <div v-else class="panel">
-          <div class="cards-grid">
+        <div class="panel">
+          <div v-if="loading" class="muted">Loading RefData…</div>
+          <div v-else-if="error" class="error">{{ error }}</div>
+          <div v-else class="cards-grid">
             <div v-for="role in trainers" :key="role.key" class="card">
               <div class="card-head">
                 <h3 class="title">{{ role.title }}</h3>
@@ -52,10 +52,10 @@
       </div>
 
       <div class="section-content-container">
-        <div v-if="loading" class="muted">Loading RefData…</div>
-
-        <div v-else class="panel">
-          <div class="cards-grid cols-2">
+        <div class="panel">
+          <div v-if="loading" class="muted">Loading RefData…</div>
+          <div v-else-if="error" class="error">{{ error }}</div>
+          <div v-else class="cards-grid cols-2">
             <div v-for="s in shops" :key="s.key" class="card">
               <div class="card-head">
                 <h3 class="title">{{ s.title }}</h3>
@@ -85,10 +85,11 @@ export default {
       animateView: false,
       animationDelay: "0ms",
       loading: true,
+      error: "",
 
-      // TODO: replace with your actual RefData “publish to web” CSV URL (sheet with V..AI)
+      // Wired to your RefData (gid=107253735)
       refDataCsvUrl:
-        "https://docs.google.com/spreadsheets/d/e/REPLACE_ME/pub?gid=REPLACE_ME&single=true&output=csv",
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv",
 
       trainers: [], // [{key,title,lead,others:[]}]
       shops: [],    // [{key,title,people:[]}]
@@ -101,7 +102,7 @@ export default {
     this.triggerFlicker();
   },
   methods: {
-    /* flicker */
+    // why: ensure consistent view fade-in like other pages
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -111,6 +112,7 @@ export default {
     async loadRefData() {
       try {
         const res = await fetch(this.refDataCsvUrl, { method: "GET" });
+        if (!res.ok) throw new Error(`Failed to fetch RefData (HTTP ${res.status}).`);
         const csv = await res.text();
         const table = this.parseCsv(csv);
 
@@ -145,19 +147,20 @@ export default {
         this.trainers = trainers;
         this.shops = shops;
       } catch (e) {
+        this.error = String(e?.message || e);
         console.error("RefData load failed:", e);
       } finally {
         this.loading = false;
       }
     },
 
-    /* helpers */
+    // helpers
     range(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; },
     readDown(table, startRow, colIndex) {
       const out = [];
       for (let r = startRow; r < table.length; r++) {
         const v = this.cleanName(table[r]?.[colIndex] || "");
-        if (!v) break;
+        if (!v) break; // stop at first empty
         out.push(v);
       }
       return out;
@@ -165,7 +168,7 @@ export default {
     cleanHeader(s) { return String(s).replace(/^"+|"+$/g, "").replace(/\s+/g, " ").trim(); },
     cleanName(s) { return String(s).replace(/\s+/g, " ").trim(); },
 
-    // minimal CSV parser (matches other views’ style)
+    // minimal CSV parser (mirrors other views)
     parseCsv(text) {
       const rows = [];
       let cur = [], val = "", inQ = false;
@@ -192,11 +195,10 @@ export default {
 </script>
 
 <style scoped>
-/* match other views’ header scaffolding */
 .header-shell { height: 52px; overflow: hidden; }
 .muted { color: #9ec5e6; }
+.error { color: #ff9f9f; }
 
-/* a bordered inner “window” so content sits inside the section window */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
@@ -204,7 +206,6 @@ export default {
   padding: .7rem;
 }
 
-/* cards inside the panel */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -230,15 +231,6 @@ export default {
 .highlight { color: #79ffba; }
 .label { color: #9ec5e6; margin-bottom: .25rem; font-size: .9rem; }
 
-.chips { display: flex; flex-wrap: wrap; gap: .35rem; }
-.chip {
-  padding: .15rem .45rem;
-  border-radius: 999px;
-  border: 1px solid rgba(30,144,255,0.45);
-  background: rgba(0,10,30,0.35);
-  color: #e6f3ff;
-  font-size: .88rem;
-}
 .list .row { padding: .18rem 0; color: #e6f3ff; }
 
 @media (max-width: 1200px) {
