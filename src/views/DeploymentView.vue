@@ -6,7 +6,7 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- LEFT: DEPLOYMENT (own window) -->
+    <!-- LEFT: DEPLOYMENT -->
     <section id="deploy-main" class="section-container deployment-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -18,8 +18,8 @@
 
       <div class="section-content-container" :class="{ animate: animateView }">
         <div class="panel">
-          <div v-if="!selectedSquads.length" class="muted">
-            No squads found. Ensure ORBAT includes Chalks / Wyvern / Caladrius.
+          <div v-if="!plan.units.length" class="muted">
+            No eligible elements found. (Reserves / Fillers / Recruits are excluded.)
           </div>
 
           <div class="groups">
@@ -31,6 +31,7 @@
                 </h2>
                 <div class="group-actions">
                   <button class="ghost small" @click="clearGroup(g.key)">Clear</button>
+                  <button class="ghost small" @click="addSlot(g.key)">Add slot</button>
                   <button class="ghost small" @click="fillFromRoster(g.key)">Auto-fill</button>
                 </div>
               </div>
@@ -45,7 +46,10 @@
                   <div class="slot-topline">
                     <span class="slot-tag">#{{ sIdx + 1 }}</span>
                     <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
-                    <button class="ghost xsmall" v-if="slot.id" @click="clearSlot(g.key, sIdx)">Clear</button>
+                    <div style="display:flex; gap:.35rem;">
+                      <button class="ghost xsmall" v-if="slot.id" @click="clearSlot(g.key, sIdx)">Clear</button>
+                      <button class="ghost xsmall" @click="removeSlot(g.key, sIdx)">–</button>
+                    </div>
                   </div>
 
                   <div class="slot-body">
@@ -65,15 +69,17 @@
             </div>
           </div>
 
-          <div class="actions-row">
+          <!-- FOOTER ACTIONS -->
+          <div class="actions-row" style="display:flex; gap:.6rem; flex-wrap:wrap;">
             <button class="ghost" @click="resetPlan">Reset</button>
+            <button class="ghost" @click="fillAllFromRoster">Auto-fill All</button>
             <button class="ghost" @click="exportJson">Export JSON</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- RIGHT: OVERVIEW (own window) -->
+    <!-- RIGHT: OVERVIEW -->
     <section id="deploy-overview" class="section-container overview-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -110,13 +116,13 @@
             <div class="ov-free" v-if="freePersonnel.length">
               <h4 class="ov-subtitle">Free Personnel ({{ freePersonnel.length }})</h4>
               <ul class="free-list">
-                <li v-for="p in freePersonnel.slice(0, 16)" :key="`free-${p.id}`">
+                <li v-for="p in freePersonnel.slice(0, 18)" :key="`free-${p.id}`">
                   <span class="name" :title="p.name">{{ p.name }}</span>
                   <span class="meta" v-if="p.role">· {{ p.role }}</span>
                 </li>
               </ul>
-              <div v-if="freePersonnel.length > 16" class="muted small">
-                +{{ freePersonnel.length - 16 }} more…
+              <div v-if="freePersonnel.length > 18" class="muted small">
+                +{{ freePersonnel.length - 18 }} more…
               </div>
             </div>
           </div>
@@ -185,12 +191,20 @@
 </template>
 
 <script>
+/**
+ * Notes:
+ * - If parent provides `orbat` (same as PilotsView), we use it.
+ * - Optional CSV fallback: pass prop `orbatCsvUrl` or set env `VITE_ORBAT_CSV_URL`.
+ * - Excludes squad titles: Reserves / Fillers / Recruits (case-insensitive).
+ * - Only includes members that are "active":
+ *   - member.active === true  OR  member.status === 'ACTIVE' (case-insensitive).
+ */
 export default {
   name: "DeploymentView",
   props: {
-    animate:  { type: Boolean, default: true },
-    members:  { type: Array,   default: () => [] },
-    orbat:    { type: Array,   default: () => [] }, // same feed PilotsView uses
+    animate: { type: Boolean, default: true },
+    orbat: { type: Array, default: () => [] },           // preferred (from PilotsView feed)
+    orbatCsvUrl: { type: String, default: "" },          // optional fallback URL
   },
   data() {
     return {
@@ -202,22 +216,26 @@ export default {
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
 
       personnel: [],
-      STORAGE_KEY: "deploymentPlan",
+      rawOrbat: [],
+
+      STORAGE_KEY: "deploymentPlan2",
       MIN_CHALK_SLOTS: 12,
+      EXCLUDE_SQUADS: new Set(["reserves", "fillers", "recruits"]),
     };
   },
-  created() {
-    this.personnel = this.buildPersonnelPool();
-    this.plan.units = this.loadOrInitPlan(); // auto-fill from current ORBAT
+  async created() {
+    // Load ORBAT: prefer prop; else CSV fallback (if provided)
+    await this.ensureOrbatLoaded();
+
+    // Build personnel pool (active only)
+    this.personnel = this.buildPersonnelPool(this.rawOrbat);
+
+    // Load saved plan or init from ORBAT
+    const saved = this.loadSaved();
+    this.plan.units = saved ?? this.buildUnitsFromOrbat(this.rawOrbat);
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
-    selectedSquads() {
-      const wanted = new Set(["chalk 1","chalk 2","chalk 3","chalk 4","wyvern","caladrius"]);
-      const rows = (this.orbat || []).filter(sq => wanted.has(String(sq.squad||"").trim().toLowerCase()));
-      rows.sort((a,b)=>String(a.squad).localeCompare(String(b.squad), undefined, { numeric:true }));
-      return rows;
-    },
     currentSlotTitle() {
       if (!this.picker.open) return "";
       const g = this.plan.units.find(u => u.key === this.picker.unitKey);
@@ -240,69 +258,152 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
+    /* ---- lifecycle helpers ---- */
+    async ensureOrbatLoaded() {
+      if (Array.isArray(this.orbat) && this.orbat.length) {
+        this.rawOrbat = this.filterOrbatSquads(this.orbat);
+        return;
+      }
+      const url = this.orbatCsvUrl || import.meta.env.VITE_ORBAT_CSV_URL || "";
+      if (!url) { this.rawOrbat = []; return; }
+      try {
+        const text = await fetch(url, { cache: "no-store" }).then(r => r.text());
+        this.rawOrbat = this.filterOrbatSquads(this.parseOrbatCsv(text));
+      } catch {
+        this.rawOrbat = [];
+      }
+    },
+
+    loadSaved() {
+      try {
+        const saved = sessionStorage.getItem(this.STORAGE_KEY);
+        if (!saved) return null;
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed?.units)) return parsed.units;
+      } catch {}
+      return null;
+    },
+
+    persistPlan() {
+      try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {}
+    },
+
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(()=>requestAnimationFrame(()=>this.animateView = true));
     },
 
-    buildPersonnelPool() {
-      const pool = [];
-      if (this.members?.length) {
-        this.members.forEach((m,i)=>{
-          const id = String(m.id ?? i+1);
-          const nm = String(m.name ?? m.displayName ?? m.username ?? "Unknown");
-          const cs = String(m.callsign || "");
-          const rl = String(m.slot || m.role || "");
-          if (id && nm) pool.push({ id, name:nm, callsign:cs, role:rl });
-        });
-      } else {
-        (this.orbat||[]).forEach(sq=>{
-          (sq.fireteams||[]).forEach(ft=>{
-            (ft.slots||[]).forEach((s,idx)=>{
-              if (s?.status === "FILLED" && s.member) {
-                const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
-                const nm = String(s.member.name || "Unknown");
-                const cs = String(s.member.callsign || "");
-                const rl = String(s.role || s.member.slot || "");
-                if (id && nm) pool.push({ id, name:nm, callsign:cs, role:rl });
-              }
-            });
-          });
+    /* ---- CSV parsing (fallback) ---- */
+    parseOrbatCsv(text) {
+      // Minimal CSV parser -> array of rows (naive, assumes no quoted commas)
+      const rows = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(r => r.split(","));
+      if (!rows.length) return [];
+
+      // This part is **project-specific**. We approximate a common structure:
+      // Expect columns like: squad, fireteam, role, member_id, member_name, member_callsign, member_status, slot_status
+      // Adjust as needed to match PilotsView if schema differs.
+      const header = rows[0].map(h => h.trim().toLowerCase());
+      const idx = (name) => header.indexOf(name);
+
+      const cSquad = idx("squad");
+      const cFT = idx("fireteam");
+      const cRole = idx("role");
+      const cId = idx("member_id");
+      const cName = idx("member_name");
+      const cCall = idx("member_callsign");
+      const cMStatus = idx("member_status");
+      const cSStatus = idx("slot_status");
+
+      const bySquad = new Map();
+
+      for (let i=1; i<rows.length; i++) {
+        const r = rows[i];
+        const squad = (r[cSquad] || "").trim();
+        const ft = (r[cFT] || "").trim();
+        const role = (r[cRole] || "").trim();
+        const mId = (r[cId] || "").trim();
+        const mName = (r[cName] || "").trim();
+        const mCall = (r[cCall] || "").trim();
+        const mStatus = (r[cMStatus] || "").trim();
+        const slotStatus = (r[cSStatus] || "").trim();
+
+        if (!bySquad.has(squad)) bySquad.set(squad, { squad, fireteams: [] });
+        const sq = bySquad.get(squad);
+
+        let team = sq.fireteams.find(x => x.name === ft);
+        if (!team) { team = { name: ft, slots: [] }; sq.fireteams.push(team); }
+
+        const member = (mId || mName) ? {
+          id: mId || undefined,
+          name: mName || undefined,
+          callsign: mCall || undefined,
+          status: mStatus || undefined,
+          active: String(mStatus||"").toUpperCase() === "ACTIVE"
+        } : null;
+
+        team.slots.push({
+          role,
+          status: slotStatus || (member ? "FILLED" : "VACANT"),
+          member
         });
       }
+
+      return Array.from(bySquad.values());
+    },
+
+    /* ---- ORBAT transforms ---- */
+    filterOrbatSquads(orbat) {
+      // Exclude Reserves / Fillers / Recruits (case-insensitive)
+      return (orbat || []).filter(sq => {
+        const n = String(sq?.squad || "").trim().toLowerCase();
+        return !this.EXCLUDE_SQUADS.has(n);
+      });
+    },
+
+    isActiveMember(member) {
+      if (!member) return false;
+      const stat = String(member.status || "").toUpperCase();
+      if (typeof member.active === "boolean") return member.active;
+      return stat === "ACTIVE";
+    },
+
+    /* Build a personnel pool (for picker) from ORBAT, active only */
+    buildPersonnelPool(orbat) {
+      const pool = [];
+      (orbat || []).forEach(sq=>{
+        (sq.fireteams||[]).forEach(ft=>{
+          (ft.slots||[]).forEach((s,idx)=>{
+            if (s?.member && this.isActiveMember(s.member)) {
+              const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
+              const nm = String(s.member.name || "Unknown");
+              const cs = String(s.member.callsign || "");
+              const rl = String(s.role || s.member.slot || "");
+              if (id && nm) pool.push({ id, name:nm, callsign:cs, role:rl });
+            }
+          });
+        });
+      });
+      // Deduplicate by id
       const seen = new Set(); const out=[];
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
 
-    loadOrInitPlan() {
-      const saved = sessionStorage.getItem(this.STORAGE_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed?.units)) {
-            this.padChalks(parsed.units); // keep ≥12 for chalks
-            return parsed.units;
-          }
-        } catch {}
-      }
-      return this.buildUnitsFromOrbat(); // fresh auto-fill from live ORBAT
-    },
-
-    buildUnitsFromOrbat() {
+    /* Build the working plan from ORBAT (active-only) */
+    buildUnitsFromOrbat(orbat) {
       const units = [];
-      this.selectedSquads.forEach((sq)=>{
+      (orbat || []).forEach((sq)=>{
         const key = this.keyFromName(sq.squad);
+        const slots = [];
 
-        // slots exactly from ORBAT
-        const fromRoster = [];
         (sq.fireteams||[]).forEach(ft=>{
-          (ft.slots||[]).forEach((s)=>{
-            const status = String(s?.status || "FILLED").toUpperCase();
+          (ft.slots||[]).forEach(s=>{
+            const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
             const origStatus = ["VACANT","CLOSED"].includes(status) ? status : "FILLED";
-            const member = s?.member;
-            fromRoster.push({
+            const member = this.isActiveMember(s?.member) ? s.member : null;
+
+            slots.push({
               id: member?.id ? String(member.id) : null,
               name: member?.name || null,
               role: s?.role || member?.slot || "",
@@ -311,32 +412,29 @@ export default {
           });
         });
 
-        // add Chalk Actual (prefer SL/Actual), then pad chalks to 12
-        const withActual = this.isChalk(sq.squad)
-          ? this.injectChalkActual(sq, fromRoster)
-          : fromRoster;
-
+        // Keep as-is (no longer forcing only Chalks), as requested: “every element except …”
+        // For Chalks, we still want capacity to over-fill -> pad to MIN_CHALK_SLOTS
         const finalSlots = this.isChalk(sq.squad)
-          ? this.padSlots(withActual, this.MIN_CHALK_SLOTS)
-          : withActual;
+          ? this.padSlots(slots, this.MIN_CHALK_SLOTS)
+          : slots;
 
         units.push({ key, title: sq.squad, slots: finalSlots });
       });
       return units;
     },
 
-    // Used by Auto-fill button — rebuild that one unit from the same ORBAT feed PilotsView uses
-    buildUnitFromOrbatByKey(unitKey) {
-      const unit = this.selectedSquads.find(sq => this.keyFromName(sq.squad) === unitKey);
+    buildUnitFromOrbatByKey(orbat, unitKey) {
+      const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
       if (!unit) return null;
 
-      const fromRoster = [];
+      const slots = [];
       (unit.fireteams||[]).forEach(ft=>{
-        (ft.slots||[]).forEach((s)=>{
-          const status = String(s?.status || "FILLED").toUpperCase();
+        (ft.slots||[]).forEach(s=>{
+          const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
           const origStatus = ["VACANT","CLOSED"].includes(status) ? status : "FILLED";
-          const member = s?.member;
-          fromRoster.push({
+          const member = this.isActiveMember(s?.member) ? s.member : null;
+
+          slots.push({
             id: member?.id ? String(member.id) : null,
             name: member?.name || null,
             role: s?.role || member?.slot || "",
@@ -345,42 +443,14 @@ export default {
         });
       });
 
-      const withActual = this.isChalk(unit.squad)
-        ? this.injectChalkActual(unit, fromRoster)
-        : fromRoster;
-
       const finalSlots = this.isChalk(unit.squad)
-        ? this.padSlots(withActual, this.MIN_CHALK_SLOTS)
-        : withActual;
+        ? this.padSlots(slots, this.MIN_CHALK_SLOTS)
+        : slots;
 
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    injectChalkActual(sq, slots) {
-      // why: put "Actual" at slot 1; try find SL/Actual in ORBAT, else leave vacant
-      const roleMatch = /(^|\b)(actual|sl|squad\s*leader)(\b|$)/i;
-      let actual = null, idx = -1;
-
-      for (let i = 0; i < slots.length; i++) {
-        const s = slots[i];
-        const r = String(s?.role || "");
-        if (!actual && roleMatch.test(r) && s?.id && s?.name) {
-          actual = { id: String(s.id), name: s.name, role: r, origStatus: "FILLED" };
-          idx = i;
-          break;
-        }
-      }
-
-      const out = slots.slice();
-      if (actual) {
-        out.splice(idx, 1); // remove original
-        out.unshift(actual); // add as first
-      } else {
-        out.unshift({ id: null, name: null, role: "Actual", origStatus: "VACANT" });
-      }
-      return out;
-    },
-
+    isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
     padSlots(arr, min) {
       const out = arr.slice();
       const need = Math.max(0, min - out.length);
@@ -390,25 +460,15 @@ export default {
       return out;
     },
 
-    padChalks(units) {
-      for (const u of units) {
-        if (this.isChalk(u.title)) u.slots = this.padSlots(u.slots, this.MIN_CHALK_SLOTS);
-      }
-    },
-
-    isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
-
-    persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
-
+    /* ---- small utils ---- */
     keyFromName(name){ return String(name||"").trim().toLowerCase().replace(/\s+/g,"-"); },
     filledCount(g){ return g.slots.reduce((n,s)=>n+(s.id?1:0),0); },
     displayName(slot){ return slot.name || (slot.origStatus==="VACANT" ? "— Vacant —" : "— Empty —"); },
 
+    /* ---- picker + assignment ---- */
     openPicker(unitKey, slotIdx){
       const g = this.plan.units.find(u=>u.key===unitKey);
-      if (!g) return;
-      const slot = g.slots[slotIdx];
-      if (slot?.origStatus==="CLOSED") return; // why: block closed slots
+      if (!g || g.slots[slotIdx]?.origStatus==="CLOSED") return;
       this.picker = { ...this.picker, open:true, unitKey, slotIdx, query:"", onlyFree:false };
     },
     closePicker(){ this.picker.open = false; },
@@ -425,23 +485,32 @@ export default {
     selectPersonnel(p){
       if (!this.picker.open) return;
       const from = this.findAssignment(p.id);
-      const g = this.plan.units.find(u=>u.key===this.picker.unitKey);
-      if (!g) return;
+      const gIdx = this.plan.units.findIndex(u=>u.key===this.picker.unitKey);
+      if (gIdx < 0) return;
+      const g = this.plan.units[gIdx];
       const target = g.slots[this.picker.slotIdx];
 
+      // Swap across groups if needed (immutable updates for Vue reactivity)
       if (from && target?.id && !(from.unitKey===g.key && from.slotIdx===this.picker.slotIdx)) {
-        const srcGroup = this.plan.units.find(u=>u.key===from.unitKey);
+        const srcIdx = this.plan.units.findIndex(u=>u.key===from.unitKey);
+        const srcGroup = this.plan.units[srcIdx];
         const tmp = { ...target };
-        target.id = p.id; target.name = p.name; target.role ||= p.role || "";
-        srcGroup.slots[from.slotIdx] = { ...srcGroup.slots[from.slotIdx], id: tmp.id, name: tmp.name };
-      } else if (!from && target?.id) {
-        target.id = p.id; target.name = p.name; target.role ||= p.role || "";
-      } else if (from && !target?.id) {
-        const srcGroup = this.plan.units.find(u=>u.key===from.unitKey);
-        srcGroup.slots[from.slotIdx] = { ...srcGroup.slots[from.slotIdx], id:null, name:null };
-        target.id = p.id; target.name = p.name; target.role ||= p.role || "";
-      } else if (!from && !target?.id) {
-        target.id = p.id; target.name = p.name; target.role ||= p.role || "";
+
+        const newTarget = { ...target, id: p.id, name: p.name, role: target.role || p.role || "" };
+        const newSrcSlots = srcGroup.slots.slice();
+        newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name };
+        const newSrc = { ...srcGroup, slots: newSrcSlots };
+
+        const newGSlots = g.slots.slice();
+        newGSlots[this.picker.slotIdx] = newTarget;
+        const newG = { ...g, slots: newGSlots };
+
+        this.plan.units = this.plan.units.map((u,i)=> i===gIdx ? newG : (i===srcIdx ? newSrc : u));
+      } else {
+        const newSlots = g.slots.slice();
+        newSlots[this.picker.slotIdx] = { ...target, id: p.id, name: p.name, role: target.role || p.role || "" };
+        const newG = { ...g, slots: newSlots };
+        this.plan.units = this.plan.units.map((u,i)=> i===gIdx ? newG : u);
       }
 
       this.persistPlan();
@@ -449,31 +518,78 @@ export default {
     },
 
     clearSlot(unitKey, slotIdx){
-      const g = this.plan.units.find(u=>u.key===unitKey);
-      if (!g) return;
-      g.slots[slotIdx] = { ...g.slots[slotIdx], id:null, name:null };
-      this.persistPlan();
-    },
-    clearGroup(unitKey){
-      const g = this.plan.units.find(u=>u.key===unitKey);
-      if (!g) return;
-      g.slots = g.slots.map(s=>({ ...s, id:null, name:null }));
+      const idx = this.plan.units.findIndex(u=>u.key===unitKey);
+      if (idx < 0) return;
+      const g = this.plan.units[idx];
+      const newSlots = g.slots.slice();
+      newSlots[slotIdx] = { ...newSlots[slotIdx], id:null, name:null };
+      const newG = { ...g, slots: newSlots };
+      this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
       this.persistPlan();
     },
 
-    // UPDATED: one-click restore from the same ORBAT used by PilotsView
-    fillFromRoster(unitKey){
-      const rebuilt = this.buildUnitFromOrbatByKey(unitKey);
-      const g = this.plan.units.find(u=>u.key===unitKey);
-      if (!g || !rebuilt) return;
-      g.title = rebuilt.title;
-      g.slots = rebuilt.slots;
+    clearGroup(unitKey){
+      const idx = this.plan.units.findIndex(u=>u.key===unitKey);
+      if (idx < 0) return;
+      const g = this.plan.units[idx];
+      const newG = { ...g, slots: g.slots.map(s=>({ ...s, id:null, name:null })) };
+      this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
       this.persistPlan();
-      this.triggerFlicker(0); // small visual confirmation
+    },
+
+    addSlot(unitKey){
+      const idx = this.plan.units.findIndex(u=>u.key===unitKey);
+      if (idx < 0) return;
+      const g = this.plan.units[idx];
+      const newSlots = g.slots.slice();
+      newSlots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
+      const newG = { ...g, slots: newSlots };
+      this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
+      this.persistPlan();
+    },
+
+    removeSlot(unitKey, slotIdx){
+      const idx = this.plan.units.findIndex(u=>u.key===unitKey);
+      if (idx < 0) return;
+      const g = this.plan.units[idx];
+      if (g.slots.length <= 1) return;
+      const newSlots = g.slots.slice();
+      newSlots.splice(slotIdx, 1);
+      const newG = { ...g, slots: newSlots };
+      this.plan.units = this.plan.units.map((u,i)=> i===idx ? newG : u);
+      this.persistPlan();
+    },
+
+    /* ---- Auto-fill ---- */
+    fillFromRoster(unitKey){
+      const rebuilt = this.buildUnitFromOrbatByKey(this.rawOrbat, unitKey);
+      const idx = this.plan.units.findIndex(u=>u.key===unitKey);
+      if (idx < 0 || !rebuilt) return;
+      // Keep current length if larger (over-filled): re-pad to max(current, rebuilt)
+      const len = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
+      while (rebuilt.slots.length < len) rebuilt.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
+
+      this.plan.units = this.plan.units.map((u,i)=> i===idx ? rebuilt : u);
+      this.persistPlan();
+      this.triggerFlicker(0);
+    },
+
+    fillAllFromRoster(){
+      const rebuilt = this.buildUnitsFromOrbat(this.rawOrbat);
+      // Preserve any over-fill lengths already present
+      const out = rebuilt.map(u=>{
+        const prev = this.plan.units.find(x=>x.key===u.key);
+        const len = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
+        while (u.slots.length < len) u.slots.push({ id:null, name:null, role:"", origStatus:"VACANT" });
+        return u;
+      });
+      this.plan.units = out;
+      this.persistPlan();
+      this.triggerFlicker(0);
     },
 
     resetPlan(){
-      this.plan.units = this.buildUnitsFromOrbat();
+      this.plan.units = this.buildUnitsFromOrbat(this.rawOrbat);
       this.persistPlan();
       this.triggerFlicker(0);
     },
@@ -488,11 +604,14 @@ export default {
     },
   },
   watch: {
-    // If ORBAT changes, keep current plan unless empty; all Auto-fill clicks use fresh ORBAT anyway.
-    orbat: { deep:true, handler(){
-      if (!this.plan?.units?.length) this.plan.units = this.buildUnitsFromOrbat();
+    // If parent updates orbat, rebuild base but keep current plan unless you reset.
+    orbat: { deep:true, immediate:false, handler(newV){
+      if (Array.isArray(newV) && newV.length) {
+        this.rawOrbat = this.filterOrbatSquads(newV);
+        // Also update personnel list
+        this.personnel = this.buildPersonnelPool(this.rawOrbat);
+      }
     }},
-    members: { deep:true, handler(){ this.personnel = this.buildPersonnelPool(); } },
     plan: { deep:true, handler(){ this.persistPlan(); } },
   },
 };
@@ -509,9 +628,11 @@ export default {
   padding-left: 18px;
   padding-right: 18px;
 }
-@media (max-width: 1280px) { #deploymentView { grid-template-columns: 1fr; } }
+@media (max-width: 1280px) {
+  #deploymentView { grid-template-columns: 1fr; }
+}
 
-/* Make each window (section) honor the grid width, not a global cap */
+/* each window respects grid */
 .deployment-window.section-container,
 .overview-window.section-container { max-width: none !important; width: auto; }
 .deployment-window { grid-column: 1; }
