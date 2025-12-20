@@ -72,7 +72,6 @@
             </div>
           </div>
 
-          <!-- FOOTER ACTIONS -->
           <div class="actions-row">
             <button type="button" class="btn ghost" @click.stop="resetPlan">Reset</button>
             <button type="button" class="btn ghost" @click.stop="fillAllFromRoster">Auto-fill All</button>
@@ -207,12 +206,18 @@ export default {
       STORAGE_KEY: "deploymentPlan2",
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
+
+      // new: names to exclude from UI (normalized)
+      EXCLUDED_UNITS: /^(fillers?|recruits?|reserves?)$/i,
     };
   },
   created() {
     this.personnel = this.buildPersonnelPool(this.orbat);
     const saved = this.loadSaved();
-    this.plan.units = saved ?? this.buildUnitsFromOrbat(this.orbat);
+    // filter out excluded units if any were persisted before this change
+    this.plan.units = (saved ?? this.buildUnitsFromOrbat(this.orbat)).filter(
+      (u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title))
+    );
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
@@ -238,6 +243,8 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
+    /* --- helpers --- */
+    normalizeTitle(t) { return String(t || "").trim(); },
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
@@ -248,11 +255,14 @@ export default {
         const saved = sessionStorage.getItem(this.STORAGE_KEY);
         if (!saved) return null;
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed?.units)) return parsed.units;
+        if (!Array.isArray(parsed?.units)) return null;
+        // strip excluded if present in a stale save
+        return parsed.units.filter((u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title)));
       } catch {}
       return null;
     },
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
+
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -275,6 +285,8 @@ export default {
         .sort((a, b) => a.p - b.p || a.i - b.i)
         .map(x => x.s);
     },
+
+    /* --- data builders --- */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -305,6 +317,9 @@ export default {
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach(sq => {
+        // skip excluded unit titles entirely
+        if (this.EXCLUDED_UNITS.test(this.normalizeTitle(sq.squad))) return;
+
         const key = this.keyFromName(sq.squad);
         const slots = [];
         (sq.fireteams || []).forEach(ft => {
@@ -329,6 +344,9 @@ export default {
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
       if (!unit) return null;
+      // skip if request is for an excluded unit
+      if (this.EXCLUDED_UNITS.test(this.normalizeTitle(unit.squad))) return null;
+
       const slots = [];
       (unit.fireteams || []).forEach(ft => {
         (ft.slots || []).forEach(s => {
@@ -348,6 +366,7 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
+    /* --- interactions --- */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
@@ -433,10 +452,13 @@ export default {
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
     },
+
+    /* --- fill / reset --- */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
+      if (!rebuilt) return; // excluded or not found
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
-      if (idx < 0 || !rebuilt) return;
+      if (idx < 0) return;
       const keepLen = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
       while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id: null, name: null, role: "", origStatus: "VACANT" });
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? rebuilt : u));
@@ -444,7 +466,7 @@ export default {
       this.triggerFlicker(0);
     },
     fillAllFromRoster() {
-      const rebuilt = this.buildUnitsFromOrbat(this.orbat);
+      const rebuilt = this.buildUnitsFromOrbat(this.orbat); // already excludes
       const out = rebuilt.map(u => {
         const prev = this.plan.units.find(x => x.key === u.key);
         const keepLen = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
@@ -456,7 +478,7 @@ export default {
       this.triggerFlicker(0);
     },
     resetPlan() {
-      this.plan.units = this.buildUnitsFromOrbat(this.orbat);
+      this.plan.units = this.buildUnitsFromOrbat(this.orbat); // excludes
       this.persistPlan();
       this.triggerFlicker(0);
     },
@@ -470,14 +492,16 @@ export default {
     },
   },
   watch: {
-    orbat: { deep: true, handler(newV) { if (Array.isArray(newV) && newV.length) this.personnel = this.buildPersonnelPool(newV); } },
+    orbat: { deep: true, handler(newV) {
+      if (Array.isArray(newV) && newV.length) this.personnel = this.buildPersonnelPool(newV);
+    }},
     plan: { deep: true, handler() { this.persistPlan(); } },
   },
 };
 </script>
 
 <style scoped>
-/* ---- PAGE SIZING (unchanged from last fix) ---- */
+/* sizing / layout unchanged from your current version */
 #deploymentView {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
@@ -497,7 +521,6 @@ export default {
 .header-shell { height: 52px; overflow: hidden; }
 .section-header, .section-content-container { width: 100%; }
 
-/* scrollers */
 .deploy-scroll,
 .overview-scroll {
   max-height: calc(94vh - 100px - 52px - 36px);
@@ -506,7 +529,6 @@ export default {
   padding-bottom: 36px;
 }
 
-/* ---- THEME PANELS ---- */
 .panel {
   border: 1px dashed rgba(30,144,255,0.35);
   background: rgba(0,10,30,0.18);
@@ -519,147 +541,68 @@ export default {
 .small { font-size: .86rem; }
 .actions-row { display:flex; gap:.6rem; flex-wrap:wrap; padding-top:.4rem; }
 
-/* ---- BUTTON SYSTEM ---- */
-.btn {
-  appearance: none;
-  border: 1px solid rgba(30,144,255,0.35);
-  background: linear-gradient(180deg, rgba(6,18,30,.75), rgba(2,10,20,.6));
-  color: #dbeeff;
-  padding: .42rem .7rem;
-  border-radius: .5rem;
-  font-size: .92rem;
-  letter-spacing: .02em;
-  cursor: pointer;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
-  box-shadow: inset 0 0 0 1px rgba(120,200,255,0.08);
-}
-.btn:hover { background: linear-gradient(180deg, rgba(10,28,44,.85), rgba(2,12,22,.7)); border-color: rgba(120,200,255,0.5); }
+/* buttons / inputs / slots (from your styled version) */
+.btn { appearance:none; border:1px solid rgba(30,144,255,0.35); background:linear-gradient(180deg, rgba(6,18,30,.75), rgba(2,10,20,.6)); color:#dbeeff; padding:.42rem .7rem; border-radius:.5rem; font-size:.92rem; letter-spacing:.02em; cursor:pointer; transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease; box-shadow: inset 0 0 0 1px rgba(120,200,255,0.08); }
+.btn:hover { background:linear-gradient(180deg, rgba(10,28,44,.85), rgba(2,12,22,.7)); border-color:rgba(120,200,255,0.5); }
 .btn:active { transform: translateY(1px) scale(0.995); }
-.btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(120,200,255,0.35); }
-.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn:focus-visible { outline:none; box-shadow:0 0 0 2px rgba(120,200,255,0.35); }
+.btn[disabled]{ opacity:.45; cursor:not-allowed; }
+.btn.small{ padding:.32rem .55rem; font-size:.86rem; border-radius:.45rem; }
+.btn.xsmall{ padding:.22rem .45rem; font-size:.80rem; border-radius:.42rem; }
+.btn.primary{ background:linear-gradient(180deg, rgba(8,40,22,.9), rgba(6,28,18,.85)); border-color:rgba(90,220,160,0.45); box-shadow: inset 0 0 0 1px rgba(90,220,160,0.15); }
+.btn.primary:hover{ border-color:rgba(120,255,190,0.6); background:linear-gradient(180deg, rgba(10,50,28,.95), rgba(6,32,20,.9)); }
+.btn.ghost{ background: rgba(0,10,30,0.25); }
+button.pick{ width:100%; }
 
-.btn.small  { padding: .32rem .55rem; font-size: .86rem; border-radius: .45rem; }
-.btn.xsmall { padding: .22rem .45rem; font-size: .80rem; border-radius: .42rem; }
+.search{ flex:1 1 auto; padding:.5rem .6rem; border-radius:.45rem; border:1px solid rgba(30,144,255,0.35); background:rgba(1,8,18,0.45); color:#e6f3ff; transition:border-color 120ms ease, box-shadow 120ms ease, background 120ms ease; }
+.search::placeholder{ color:#86a8c6; }
+.search:focus{ outline:none; border-color:rgba(120,200,255,0.55); box-shadow:0 0 0 2px rgba(120,200,255,0.25); background:rgba(1,12,24,0.55); }
 
-/* primary = action */
-.btn.primary {
-  background: linear-gradient(180deg, rgba(8,40,22,.9), rgba(6,28,18,.85));
-  border-color: rgba(90,220,160,0.45);
-  box-shadow: inset 0 0 0 1px rgba(90,220,160,0.15);
-}
-.btn.primary:hover { border-color: rgba(120,255,190,0.6); background: linear-gradient(180deg, rgba(10,50,28,.95), rgba(6,32,20,.9)); }
-.btn.primary:focus-visible { box-shadow: 0 0 0 2px rgba(120,255,190,0.35); }
+.check{ display:flex; align-items:center; gap:.45rem; color:#cfe7ff; }
+.check input{ width:16px; height:16px; }
 
-/* ghost = quiet outline */
-.btn.ghost {
-  background: rgba(0,10,30,0.25);
-}
+.groups{ display:grid; gap:1rem; padding-bottom:2px; }
+.group-card{ border:1px solid rgba(30,144,255,0.28); background:rgba(0,10,30,0.28); border-radius:.6rem; padding:.7rem .8rem; display:grid; gap:.6rem; }
+.group-head{ display:flex; align-items:baseline; gap:.6rem; }
+.group-title{ margin:0; color:#d9ebff; text-transform:uppercase; letter-spacing:.12em; font-size:1.12rem; line-height:1.2; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.subcount{ color:#9ec5e6; font-size:.9rem; margin-left:.5rem; }
+.group-actions{ display:flex; gap:.4rem; flex-wrap:wrap; }
 
-/* assign/swap full-width */
-button.pick { width: 100%; }
-
-/* ---- INPUTS ---- */
-.search {
-  flex: 1 1 auto;
-  padding: .5rem .6rem;
-  border-radius: .45rem;
-  border: 1px solid rgba(30,144,255,0.35);
-  background: rgba(1,8,18,0.45);
-  color: #e6f3ff;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
-}
-.search::placeholder { color: #86a8c6; }
-.search:focus { outline: none; border-color: rgba(120,200,255,0.55); box-shadow: 0 0 0 2px rgba(120,200,255,0.25); background: rgba(1,12,24,0.55); }
-
-.check { display:flex; align-items:center; gap:.45rem; color:#cfe7ff; }
-.check input { width: 16px; height: 16px; }
-
-/* ---- GROUPS & SLOTS ---- */
-.groups { display: grid; gap: 1rem; padding-bottom: 2px; }
-.group-card {
-  border: 1px solid rgba(30,144,255,0.28);
-  background: rgba(0,10,30,0.28);
-  border-radius: .6rem;
-  padding: .7rem .8rem;
-  display: grid; gap: .6rem;
-}
-.group-head { display:flex; align-items:baseline; gap:.6rem; }
-.group-title {
-  margin:0; color:#d9ebff; text-transform:uppercase; letter-spacing:.12em;
-  font-size:1.12rem; line-height:1.2; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.subcount { color:#9ec5e6; font-size:.9rem; margin-left:.5rem; }
-.group-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
-
-.slots-grid { display:grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap:.7rem; }
+.slots-grid{ display:grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap:.7rem; }
 @media (min-width:1680px){ .slots-grid{ grid-template-columns: repeat(6, minmax(200px,1fr)); } }
 @media (max-width:1500px){ .slots-grid{ grid-template-columns: repeat(4, minmax(180px,1fr)); } }
 @media (max-width:1100px){ .slots-grid{ grid-template-columns: repeat(3, minmax(160px,1fr)); } }
 @media (max-width:820px){  .slots-grid{ grid-template-columns: repeat(2, minmax(150px,1fr)); } }
 @media (max-width:560px){  .slots-grid{ grid-template-columns: 1fr; } }
 
-.slot {
-  border: 1px solid rgba(30,144,255,0.25);
-  background: linear-gradient(180deg, rgba(1,8,16,0.6), rgba(0,10,20,0.32));
-  border-radius: .55rem;
-  padding: .55rem .6rem;
-  display: grid; gap: .45rem;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
-}
-.slot:hover { border-color: rgba(120,200,255,0.45); box-shadow: 0 0 0 1px rgba(120,200,255,0.08) inset; }
-.slot.vacant { border-style: dashed; opacity: .98; }
-.slot.closed { filter: grayscale(85%); opacity: .6; background: rgba(1,6,14,.9); }
-.slot-topline { display:flex; align-items:center; gap:.5rem; }
-.slot-tag { font-size:.78rem; letter-spacing:.12em; color:#9ec5e6; }
-.slot-role { margin-left:auto; color:#9ec5e6; font-size:.82rem; opacity:.9; }
-.slot-body { display:grid; gap:.45rem; }
-.slot-name { color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:1.2em; }
+.slot{ border:1px solid rgba(30,144,255,0.25); background:linear-gradient(180deg, rgba(1,8,16,0.6), rgba(0,10,20,0.32)); border-radius:.55rem; padding:.55rem .6rem; display:grid; gap:.45rem; transition:border-color 120ms ease, box-shadow 120ms ease, transform 80ms ease; }
+.slot:hover{ border-color: rgba(120,200,255,0.45); box-shadow: 0 0 0 1px rgba(120,200,255,0.08) inset; }
+.slot.vacant{ border-style:dashed; opacity:.98; }
+.slot.closed{ filter:grayscale(85%); opacity:.6; background:rgba(1,6,14,.9); }
+.slot-topline{ display:flex; align-items:center; gap:.5rem; }
+.slot-tag{ font-size:.78rem; letter-spacing:.12em; color:#9ec5e6; }
+.slot-role{ margin-left:auto; color:#9ec5e6; font-size:.82rem; opacity:.9; }
+.slot-body{ display:grid; gap:.45rem; }
+.slot-name{ color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:1.2em; }
 
-/* ---- OVERVIEW LIST ---- */
-.overview { display:grid; gap:.9rem; }
-.ov-subtitle { margin:.2rem 0; color:#cfe7ff; letter-spacing:.06em; }
-.summary { display:grid; gap:.25rem; }
-.summary-row { display:flex; justify-content:space-between; color:#e6f3ff; }
-.summary-row .label { color:#9ec5e6; }
-.summary-row.total { margin-top:.35rem; border-top:1px solid rgba(30,144,255,0.25); padding-top:.35rem; }
-.ov-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
-.free-list { list-style:none; margin:.4rem 0 0; padding:0; display:grid; gap:.2rem; }
-.free-list li { display:flex; gap:.4rem; color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.free-list .meta { color:#9ec5e6; }
+/* overview list */
+.overview{ display:grid; gap:.9rem; }
+.ov-subtitle{ margin:.2rem 0; color:#cfe7ff; letter-spacing:.06em; }
+.summary{ display:grid; gap:.25rem; }
+.summary-row{ display:flex; justify-content:space-between; color:#e6f3ff; }
+.summary-row .label{ color:#9ec5e6; }
+.summary-row.total{ margin-top:.35rem; border-top:1px solid rgba(30,144,255,0.25); padding-top:.35rem; }
+.ov-actions{ display:flex; gap:.5rem; flex-wrap:wrap; }
+.free-list{ list-style:none; margin:.4rem 0 0; padding:0; display:grid; gap:.2rem; }
+.free-list li{ display:flex; gap:.4rem; color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.free-list .meta{ color:#9ec5e6; }
 
-/* ---- MODAL ---- */
-.picker-veil { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:1000; }
-.picker {
-  width:min(900px, 92vw);
-  max-height:80vh;
-  overflow:hidden;
-  border-radius:.8rem;
-  border:1px solid rgba(30,144,255,0.45);
-  background:rgba(0, 10, 30, 0.98);
-  display:grid; grid-template-rows:auto auto 1fr auto;
-}
-.picker-head { display:flex; align-items:center; justify-content:space-between; padding:.8rem .9rem; border-bottom:1px solid rgba(30,144,255,0.25); }
-.picker-controls { display:flex; gap:.8rem; align-items:center; padding:.6rem .9rem; border-bottom:1px solid rgba(30,144,255,0.18); }
-.picker-list { overflow:auto; padding:.6rem .4rem; display:grid; gap:.4rem; }
-.pick-row {
-  display:grid; grid-template-columns:1fr auto auto; gap:.6rem; align-items:center;
-  border:1px solid rgba(30,144,255,0.25); background:rgba(0,10,30,0.2);
-  border-radius:.5rem; padding:.5rem .6rem;
-}
-.pick-row.assigned { background: rgba(30,144,255,0.08); }
-.p-name { color:#e6f3ff; font-weight:600; }
-.p-meta .subtle { color:#9ec5e6; font-size:.86rem; }
-.badge {
-  color:#79ffba; border:1px solid rgba(120,255,170,0.55);
-  border-radius:999px; padding:.1rem .5rem; font-size:.78rem;
-}
-
-/* flicker */
-.section-content-container.animate { animation: contentEntry 260ms ease-out both; }
-@keyframes contentEntry {
-  0% { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
-  60% { opacity: 1; filter: brightness(1.0) saturate(1.0) blur(0); }
-  80% { opacity: .98; filter: brightness(1.03); }
-  100% { opacity: 1; filter: none; }
+/* modal flicker */
+.section-content-container.animate{ animation: contentEntry 260ms ease-out both; }
+@keyframes contentEntry{
+  0%{ opacity:0; filter:brightness(1.15) saturate(1.05) blur(1px); }
+  60%{ opacity:1; filter:brightness(1.0) saturate(1.0) blur(0); }
+  80%{ opacity:.98; filter:brightness(1.03); }
+  100%{ opacity:1; filter:none; }
 }
 </style>
