@@ -1,3 +1,4 @@
+<!-- src/views/DeploymentView.vue -->
 <template>
   <div
     id="deploymentView"
@@ -33,7 +34,6 @@
 
           <div v-if="!plan.units.length" class="muted">No eligible elements found.</div>
 
-          <!-- NOTE: removed `clipped-medium-backward-pilot` from the card -->
           <div class="cards-grid">
             <div
               v-for="g in plan.units"
@@ -65,6 +65,13 @@
                 <button class="btn primary small" @click.stop="openDetail(g.key)">Open</button>
                 <button class="btn ghost small" @click.stop="fillFromRoster(g.key)">Auto-fill</button>
                 <button class="btn ghost small" @click.stop="clearGroup(g.key)">Clear</button>
+                <span
+                  class="pts small"
+                  :class="{ over: unitPointsUsed(g) > SQUAD_POINT_CAP }"
+                  title="Certification points"
+                >
+                  {{ unitPointsUsed(g) }} / {{ SQUAD_POINT_CAP }} pts
+                </span>
               </div>
             </div>
           </div>
@@ -82,14 +89,21 @@
             <button class="btn ghost small" @click="backToSummary">Back</button>
             <button class="btn ghost small" @click="fillFromRoster(detailKey)">Auto-fill</button>
             <button class="btn ghost small" @click="clearGroup(detailKey)">Clear</button>
-            <div class="muted small" style="margin-left:auto;">
-              {{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }}
+
+            <div class="muted small" style="margin-left:auto; display:flex; align-items:center; gap:.6rem">
+              <span>{{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }} assigned</span>
+              <span class="divider"></span>
+              <span class="pts big" :class="{ over: unitPointsUsed(currentUnit) > SQUAD_POINT_CAP }">
+                Points: {{ unitPointsUsed(currentUnit) }} / {{ SQUAD_POINT_CAP }}
+              </span>
             </div>
           </div>
 
           <div v-if="!currentUnit" class="muted">No element selected.</div>
 
           <div v-else class="group-card">
+            <div v-if="detailError" class="warn">{{ detailError }}</div>
+
             <div class="slots-grid">
               <div
                 v-for="(slot, sIdx) in currentUnit.slots"
@@ -114,16 +128,34 @@
                 <div class="slot-body">
                   <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
 
+                  <!-- Cert picker -->
                   <div v-if="slot.id" class="zoom-cert">
                     <label>Cert</label>
                     <select
                       class="select"
                       :value="slot.cert || ''"
-                      @change="setSlotCert(detailKey, sIdx, $event.target.value)"
+                      @change="onChangeCert(detailKey, sIdx, $event.target.value)"
                     >
                       <option value="">—</option>
-                      <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">{{ c }}</option>
+                      <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">
+                        {{ c }}{{ certPointSuffix(c) }}
+                      </option>
                     </select>
+                  </div>
+
+                  <!-- Disposable launcher (only if AT-capable) -->
+                  <div
+                    v-if="slot.id && personHasCert(slot.id, 'Anti Tank')"
+                    class="disp-row"
+                  >
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        :checked="!!slot.disposable"
+                        @change="onToggleDisposable(detailKey, sIdx, $event.target.checked)"
+                      />
+                      Disposable launcher <span class="muted small">( +{{ DISPOSABLE_COST }} pt )</span>
+                    </label>
                   </div>
 
                   <button
@@ -147,7 +179,7 @@
       </div>
     </section>
 
-    <!-- ASSIGN/SWAP PICKER (shared) -->
+    <!-- ASSIGN/SWAP PICKER -->
     <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
       <div class="picker">
         <div class="picker-head">
@@ -208,15 +240,36 @@ export default {
 
       viewMode: "summary",
       detailKey: "",
+      detailError: "",
 
       plan: { units: [] },
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
 
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
+
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
       EXCLUDED_UNITS: /^(fillers?|recruits?|reserves?)$/i,
+
+      /* certification system */
+      SQUAD_POINT_CAP: 10,
+      DISPOSABLE_COST: 1,
+      CERT_POINTS: {
+        "Rifleman": 0,
+        "Grenadier": 1,
+        "Breacher": 1,
+        "RTO": 1,
+        "Machine Gunner": 2,
+        "Marksman": 2,
+        "Combat Engineer": 2,
+        "Anti Tank": 3,
+        "Corpsmen": 3,
+        "PJ": 3,
+        "Pilot": 3,
+        "NCO": 0,
+        "Officer": 0,
+      },
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
@@ -229,6 +282,8 @@ export default {
     this.plan.units = (saved ?? this.buildUnitsFromOrbat(this.orbat)).filter(
       (u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title))
     );
+    // why: migrate older plans that don't have `disposable`
+    this.plan.units.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
@@ -255,14 +310,28 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
+    /* animation */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
     },
-    openDetail(unitKey) { this.detailKey = unitKey; this.viewMode = "detail"; this.triggerFlicker(0); },
-    backToSummary() { this.viewMode = "summary"; this.detailKey = ""; this.triggerFlicker(0); },
 
+    /* routing-like mode switches */
+    openDetail(unitKey) {
+      this.detailKey = unitKey;
+      this.viewMode = "detail";
+      this.detailError = "";
+      this.triggerFlicker(0);
+    },
+    backToSummary() {
+      this.viewMode = "summary";
+      this.detailKey = "";
+      this.detailError = "";
+      this.triggerFlicker(0);
+    },
+
+    /* persistence */
     normalizeTitle(t) { return String(t || "").trim(); },
     loadSaved() {
       try {
@@ -276,6 +345,7 @@ export default {
     },
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
 
+    /* role sort helpers */
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -299,6 +369,7 @@ export default {
         .map(x => x.s);
     },
 
+    /* cert extraction */
     extractCertsFromMember(member) {
       const arr = member?.certifications;
       if (Array.isArray(arr) && arr.length) {
@@ -346,6 +417,15 @@ export default {
       const p = this.personnel.find(pp => String(pp.id) === String(personId));
       return p?.certs || [];
     },
+    personHasCert(personId, label) {
+      const certs = this.getCertsForPersonId(personId);
+      return certs.includes(label);
+    },
+    certPointSuffix(label) {
+      const pts = this.CERT_POINTS[label] ?? 0;
+      return pts ? ` (+${pts})` : "";
+    },
+
     ensureSlotCert(slot, fallbackRole = "") {
       if (slot.cert) return slot.cert;
       const certs = this.getCertsForPersonId(slot.id) || [];
@@ -357,6 +437,7 @@ export default {
       return t.replace(/\s+/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
     },
 
+    /* builders */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -382,7 +463,7 @@ export default {
     },
 
     isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
-    padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" }); return out; },
+    padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
@@ -404,6 +485,7 @@ export default {
               role: s?.role || member?.slot || "",
               origStatus,
               cert: "",
+              disposable: false,
             };
             if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
             slots.push(slot);
@@ -432,6 +514,7 @@ export default {
             role: s?.role || member?.slot || "",
             origStatus,
             cert: "",
+            disposable: false,
           };
           if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
           slots.push(slot);
@@ -442,13 +525,29 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
+    /* points */
+    unitPointsUsed(unit) {
+      if (!unit) return 0;
+      return unit.slots.reduce((sum, s) => {
+        if (!s.id) return sum;
+        const cert = s.cert || "";
+        const certPts = this.CERT_POINTS[cert] ?? 0;
+        const dispPts = s.disposable ? this.DISPOSABLE_COST : 0;
+        return sum + certPts + dispPts;
+      }, 0);
+    },
+    wouldExceedCap(unitKey, delta) {
+      const unit = this.plan.units.find(u => u.key === unitKey);
+      return unit ? this.unitPointsUsed(unit) + delta > this.SQUAD_POINT_CAP : false;
+    },
+
+    /* interactions */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
       this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false };
     },
     closePicker() { this.picker.open = false; },
-
     findAssignment(personId) {
       for (const g of this.plan.units) {
         const idx = g.slots.findIndex(s => String(s.id) === String(personId));
@@ -465,16 +564,34 @@ export default {
       if (gIdx < 0) return;
       const g = this.plan.units[gIdx];
       const target = g.slots[this.picker.slotIdx];
-      const chosenCertDefault = (this.getCertsForPersonId(p.id)[0] || target.role || p.role || "");
+
+      // keep existing cert if valid for the person, else default to first available
+      const available = this.getCertsForPersonId(p.id);
+      const chosenCertDefault = available.includes(target.cert) ? target.cert : (available[0] || target.role || p.role || "");
+
+      // compute delta for points when swapping/assigning
+      const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
+      const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0); // disposable remains false on first assign
+      const delta = nextPts - prevPts;
+
+      if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
+        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+        return;
+      }
+      this.detailError = "";
 
       if (from && target?.id && !(from.unitKey === g.key && from.slotIdx === this.picker.slotIdx)) {
         const srcIdx = this.plan.units.findIndex(u => u.key === from.unitKey);
         const srcGroup = this.plan.units[srcIdx];
         const tmp = { ...target };
-        const newTarget = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: target.cert || chosenCertDefault };
+
+        const newTarget = {
+          ...target, id: p.id, name: p.name,
+          role: target.role || p.role || "", cert: chosenCertDefault, disposable: false,
+        };
 
         const newSrcSlots = srcGroup.slots.slice();
-        newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name, cert: tmp.cert || this.ensureSlotCert(tmp, tmp.role) };
+        newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name, cert: tmp.cert || this.ensureSlotCert(tmp, tmp.role), disposable: !!tmp.disposable };
         const newSrc = { ...srcGroup, slots: this.sortSlotsByRole(newSrcSlots) };
 
         const newGSlots = g.slots.slice();
@@ -484,7 +601,7 @@ export default {
         this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? newG : i === srcIdx ? newSrc : u));
       } else {
         const newSlots = g.slots.slice();
-        newSlots[this.picker.slotIdx] = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: target.cert || chosenCertDefault };
+        newSlots[this.picker.slotIdx] = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: chosenCertDefault, disposable: false };
         const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
         this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? newG : u));
       }
@@ -499,26 +616,28 @@ export default {
       if (idx < 0) return;
       const g = this.plan.units[idx];
       const newSlots = g.slots.slice();
-      newSlots[slotIdx] = { ...newSlots[slotIdx], id: null, name: null, cert: "" };
+      newSlots[slotIdx] = { ...newSlots[slotIdx], id: null, name: null, cert: "", disposable: false };
       const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
+      this.detailError = "";
     },
     clearGroup(unitKey) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
       const g = this.plan.units[idx];
-      const emptied = g.slots.map(s => ({ ...s, id: null, name: null, cert: "" }));
+      const emptied = g.slots.map(s => ({ ...s, id: null, name: null, cert: "", disposable: false }));
       const newG = { ...g, slots: this.sortSlotsByRole(emptied) };
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
+      this.detailError = "";
     },
     addSlot(unitKey) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
       const g = this.plan.units[idx];
       const newSlots = g.slots.slice();
-      newSlots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" });
+      newSlots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false });
       const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
@@ -532,17 +651,66 @@ export default {
       const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
+      this.detailError = "";
     },
 
+    /* points-aware handlers */
+    onChangeCert(unitKey, slotIdx, nextCert) {
+      const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
+      if (uIdx < 0) return;
+      const unit = this.plan.units[uIdx];
+      const slot = unit.slots[slotIdx];
+
+      const prevPts = (this.CERT_POINTS[slot.cert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
+      const nextPts = (this.CERT_POINTS[nextCert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
+      const delta = nextPts - prevPts;
+
+      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
+        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+        return;
+      }
+      this.detailError = "";
+
+      const newSlots = unit.slots.slice();
+      newSlots[slotIdx] = { ...slot, cert: nextCert };
+      const newU = { ...unit, slots: this.sortSlotsByRole(newSlots) };
+      this.plan.units = this.plan.units.map((u, i) => (i === uIdx ? newU : u));
+      this.persistPlan();
+    },
+    onToggleDisposable(unitKey, slotIdx, checked) {
+      const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
+      if (uIdx < 0) return;
+      const unit = this.plan.units[uIdx];
+      const slot = unit.slots[slotIdx];
+
+      const add = checked ? this.DISPOSABLE_COST : 0;
+      const remove = !checked ? this.DISPOSABLE_COST : 0;
+      const delta = add - remove;
+
+      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
+        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+        return;
+      }
+      this.detailError = "";
+
+      const newSlots = unit.slots.slice();
+      newSlots[slotIdx] = { ...slot, disposable: checked === true };
+      const newU = { ...unit, slots: newSlots };
+      this.plan.units = this.plan.units.map((u, i) => (i === uIdx ? newU : u));
+      this.persistPlan();
+    },
+
+    /* fill / reset */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       if (!rebuilt) return;
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
       const keepLen = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
-      while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" });
+      while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false });
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? rebuilt : u));
       this.persistPlan();
+      this.detailError = "";
       this.triggerFlicker(0);
     },
     fillAllFromRoster() {
@@ -550,19 +718,22 @@ export default {
       const out = rebuilt.map(u => {
         const prev = this.plan.units.find(x => x.key === u.key);
         const keepLen = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
-        while (u.slots.length < keepLen) u.slots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" });
+        while (u.slots.length < keepLen) u.slots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false });
         return u;
       });
       this.plan.units = out;
       this.persistPlan();
+      this.detailError = "";
       this.triggerFlicker(0);
     },
     resetPlan() {
       this.plan.units = this.buildUnitsFromOrbat(this.orbat);
       this.persistPlan();
+      this.detailError = "";
       this.triggerFlicker(0);
     },
 
+    /* utility */
     exportJson() {
       const blob = new Blob([JSON.stringify(this.plan, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -572,7 +743,11 @@ export default {
     },
   },
   watch: {
-    orbat: { deep: true, handler(newV) { if (Array.isArray(newV) && newV.length) this.personnel = this.buildPersonnelPool(newV); } },
+    orbat: { deep: true, handler(newV) {
+      if (Array.isArray(newV) && newV.length) {
+        this.personnel = this.buildPersonnelPool(newV);
+      }
+    }},
     plan:  { deep: true, handler() { this.persistPlan(); } },
   },
 };
@@ -587,12 +762,13 @@ export default {
 .panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
 .muted{color:#9ec5e6}.small{font-size:.86rem}
 .summary-toolbar,.detail-toolbar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem}
+.divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block}
 
-/* Cards: no clipped corner here */
+/* Cards */
 .cards-grid{display:grid;gap:1rem;grid-template-columns:repeat(3,minmax(260px,1fr))}
 @media (max-width:1400px){.cards-grid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
 @media (max-width:900px){.cards-grid{grid-template-columns:1fr}}
-.unit-card{background:rgba(0,10,30,.32);border:1px solid rgba(30,144,255,.28);border-radius:.7rem;padding:.75rem .8rem;cursor:pointer;transition:transform 80ms ease, border-color 120ms ease, box-shadow 120ms ease}
+.unit-card{background:rgba(0,10,30,.32);border:1px solid rgba(30,144,255,.28);border-radius:.7rem;padding:.75rem .8rem;cursor:pointer;transition:transform 80ms ease,border-color 120ms ease,box-shadow 120ms ease}
 .unit-card:hover{transform:translateY(-1px);border-color:rgba(120,200,255,.45);box-shadow:0 0 0 1px rgba(120,200,255,.08) inset}
 .unit-card-head{display:flex;align-items:center;gap:.6rem}
 .unit-card-head img{width:20px;height:20px}
@@ -602,9 +778,13 @@ export default {
 .assigned-list{list-style:none;margin:0;padding:0;display:grid;gap:.18rem}
 .assigned-list li{display:flex;gap:.35rem;color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .assigned-list .meta{color:#9ec5e6}
+.unit-card-foot{display:flex;gap:.45rem;align-items:center;margin-top:.6rem}
+.unit-card-foot .pts{margin-left:auto;color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.06rem .45rem}
+.unit-card-foot .pts.over{color:#ffd4d4;border-color:rgba(255,140,140,.55);}
 
 /* Detail slots */
 .group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
+.warn{border:1px solid rgba(255,120,120,.5);background:rgba(90,0,0,.25);color:#ffdcdc;border-radius:.5rem;padding:.4rem .6rem}
 .slots-grid{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:.7rem}
 @media (min-width:1680px){.slots-grid{grid-template-columns:repeat(6,minmax(200px,1fr))}}
 @media (max-width:1500px){.slots-grid{grid-template-columns:repeat(4,minmax(180px,1fr))}}
@@ -620,10 +800,11 @@ export default {
 .slot-role{margin-left:auto;color:#9ec5e6;font-size:.82rem;opacity:.9}
 .slot-body{display:grid;gap:.45rem}
 .slot-name{color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.2em}
-
 .zoom-cert{display:grid;gap:.25rem}
 .zoom-cert label{color:#9ec5e6;font-size:.82rem;letter-spacing:.06em}
 .select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
+.disp-row{margin-top:.1rem}
+.check{display:inline-flex;align-items:center;gap:.4rem}
 
 /* Buttons */
 .actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem}
@@ -638,6 +819,8 @@ export default {
 .btn.primary:hover{border-color:rgba(120,255,190,0.6);background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9))}
 .btn.ghost{background:rgba(0,10,30,0.25)}
 button.pick{width:100%}
+.pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
+.pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
 
 /* Picker modal */
 .picker-veil{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:grid;place-items:center;z-index:1000}
