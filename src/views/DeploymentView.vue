@@ -1,4 +1,3 @@
-<!-- src/views/DeploymentView.vue -->
 <template>
   <div
     id="deploymentView"
@@ -65,7 +64,10 @@
                 <button class="btn primary small" @click.stop="openDetail(g.key)">Open</button>
                 <button class="btn ghost small" @click.stop="fillFromRoster(g.key)">Auto-fill</button>
                 <button class="btn ghost small" @click.stop="clearGroup(g.key)">Clear</button>
+
+                <!-- Points only for Chalk 1–4 -->
                 <span
+                  v-if="isPointsUnit(g.title)"
                   class="pts small"
                   :class="{ over: unitPointsUsed(g) > SQUAD_POINT_CAP }"
                   title="Certification points"
@@ -92,8 +94,12 @@
 
             <div class="muted small" style="margin-left:auto; display:flex; align-items:center; gap:.6rem">
               <span>{{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }} assigned</span>
-              <span class="divider"></span>
-              <span class="pts big" :class="{ over: unitPointsUsed(currentUnit) > SQUAD_POINT_CAP }">
+              <span class="divider" />
+              <span
+                v-if="currentUnit && isPointsUnit(currentUnit.title)"
+                class="pts big"
+                :class="{ over: unitPointsUsed(currentUnit) > SQUAD_POINT_CAP }"
+              >
                 Points: {{ unitPointsUsed(currentUnit) }} / {{ SQUAD_POINT_CAP }}
               </span>
             </div>
@@ -143,9 +149,9 @@
                     </select>
                   </div>
 
-                  <!-- Disposable launcher (only if AT-capable) -->
+                  <!-- Disposable: show for ALL in Chalk 1–4 -->
                   <div
-                    v-if="slot.id && personHasCert(slot.id, 'Anti Tank')"
+                    v-if="slot.id && currentUnit && isPointsUnit(currentUnit.title)"
                     class="disp-row"
                   >
                     <label class="check">
@@ -282,7 +288,6 @@ export default {
     this.plan.units = (saved ?? this.buildUnitsFromOrbat(this.orbat)).filter(
       (u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title))
     );
-    // why: migrate older plans that don't have `disposable`
     this.plan.units.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
   },
   mounted() { this.triggerFlicker(0); },
@@ -310,6 +315,12 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
+    /* Quick helper: which units use points? */
+    isPointsUnit(title) {
+      const t = String(title || "").toLowerCase();
+      return /\bchalk\s*[1-4]\b/.test(t);
+    },
+
     /* animation */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
@@ -417,10 +428,6 @@ export default {
       const p = this.personnel.find(pp => String(pp.id) === String(personId));
       return p?.certs || [];
     },
-    personHasCert(personId, label) {
-      const certs = this.getCertsForPersonId(personId);
-      return certs.includes(label);
-    },
     certPointSuffix(label) {
       const pts = this.CERT_POINTS[label] ?? 0;
       return pts ? ` (+${pts})` : "";
@@ -462,7 +469,7 @@ export default {
       return out;
     },
 
-    isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
+    isChalk(title) { return /\bchalk\s*\d+\b/i.test(String(title || "")); },
     padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
@@ -525,20 +532,20 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    /* points */
+    /* points helpers */
     unitPointsUsed(unit) {
-      if (!unit) return 0;
+      if (!unit || !this.isPointsUnit(unit.title)) return 0;
       return unit.slots.reduce((sum, s) => {
         if (!s.id) return sum;
-        const cert = s.cert || "";
-        const certPts = this.CERT_POINTS[cert] ?? 0;
+        const certPts = this.CERT_POINTS[s.cert] ?? 0;
         const dispPts = s.disposable ? this.DISPOSABLE_COST : 0;
         return sum + certPts + dispPts;
       }, 0);
     },
     wouldExceedCap(unitKey, delta) {
       const unit = this.plan.units.find(u => u.key === unitKey);
-      return unit ? this.unitPointsUsed(unit) + delta > this.SQUAD_POINT_CAP : false;
+      if (!unit || !this.isPointsUnit(unit.title)) return false; // never block outside Chalk 1–4
+      return this.unitPointsUsed(unit) + delta > this.SQUAD_POINT_CAP;
     },
 
     /* interactions */
@@ -564,19 +571,20 @@ export default {
       if (gIdx < 0) return;
       const g = this.plan.units[gIdx];
       const target = g.slots[this.picker.slotIdx];
+      const isPoints = this.isPointsUnit(g.title);
 
-      // keep existing cert if valid for the person, else default to first available
       const available = this.getCertsForPersonId(p.id);
       const chosenCertDefault = available.includes(target.cert) ? target.cert : (available[0] || target.role || p.role || "");
 
-      // compute delta for points when swapping/assigning
-      const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
-      const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0); // disposable remains false on first assign
-      const delta = nextPts - prevPts;
-
-      if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
-        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
-        return;
+      // compute delta only if this group is points-enabled
+      if (isPoints) {
+        const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
+        const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0); // new assignee starts disposable=false
+        const delta = nextPts - prevPts;
+        if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
+          this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+          return;
+        }
       }
       this.detailError = "";
 
@@ -660,14 +668,17 @@ export default {
       if (uIdx < 0) return;
       const unit = this.plan.units[uIdx];
       const slot = unit.slots[slotIdx];
+      const isPoints = this.isPointsUnit(unit.title);
 
-      const prevPts = (this.CERT_POINTS[slot.cert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
-      const nextPts = (this.CERT_POINTS[nextCert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
-      const delta = nextPts - prevPts;
+      if (isPoints) {
+        const prevPts = (this.CERT_POINTS[slot.cert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
+        const nextPts = (this.CERT_POINTS[nextCert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
+        const delta = nextPts - prevPts;
 
-      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
-        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
-        return;
+        if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
+          this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+          return;
+        }
       }
       this.detailError = "";
 
@@ -682,6 +693,16 @@ export default {
       if (uIdx < 0) return;
       const unit = this.plan.units[uIdx];
       const slot = unit.slots[slotIdx];
+
+      if (!this.isPointsUnit(unit.title)) {
+        // outside Chalk 1–4: ignore / force false
+        const newSlots = unit.slots.slice();
+        newSlots[slotIdx] = { ...slot, disposable: false };
+        const newU = { ...unit, slots: newSlots };
+        this.plan.units = this.plan.units.map((u, i) => (i === uIdx ? newU : u));
+        this.persistPlan();
+        return;
+      }
 
       const add = checked ? this.DISPOSABLE_COST : 0;
       const remove = !checked ? this.DISPOSABLE_COST : 0;
