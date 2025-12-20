@@ -1,4 +1,3 @@
-<!-- src/views/DeploymentView.vue -->
 <template>
   <div
     id="deploymentView"
@@ -34,12 +33,12 @@
 
           <div v-if="!plan.units.length" class="muted">No eligible elements found.</div>
 
-          <!-- Cards like PilotsView windows -->
+          <!-- NOTE: removed `clipped-medium-backward-pilot` from the card -->
           <div class="cards-grid">
             <div
               v-for="g in plan.units"
               :key="g.key"
-              class="unit-card clipped-medium-backward-pilot"
+              class="unit-card"
               @click="openDetail(g.key)"
               role="button"
               tabindex="0"
@@ -207,8 +206,8 @@ export default {
       animateView: false,
       animationDelay: "0ms",
 
-      viewMode: "summary",          // summary | detail
-      detailKey: "",                // which unit is open
+      viewMode: "summary",
+      detailKey: "",
 
       plan: { units: [] },
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
@@ -218,8 +217,6 @@ export default {
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
       EXCLUDED_UNITS: /^(fillers?|recruits?|reserves?)$/i,
-
-      // Mirrored cert labels (order-sensitive)
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
@@ -258,26 +255,14 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
-    /* animation */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
     },
+    openDetail(unitKey) { this.detailKey = unitKey; this.viewMode = "detail"; this.triggerFlicker(0); },
+    backToSummary() { this.viewMode = "summary"; this.detailKey = ""; this.triggerFlicker(0); },
 
-    /* routing-like mode switches */
-    openDetail(unitKey) {
-      this.detailKey = unitKey;
-      this.viewMode = "detail";
-      this.triggerFlicker(0);
-    },
-    backToSummary() {
-      this.viewMode = "summary";
-      this.detailKey = "";
-      this.triggerFlicker(0);
-    },
-
-    /* persistence */
     normalizeTitle(t) { return String(t || "").trim(); },
     loadSaved() {
       try {
@@ -291,7 +276,6 @@ export default {
     },
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
 
-    /* role sort helpers */
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -315,7 +299,6 @@ export default {
         .map(x => x.s);
     },
 
-    /* cert extraction */
     extractCertsFromMember(member) {
       const arr = member?.certifications;
       if (Array.isArray(arr) && arr.length) {
@@ -350,32 +333,15 @@ export default {
     bestCertLabelMatch(name) {
       const n = String(name || "").trim().toLowerCase();
       const map = {
-        "rifleman": "Rifleman",
-        "mg": "Machine Gunner",
-        "machinegunner": "Machine Gunner",
-        "machine gunner": "Machine Gunner",
-        "anti tank": "Anti Tank",
-        "at": "Anti Tank",
-        "corpsman": "Corpsmen",
-        "medic": "Corpsmen",
-        "combat engineer": "Combat Engineer",
-        "engineer": "Combat Engineer",
-        "marksman": "Marksman",
-        "breacher": "Breacher",
-        "grenadier": "Grenadier",
-        "pilot": "Pilot",
-        "rto": "RTO",
-        "pj": "PJ",
-        "nco": "NCO",
-        "officer": "Officer",
+        "rifleman":"Rifleman","mg":"Machine Gunner","machinegunner":"Machine Gunner","machine gunner":"Machine Gunner",
+        "anti tank":"Anti Tank","at":"Anti Tank","corpsman":"Corpsmen","medic":"Corpsmen","combat engineer":"Combat Engineer",
+        "engineer":"Combat Engineer","marksman":"Marksman","breacher":"Breacher","grenadier":"Grenadier","pilot":"Pilot",
+        "rto":"RTO","pj":"PJ","nco":"NCO","officer":"Officer",
       };
       if (map[n]) return map[n];
-      for (const label of this.certLabels) {
-        if (n.includes(label.toLowerCase())) return label;
-      }
+      for (const label of this.certLabels) if (n.includes(label.toLowerCase())) return label;
       return "";
     },
-
     getCertsForPersonId(personId) {
       const p = this.personnel.find(pp => String(pp.id) === String(personId));
       return p?.certs || [];
@@ -391,7 +357,6 @@ export default {
       return t.replace(/\s+/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
     },
 
-    /* builders */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -415,6 +380,7 @@ export default {
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
+
     isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
     padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
@@ -476,7 +442,6 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    /* interactions */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
@@ -528,10 +493,7 @@ export default {
       this.closePicker();
     },
 
-    clearCurrentSlot() {
-      if (!this.picker.open) return;
-      this.clearSlot(this.picker.unitKey, this.picker.slotIdx);
-    },
+    clearCurrentSlot() { if (!this.picker.open) return; this.clearSlot(this.picker.unitKey, this.picker.slotIdx); },
     clearSlot(unitKey, slotIdx) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -572,7 +534,6 @@ export default {
       this.persistPlan();
     },
 
-    /* fill / reset */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       if (!rebuilt) return;
@@ -602,7 +563,6 @@ export default {
       this.triggerFlicker(0);
     },
 
-    /* utility */
     exportJson() {
       const blob = new Blob([JSON.stringify(this.plan, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -619,19 +579,16 @@ export default {
 </script>
 
 <style scoped>
-/* page grid */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
 .deploy-scroll{max-height:calc(94vh - 100px - 52px - 36px);overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:36px}
 
-/* panels */
 .panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
 .muted{color:#9ec5e6}.small{font-size:.86rem}
-
 .summary-toolbar,.detail-toolbar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem}
 
-/* summary cards */
+/* Cards: no clipped corner here */
 .cards-grid{display:grid;gap:1rem;grid-template-columns:repeat(3,minmax(260px,1fr))}
 @media (max-width:1400px){.cards-grid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
 @media (max-width:900px){.cards-grid{grid-template-columns:1fr}}
@@ -646,7 +603,7 @@ export default {
 .assigned-list li{display:flex;gap:.35rem;color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .assigned-list .meta{color:#9ec5e6}
 
-/* group/slots (detail mode) */
+/* Detail slots */
 .group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
 .slots-grid{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:.7rem}
 @media (min-width:1680px){.slots-grid{grid-template-columns:repeat(6,minmax(200px,1fr))}}
@@ -668,7 +625,7 @@ export default {
 .zoom-cert label{color:#9ec5e6;font-size:.82rem;letter-spacing:.06em}
 .select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
 
-/* buttons */
+/* Buttons */
 .actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem}
 .btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08)}
 .btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,22,.7));border-color:rgba(120,200,255,0.5)}
@@ -682,7 +639,7 @@ export default {
 .btn.ghost{background:rgba(0,10,30,0.25)}
 button.pick{width:100%}
 
-/* modal */
+/* Picker modal */
 .picker-veil{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:grid;place-items:center;z-index:1000}
 .picker{width:min(900px,92vw);max-height:80vh;overflow:hidden;border-radius:.8rem;border:1px solid rgba(30,144,255,0.45);background:rgba(0,10,30,0.98);display:grid;grid-template-rows:auto auto 1fr auto}
 .picker-head{display:flex;align-items:center;justify-content:space-between;padding:.8rem .9rem;border-bottom:1px solid rgba(30,144,255,0.25)}
@@ -694,7 +651,7 @@ button.pick{width:100%}
 .p-meta .subtle{color:#9ec5e6;font-size:.86rem}
 .badge{color:#79ffba;border:1px solid rgba(120,255,170,0.55);border-radius:999px;padding:.1rem .5rem;font-size:.78rem}
 
-/* flicker */
+/* Flicker */
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
 @keyframes contentEntry{
   0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}
