@@ -6,142 +6,149 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- LEFT: DEPLOYMENT -->
-    <section id="deploy-main" class="section-container deployment-window">
+    <!-- HEADER -->
+    <section class="section-container deployment-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
-          <h1>DEPLOYMENT</h1>
+          <h1>{{ viewMode === 'summary' ? 'DEPLOYMENT' : currentUnit?.title || 'ELEMENT' }}</h1>
         </div>
         <div class="rhombus-back">&nbsp;</div>
       </div>
 
-      <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
+      <!-- SUMMARY MODE -->
+      <div
+        v-if="viewMode === 'summary'"
+        class="section-content-container deploy-scroll"
+        :class="{ animate: animateView }"
+      >
         <div class="panel">
+          <div class="summary-toolbar">
+            <button class="btn ghost small" @click="fillAllFromRoster">Auto-fill All</button>
+            <button class="btn ghost small" @click="resetPlan">Reset</button>
+            <button class="btn ghost small" @click="exportJson">Export JSON</button>
+            <div class="muted small" style="margin-left:auto;">
+              Assigned: {{ totalAssigned }} / {{ totalSlots }} · Unassigned: {{ unassignedCount }}
+            </div>
+          </div>
+
           <div v-if="!plan.units.length" class="muted">No eligible elements found.</div>
 
-          <div class="groups">
-            <div v-for="g in plan.units" :key="g.key" class="group-card">
-              <div class="group-head">
-                <h2 class="group-title" :title="g.title">
-                  {{ g.title }} <span class="subcount">({{ filledCount(g) }}/{{ g.slots.length }})</span>
-                </h2>
-                <div class="group-actions">
-                  <button type="button" class="btn ghost small" @click.stop="openZoom(g.key)">Zoom</button>
-                  <button type="button" class="btn ghost small" @click.stop="clearGroup(g.key)">Clear</button>
-                  <button type="button" class="btn ghost small" @click.stop="addSlot(g.key)">Add slot</button>
-                  <button type="button" class="btn ghost small" @click.stop="fillFromRoster(g.key)">Auto-fill</button>
+          <!-- Cards like PilotsView windows -->
+          <div class="cards-grid">
+            <div
+              v-for="g in plan.units"
+              :key="g.key"
+              class="unit-card clipped-medium-backward-pilot"
+              @click="openDetail(g.key)"
+              role="button"
+              tabindex="0"
+            >
+              <div class="unit-card-head">
+                <img src="/icons/license.svg" alt="" />
+                <h2 class="unit-title">{{ g.title }}</h2>
+                <span class="pill">{{ filledCount(g) }}/{{ g.slots.length }}</span>
+              </div>
+
+              <div class="unit-card-body">
+                <ul class="assigned-list">
+                  <li v-for="s in g.slots.filter(s=>!!s.id).slice(0,8)" :key="s.id">
+                    <span class="name" :title="displayName(s)">{{ displayName(s) }}</span>
+                    <span v-if="s.role" class="meta">· {{ s.role }}</span>
+                  </li>
+                </ul>
+                <div v-if="g.slots.filter(s=>!!s.id).length > 8" class="muted small">
+                  +{{ g.slots.filter(s=>!!s.id).length - 8 }} more…
                 </div>
               </div>
 
-              <div class="slots-grid">
-                <div
-                  v-for="(slot, sIdx) in g.slots"
-                  :key="`slot-${g.key}-${sIdx}`"
-                  class="slot"
-                  :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
-                >
-                  <div class="slot-topline">
-                    <span class="slot-tag">#{{ sIdx + 1 }}</span>
-                    <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
-                    <div style="display:flex; gap:.35rem;">
-                      <button
-                        v-if="slot.id"
-                        type="button"
-                        class="btn ghost xsmall"
-                        @click.stop="clearSlot(g.key, sIdx)"
-                      >Clear</button>
-                      <button type="button" class="btn ghost xsmall" @click.stop="removeSlot(g.key, sIdx)">–</button>
-                    </div>
-                  </div>
-
-                  <div class="slot-body">
-                    <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
-
-                    <div v-if="slot.id" class="cert-row">
-                      <span class="chip" :title="slot.cert ? `Certification: ${slot.cert}` : 'No certification set'">
-                        <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden>
-                          <circle cx="10" cy="10" r="8"></circle>
-                        </svg>
-                        <span>{{ slot.cert || '—' }}</span>
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      class="btn primary pick"
-                      :disabled="slot.origStatus === 'CLOSED'"
-                      @click.stop="openPicker(g.key, sIdx)"
-                    >
-                      {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
-                    </button>
-                  </div>
-                </div>
+              <div class="unit-card-foot">
+                <button class="btn primary small" @click.stop="openDetail(g.key)">Open</button>
+                <button class="btn ghost small" @click.stop="fillFromRoster(g.key)">Auto-fill</button>
+                <button class="btn ghost small" @click.stop="clearGroup(g.key)">Clear</button>
               </div>
             </div>
           </div>
-
-          <div class="actions-row">
-            <button type="button" class="btn ghost" @click.stop="resetPlan">Reset</button>
-            <button type="button" class="btn ghost" @click.stop="fillAllFromRoster">Auto-fill All</button>
-            <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON</button>
-          </div>
         </div>
       </div>
-    </section>
 
-    <!-- RIGHT: OVERVIEW -->
-    <section id="deploy-overview" class="section-container overview-window">
-      <div class="header-shell">
-        <div class="section-header clipped-medium-backward-pilot">
-          <img src="/icons/events.svg" alt="" />
-          <h1>OVERVIEW</h1>
-        </div>
-        <div class="rhombus-back">&nbsp;</div>
-      </div>
-
-      <div class="section-content-container overview-scroll" :class="{ animate: animateView }">
+      <!-- DETAIL MODE -->
+      <div
+        v-else
+        class="section-content-container deploy-scroll"
+        :class="{ animate: animateView }"
+      >
         <div class="panel">
-          <div class="overview">
-            <div class="summary">
-              <div v-for="g in plan.units" :key="`sum-${g.key}`" class="summary-row">
-                <span class="label">{{ g.title }}</span>
-                <span class="value">{{ filledCount(g) }} / {{ g.slots.length }}</span>
-              </div>
+          <div class="detail-toolbar">
+            <button class="btn ghost small" @click="backToSummary">Back</button>
+            <button class="btn ghost small" @click="fillFromRoster(detailKey)">Auto-fill</button>
+            <button class="btn ghost small" @click="clearGroup(detailKey)">Clear</button>
+            <div class="muted small" style="margin-left:auto;">
+              {{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }}
+            </div>
+          </div>
 
-              <div class="summary-row total">
-                <span class="label">Assigned</span>
-                <span class="value">{{ totalAssigned }} / {{ totalSlots }}</span>
-              </div>
-              <div class="summary-row total">
-                <span class="label">Unassigned pool</span>
-                <span class="value">{{ unassignedCount }}</span>
+          <div v-if="!currentUnit" class="muted">No element selected.</div>
+
+          <div v-else class="group-card">
+            <div class="slots-grid">
+              <div
+                v-for="(slot, sIdx) in currentUnit.slots"
+                :key="`slot-${detailKey}-${sIdx}`"
+                class="slot"
+                :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
+              >
+                <div class="slot-topline">
+                  <span class="slot-tag">#{{ sIdx + 1 }}</span>
+                  <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
+                  <div style="display:flex; gap:.35rem;">
+                    <button
+                      v-if="slot.id"
+                      type="button"
+                      class="btn ghost xsmall"
+                      @click.stop="clearSlot(detailKey, sIdx)"
+                    >Clear</button>
+                    <button type="button" class="btn ghost xsmall" @click.stop="removeSlot(detailKey, sIdx)">–</button>
+                  </div>
+                </div>
+
+                <div class="slot-body">
+                  <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
+
+                  <div v-if="slot.id" class="zoom-cert">
+                    <label>Cert</label>
+                    <select
+                      class="select"
+                      :value="slot.cert || ''"
+                      @change="setSlotCert(detailKey, sIdx, $event.target.value)"
+                    >
+                      <option value="">—</option>
+                      <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">{{ c }}</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="btn primary pick"
+                    :disabled="slot.origStatus === 'CLOSED'"
+                    @click.stop="openPicker(detailKey, sIdx)"
+                  >
+                    {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div class="ov-actions">
-              <button type="button" class="btn ghost small" @click.stop="resetPlan">Reset Plan</button>
-              <button type="button" class="btn ghost small" @click.stop="exportJson">Export JSON</button>
-            </div>
-
-            <div class="ov-free" v-if="freePersonnel.length">
-              <h4 class="ov-subtitle">Free Personnel ({{ freePersonnel.length }})</h4>
-              <ul class="free-list">
-                <li v-for="p in freePersonnel.slice(0, 18)" :key="`free-${p.id}`">
-                  <span class="name" :title="p.name">{{ p.name }}</span>
-                  <span class="meta" v-if="p.role">· {{ p.role }}</span>
-                </li>
-              </ul>
-              <div v-if="freePersonnel.length > 18" class="muted small">
-                +{{ freePersonnel.length - 18 }} more…
-              </div>
+            <div class="actions-row">
+              <button type="button" class="btn ghost" @click.stop="addSlot(detailKey)">Add slot</button>
+              <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON</button>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ASSIGN/SWAP PICKER MODAL -->
+    <!-- ASSIGN/SWAP PICKER (shared) -->
     <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
       <div class="picker">
         <div class="picker-head">
@@ -188,56 +195,6 @@
         </div>
       </div>
     </div>
-
-    <!-- PER-SQUAD ZOOM -->
-    <div v-if="zoom.open" class="zoom-veil" @click.self="closeZoom">
-      <div class="zoom">
-        <div class="zoom-head">
-          <h3>{{ zoomUnit?.title || 'Element' }}</h3>
-          <div class="zoom-actions">
-            <button class="btn ghost small" @click="fillFromRoster(zoom.unitKey)" title="Auto-fill from roster">Auto-fill</button>
-            <button class="btn ghost small" @click="closeZoom">Close</button>
-          </div>
-        </div>
-
-        <div class="zoom-grid">
-          <div
-            v-for="(slot, sIdx) in zoomUnit?.slots || []"
-            :key="`zoom-slot-${zoom.unitKey}-${sIdx}`"
-            class="zoom-slot"
-            :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
-          >
-            <div class="zoom-top">
-              <span class="slot-tag">#{{ sIdx + 1 }}</span>
-              <span class="slot-role">{{ slot.role || 'Slot' }}</span>
-              <div class="gap"></div>
-              <button class="btn ghost xsmall" @click.stop="openPicker(zoom.unitKey, sIdx)">Assign/Swap</button>
-              <button v-if="slot.id" class="btn ghost xsmall" @click.stop="clearSlot(zoom.unitKey, sIdx)">Clear</button>
-            </div>
-
-            <div class="zoom-body">
-              <div class="zoom-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
-
-              <div v-if="slot.id" class="zoom-cert">
-                <label>Cert</label>
-                <select
-                  class="select"
-                  :value="slot.cert || ''"
-                  @change="setSlotCert(zoom.unitKey, sIdx, $event.target.value)"
-                >
-                  <option value="">—</option>
-                  <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">{{ c }}</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="zoom-foot">
-          <button class="btn ghost" @click="closeZoom">Done</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -249,10 +206,12 @@ export default {
     return {
       animateView: false,
       animationDelay: "0ms",
-      plan: { units: [] },
 
+      viewMode: "summary",          // summary | detail
+      detailKey: "",                // which unit is open
+
+      plan: { units: [] },
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
-      zoom: { open: false, unitKey: "" },
 
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
@@ -260,6 +219,7 @@ export default {
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
       EXCLUDED_UNITS: /^(fillers?|recruits?|reserves?)$/i,
 
+      // Mirrored cert labels (order-sensitive)
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
@@ -275,6 +235,7 @@ export default {
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
+    currentUnit() { return this.plan.units.find(u => u.key === this.detailKey) || null; },
     currentSlotTitle() {
       if (!this.picker.open) return "";
       const g = this.plan.units.find(u => u.key === this.picker.unitKey);
@@ -295,19 +256,28 @@ export default {
     totalAssigned() { return this.plan.units.reduce((n, g) => n + g.slots.filter(s => !!s.id).length, 0); },
     freePersonnel() { return this.personnel.filter(p => !this.findAssignment(p.id)); },
     unassignedCount() { return this.freePersonnel.length; },
-
-    zoomUnit() {
-      if (!this.zoom.open) return null;
-      return this.plan.units.find(u => u.key === this.zoom.unitKey) || null;
-    },
   },
   methods: {
+    /* animation */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
     },
 
+    /* routing-like mode switches */
+    openDetail(unitKey) {
+      this.detailKey = unitKey;
+      this.viewMode = "detail";
+      this.triggerFlicker(0);
+    },
+    backToSummary() {
+      this.viewMode = "summary";
+      this.detailKey = "";
+      this.triggerFlicker(0);
+    },
+
+    /* persistence */
     normalizeTitle(t) { return String(t || "").trim(); },
     loadSaved() {
       try {
@@ -321,6 +291,7 @@ export default {
     },
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
 
+    /* role sort helpers */
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -344,6 +315,7 @@ export default {
         .map(x => x.s);
     },
 
+    /* cert extraction */
     extractCertsFromMember(member) {
       const arr = member?.certifications;
       if (Array.isArray(arr) && arr.length) {
@@ -419,6 +391,7 @@ export default {
       return t.replace(/\s+/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
     },
 
+    /* builders */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -445,7 +418,7 @@ export default {
     isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
     padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
-    filledCount(g) { return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
+    filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
 
     buildUnitsFromOrbat(orbat) {
@@ -503,6 +476,7 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
+    /* interactions */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
@@ -598,6 +572,7 @@ export default {
       this.persistPlan();
     },
 
+    /* fill / reset */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       if (!rebuilt) return;
@@ -627,16 +602,13 @@ export default {
       this.triggerFlicker(0);
     },
 
-    openZoom(unitKey) { this.zoom = { open: true, unitKey }; },
-    closeZoom() { this.zoom = { open: false, unitKey: "" }; },
-    setSlotCert(unitKey, slotIdx, value) {
-      const gIdx = this.plan.units.findIndex(u => u.key === unitKey);
-      if (gIdx < 0) return;
-      const g = this.plan.units[gIdx];
-      const newSlots = g.slots.slice();
-      newSlots[slotIdx] = { ...newSlots[slotIdx], cert: String(value || "") };
-      this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? { ...g, slots: newSlots } : u));
-      this.persistPlan();
+    /* utility */
+    exportJson() {
+      const blob = new Blob([JSON.stringify(this.plan, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "deployment-plan.json"; a.click();
+      URL.revokeObjectURL(url);
     },
   },
   watch: {
@@ -647,238 +619,87 @@ export default {
 </script>
 
 <style scoped>
-/* ---- PAGE SIZING ---- */
-#deploymentView {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
-  gap: 1.2rem;
-  align-items: start;
-  height: calc(94vh - 100px);
-  overflow: hidden;
-  padding: 28px 18px 32px;
-}
-@media (max-width: 1280px) { #deploymentView { grid-template-columns: 1fr; } }
+/* page grid */
+#deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
+.deployment-window.section-container{max-width:none!important;width:auto}
+.header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
+.deploy-scroll{max-height:calc(94vh - 100px - 52px - 36px);overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:36px}
 
-.deployment-window.section-container,
-.overview-window.section-container { max-width: none !important; width: auto; }
-.deployment-window { grid-column: 1; }
-.overview-window   { grid-column: 2; }
+/* panels */
+.panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
+.muted{color:#9ec5e6}.small{font-size:.86rem}
 
-.header-shell { height: 52px; overflow: hidden; }
-.section-header, .section-content-container { width: 100%; }
+.summary-toolbar,.detail-toolbar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem}
 
-/* scrollers */
-.deploy-scroll,
-.overview-scroll {
-  max-height: calc(94vh - 100px - 52px - 36px);
-  overflow-y: auto;
-  scrollbar-gutter: stable both-edges;
-  padding-bottom: 36px;
-}
+/* summary cards */
+.cards-grid{display:grid;gap:1rem;grid-template-columns:repeat(3,minmax(260px,1fr))}
+@media (max-width:1400px){.cards-grid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
+@media (max-width:900px){.cards-grid{grid-template-columns:1fr}}
+.unit-card{background:rgba(0,10,30,.32);border:1px solid rgba(30,144,255,.28);border-radius:.7rem;padding:.75rem .8rem;cursor:pointer;transition:transform 80ms ease, border-color 120ms ease, box-shadow 120ms ease}
+.unit-card:hover{transform:translateY(-1px);border-color:rgba(120,200,255,.45);box-shadow:0 0 0 1px rgba(120,200,255,.08) inset}
+.unit-card-head{display:flex;align-items:center;gap:.6rem}
+.unit-card-head img{width:20px;height:20px}
+.unit-title{margin:0;color:#d9ebff;text-transform:uppercase;letter-spacing:.12em;font-size:1.02rem;line-height:1.2;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{border:1px solid rgba(120,255,190,.45);color:#caffe9;border-radius:999px;padding:.06rem .5rem;font-size:.78rem}
+.unit-card-body{margin-top:.6rem}
+.assigned-list{list-style:none;margin:0;padding:0;display:grid;gap:.18rem}
+.assigned-list li{display:flex;gap:.35rem;color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.assigned-list .meta{color:#9ec5e6}
 
-/* ---- THEME PANELS ---- */
-.panel {
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.18);
-  border-radius: .6rem;
-  padding: .8rem .9rem;
-  overflow: visible;
-}
+/* group/slots (detail mode) */
+.group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
+.slots-grid{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:.7rem}
+@media (min-width:1680px){.slots-grid{grid-template-columns:repeat(6,minmax(200px,1fr))}}
+@media (max-width:1500px){.slots-grid{grid-template-columns:repeat(4,minmax(180px,1fr))}}
+@media (max-width:1100px){.slots-grid{grid-template-columns:repeat(3,minmax(160px,1fr))}}
+@media (max-width:820px){.slots-grid{grid-template-columns:repeat(2,minmax(150px,1fr))}}
+@media (max-width:560px){.slots-grid{grid-template-columns:1fr}}
+.slot{border:1px solid rgba(30,144,255,0.25);background:linear-gradient(180deg,rgba(1,8,16,0.6),rgba(0,10,20,0.32));border-radius:.55rem;padding:.55rem .6rem;display:grid;gap:.45rem;transition:border-color 120ms ease,box-shadow 120ms ease,transform 80ms ease}
+.slot:hover{border-color:rgba(120,200,255,0.45);box-shadow:0 0 0 1px rgba(120,200,255,0.08) inset}
+.slot.vacant{border-style:dashed;opacity:.98}
+.slot.closed{filter:grayscale(85%);opacity:.6;background:rgba(1,6,14,.9)}
+.slot-topline{display:flex;align-items:center;gap:.5rem}
+.slot-tag{font-size:.78rem;letter-spacing:.12em;color:#9ec5e6}
+.slot-role{margin-left:auto;color:#9ec5e6;font-size:.82rem;opacity:.9}
+.slot-body{display:grid;gap:.45rem}
+.slot-name{color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.2em}
 
-.muted { color: #9ec5e6; }
-.small { font-size: .86rem; }
-.actions-row { display:flex; gap:.6rem; flex-wrap:wrap; padding-top:.4rem; }
+.zoom-cert{display:grid;gap:.25rem}
+.zoom-cert label{color:#9ec5e6;font-size:.82rem;letter-spacing:.06em}
+.select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
 
-/* ---- BUTTON SYSTEM ---- */
-.btn {
-  appearance: none;
-  border: 1px solid rgba(30,144,255,0.35);
-  background: linear-gradient(180deg, rgba(6,18,30,.75), rgba(2,10,20,.6));
-  color: #dbeeff;
-  padding: .42rem .7rem;
-  border-radius: .5rem;
-  font-size: .92rem;
-  letter-spacing: .02em;
-  cursor: pointer;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
-  box-shadow: inset 0 0 0 1px rgba(120,200,255,0.08);
-}
-.btn:hover { background: linear-gradient(180deg, rgba(10,28,44,.85), rgba(2,12,22,.7)); border-color: rgba(120,200,255,0.5); }
-.btn:active { transform: translateY(1px) scale(0.995); }
-.btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(120,200,255,0.35); }
-.btn[disabled] { opacity: .45; cursor: not-allowed; }
+/* buttons */
+.actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem}
+.btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08)}
+.btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,22,.7));border-color:rgba(120,200,255,0.5)}
+.btn:active{transform:translateY(1px) scale(0.995)}
+.btn:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,200,255,0.35)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.small{padding:.32rem .55rem;font-size:.86rem;border-radius:.45rem}
+.btn.xsmall{padding:.22rem .45rem;font-size:.80rem;border-radius:.42rem}
+.btn.primary{background:linear-gradient(180deg,rgba(8,40,22,.9),rgba(6,28,18,.85));border-color:rgba(90,220,160,0.45);box-shadow:inset 0 0 0 1px rgba(90,220,160,0.15)}
+.btn.primary:hover{border-color:rgba(120,255,190,0.6);background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9))}
+.btn.ghost{background:rgba(0,10,30,0.25)}
+button.pick{width:100%}
 
-.btn.small  { padding: .32rem .55rem; font-size: .86rem; border-radius: .45rem; }
-.btn.xsmall { padding: .22rem .45rem; font-size: .80rem; border-radius: .42rem; }
-.btn.primary {
-  background: linear-gradient(180deg, rgba(8,40,22,.9), rgba(6,28,18,.85));
-  border-color: rgba(90,220,160,0.45);
-  box-shadow: inset 0 0 0 1px rgba(90,220,160,0.15);
-}
-.btn.primary:hover { border-color: rgba(120,255,190,0.6); background: linear-gradient(180deg, rgba(10,50,28,.95), rgba(6,32,20,.9)); }
-.btn.ghost { background: rgba(0,10,30,0.25); }
-
-/* assign/swap full-width */
-button.pick { width: 100%; }
-
-/* ---- INPUTS ---- */
-.search {
-  flex: 1 1 auto;
-  padding: .5rem .6rem;
-  border-radius: .45rem;
-  border: 1px solid rgba(30,144,255,0.35);
-  background: rgba(1,8,18,0.45);
-  color: #e6f3ff;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
-}
-.search::placeholder { color: #86a8c6; }
-.search:focus { outline: none; border-color: rgba(120,200,255,0.55); box-shadow: 0 0 0 2px rgba(120,200,255,0.25); background: rgba(1,12,24,0.55); }
-
-.check { display:flex; align-items:center; gap:.45rem; color:#cfe7ff; }
-.check input { width: 16px; height: 16px; }
-
-/* ---- GROUPS & SLOTS ---- */
-.groups { display: grid; gap: 1rem; padding-bottom: 2px; }
-.group-card {
-  border: 1px solid rgba(30,144,255,0.28);
-  background: rgba(0,10,30,0.28);
-  border-radius: .6rem;
-  padding: .7rem .8rem;
-  display: grid; gap: .6rem;
-}
-.group-head { display:flex; align-items:baseline; gap:.6rem; }
-.group-title {
-  margin:0; color:#d9ebff; text-transform:uppercase; letter-spacing:.12em;
-  font-size:1.12rem; line-height:1.2; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.subcount { color:#9ec5e6; font-size:.9rem; margin-left:.5rem; }
-.group-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
-
-.slots-grid { display:grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap:.7rem; }
-@media (min-width:1680px){ .slots-grid{ grid-template-columns: repeat(6, minmax(200px,1fr)); } }
-@media (max-width:1500px){ .slots-grid{ grid-template-columns: repeat(4, minmax(180px,1fr)); } }
-@media (max-width:1100px){ .slots-grid{ grid-template-columns: repeat(3, minmax(160px,1fr)); } }
-@media (max-width:820px){  .slots-grid{ grid-template-columns: repeat(2, minmax(150px,1fr)); } }
-@media (max-width:560px){  .slots-grid{ grid-template-columns: 1fr; } }
-
-.slot {
-  border: 1px solid rgba(30,144,255,0.25);
-  background: linear-gradient(180deg, rgba(1,8,16,0.6), rgba(0,10,20,0.32));
-  border-radius: .55rem;
-  padding: .55rem .6rem;
-  display: grid; gap: .45rem;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
-}
-.slot:hover { border-color: rgba(120,200,255,0.45); box-shadow: 0 0 0 1px rgba(120,200,255,0.08) inset; }
-.slot.vacant { border-style: dashed; opacity: .98; }
-.slot.closed { filter: grayscale(85%); opacity: .6; background: rgba(1,6,14,.9); }
-.slot-topline { display:flex; align-items:center; gap:.5rem; }
-.slot-tag { font-size:.78rem; letter-spacing:.12em; color:#9ec5e6; }
-.slot-role { margin-left:auto; color:#9ec5e6; font-size:.82rem; opacity:.9; }
-.slot-body { display:grid; gap:.45rem; }
-.slot-name { color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:1.2em; }
-
-/* quick cert chip */
-.cert-row { display:flex; }
-.chip {
-  display:inline-flex; align-items:center; gap:.35rem;
-  border:1px solid rgba(90,220,160,0.45);
-  color:#bfffe0; background: rgba(4,24,16,.5);
-  padding:.16rem .45rem; border-radius:999px; font-size:.78rem; letter-spacing:.02em;
-}
-.chip svg circle { fill:none; stroke: rgba(120,255,190,0.7); stroke-width: 2; }
-
-/* ---- OVERVIEW LIST ---- */
-.overview { display:grid; gap:.9rem; }
-.ov-subtitle { margin:.2rem 0; color:#cfe7ff; letter-spacing:.06em; }
-.summary { display:grid; gap:.25rem; }
-.summary-row { display:flex; justify-content:space-between; color:#e6f3ff; }
-.summary-row .label { color:#9ec5e6; }
-.summary-row.total { margin-top:.35rem; border-top:1px solid rgba(30,144,255,0.25); padding-top:.35rem; }
-.ov-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
-.free-list { list-style:none; margin:.4rem 0 0; padding:0; display:grid; gap:.2rem; }
-.free-list li { display:flex; gap:.4rem; color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.free-list .meta { color:#9ec5e6; }
-
-/* ---- PICKER MODAL ---- */
-.picker-veil { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:1000; }
-.picker {
-  width:min(900px, 92vw);
-  max-height:80vh;
-  overflow:hidden;
-  border-radius:.8rem;
-  border:1px solid rgba(30,144,255,0.45);
-  background:rgba(0, 10, 30, 0.98);
-  display:grid; grid-template-rows:auto auto 1fr auto;
-}
-.picker-head { display:flex; align-items:center; justify-content:space-between; padding:.8rem .9rem; border-bottom:1px solid rgba(30,144,255,0.25); }
-.picker-controls { display:flex; gap:.8rem; align-items:center; padding:.6rem .9rem; border-bottom:1px solid rgba(30,144,255,0.18); }
-.picker-list { overflow:auto; padding:.6rem .4rem; display:grid; gap:.4rem; }
-.pick-row {
-  display:grid; grid-template-columns:1fr auto auto; gap:.6rem; align-items:center;
-  border:1px solid rgba(30,144,255,0.25); background:rgba(0,10,30,0.2);
-  border-radius:.5rem; padding:.5rem .6rem;
-}
-.pick-row.assigned { background: rgba(30,144,255,0.08); }
-.p-name { color:#e6f3ff; font-weight:600; }
-.p-meta .subtle { color:#9ec5e6; font-size:.86rem; }
-.badge {
-  color:#79ffba; border:1px solid rgba(120,255,170,0.55);
-  border-radius:999px; padding:.1rem .5rem; font-size:.78rem;
-}
-
-/* ---- ZOOM OVERLAY ---- */
-.zoom-veil { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:grid; place-items:center; z-index:1100; }
-.zoom {
-  width:min(1200px, 94vw);
-  max-height:88vh;
-  overflow:hidden;
-  border-radius:.9rem;
-  border:1px solid rgba(30,144,255,0.45);
-  background:rgba(0,10,30,0.98);
-  display:grid; grid-template-rows:auto 1fr auto;
-  animation: contentEntry 260ms ease-out both;
-}
-.zoom-head {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:.8rem .9rem; border-bottom:1px solid rgba(30,144,255,0.25);
-}
-.zoom-actions { display:flex; gap:.6rem; flex-wrap:wrap; }
-.zoom-grid {
-  overflow:auto; padding:.8rem .9rem;
-  display:grid; gap:.8rem;
-  grid-template-columns: repeat(3, minmax(240px, 1fr));
-}
-@media (max-width:1000px){ .zoom-grid{ grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
-@media (max-width:640px){ .zoom-grid{ grid-template-columns: 1fr; } }
-
-.zoom-slot {
-  border:1px solid rgba(30,144,255,0.35);
-  background:linear-gradient(180deg, rgba(1,8,16,0.6), rgba(0,10,20,0.32));
-  border-radius:.6rem;
-  padding:.7rem .75rem;
-  display:grid; gap:.5rem;
-}
-.zoom-slot.vacant { border-style:dashed; }
-.zoom-top { display:flex; align-items:center; gap:.5rem; }
-.zoom-top .gap { flex:1 1 auto; }
-.zoom-body { display:grid; gap:.5rem; }
-.zoom-name { color:#e6f3ff; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.zoom-cert { display:grid; gap:.25rem; }
-.zoom-cert label { color:#9ec5e6; font-size:.82rem; letter-spacing:.06em; }
-.select {
-  padding:.45rem .55rem; border-radius:.45rem;
-  border:1px solid rgba(30,144,255,0.35);
-  background:rgba(1,8,18,0.45); color:#e6f3ff;
-}
-.zoom-foot { padding:.7rem .9rem; border-top:1px solid rgba(30,144,255,0.25); display:flex; justify-content:flex-end; gap:.6rem; }
+/* modal */
+.picker-veil{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:grid;place-items:center;z-index:1000}
+.picker{width:min(900px,92vw);max-height:80vh;overflow:hidden;border-radius:.8rem;border:1px solid rgba(30,144,255,0.45);background:rgba(0,10,30,0.98);display:grid;grid-template-rows:auto auto 1fr auto}
+.picker-head{display:flex;align-items:center;justify-content:space-between;padding:.8rem .9rem;border-bottom:1px solid rgba(30,144,255,0.25)}
+.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.6rem .9rem;border-bottom:1px solid rgba(30,144,255,0.18)}
+.picker-list{overflow:auto;padding:.6rem .4rem;display:grid;gap:.4rem}
+.pick-row{display:grid;grid-template-columns:1fr auto auto;gap:.6rem;align-items:center;border:1px solid rgba(30,144,255,0.25);background:rgba(0,10,30,0.2);border-radius:.5rem;padding:.5rem .6rem}
+.pick-row.assigned{background:rgba(30,144,255,0.08)}
+.p-name{color:#e6f3ff;font-weight:600}
+.p-meta .subtle{color:#9ec5e6;font-size:.86rem}
+.badge{color:#79ffba;border:1px solid rgba(120,255,170,0.55);border-radius:999px;padding:.1rem .5rem;font-size:.78rem}
 
 /* flicker */
-.section-content-container.animate { animation: contentEntry 260ms ease-out both; }
-@keyframes contentEntry {
-  0% { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
-  60% { opacity: 1; filter: brightness(1.0) saturate(1.0) blur(0); }
-  80% { opacity: .98; filter: brightness(1.03); }
-  100% { opacity: 1; filter: none; }
+.section-content-container.animate{animation:contentEntry 260ms ease-out both}
+@keyframes contentEntry{
+  0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}
+  60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}
+  80%{opacity:.98;filter:brightness(1.03)}
+  100%{opacity:1;filter:none}
 }
 </style>
