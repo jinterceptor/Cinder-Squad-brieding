@@ -1,3 +1,4 @@
+<!-- src/views/DeploymentView.vue -->
 <template>
   <div
     id="deploymentView"
@@ -160,7 +161,9 @@
                         :checked="!!slot.disposable"
                         @change="onToggleDisposable(detailKey, sIdx, $event.target.checked)"
                       />
-                      Disposable launcher <span class="muted small">( +{{ DISPOSABLE_COST }} pt )</span>
+                      <span class="check-label">
+                        Disposable launcher <span class="muted small">( +{{ DISPOSABLE_COST }} pt )</span>
+                      </span>
                     </label>
                   </div>
 
@@ -198,7 +201,7 @@
 
         <div class="picker-controls">
           <input v-model="picker.query" placeholder="Search by name / callsign / role" class="search" @keydown.stop />
-          <label class="check"><input type="checkbox" v-model="picker.onlyFree" /> Show only unassigned</label>
+          <label class="check"><input type="checkbox" v-model="picker.onlyFree" /> <span class="check-label">Show only unassigned</span></label>
         </div>
 
         <div class="picker-list">
@@ -315,7 +318,6 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
-    /* Quick helper: which units use points? */
     isPointsUnit(title) {
       const t = String(title || "").toLowerCase();
       return /\bchalk\s*[1-4]\b/.test(t);
@@ -404,7 +406,7 @@ export default {
       }
       const raw = member?.certs || member?.skills || member?.cert || "";
       if (typeof raw === "string" && raw.trim()) {
-        const tokens = raw.split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
+        const tokens = raw split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
         return [...new Set(tokens.map(this.bestCertLabelMatch).filter(Boolean))];
       }
       if (Array.isArray(raw)) {
@@ -544,7 +546,7 @@ export default {
     },
     wouldExceedCap(unitKey, delta) {
       const unit = this.plan.units.find(u => u.key === unitKey);
-      if (!unit || !this.isPointsUnit(unit.title)) return false; // never block outside Chalk 1–4
+      if (!unit || !this.isPointsUnit(unit.title)) return false;
       return this.unitPointsUsed(unit) + delta > this.SQUAD_POINT_CAP;
     },
 
@@ -576,10 +578,9 @@ export default {
       const available = this.getCertsForPersonId(p.id);
       const chosenCertDefault = available.includes(target.cert) ? target.cert : (available[0] || target.role || p.role || "");
 
-      // compute delta only if this group is points-enabled
       if (isPoints) {
         const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
-        const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0); // new assignee starts disposable=false
+        const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0);
         const delta = nextPts - prevPts;
         if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
           this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
@@ -695,7 +696,6 @@ export default {
       const slot = unit.slots[slotIdx];
 
       if (!this.isPointsUnit(unit.title)) {
-        // outside Chalk 1–4: ignore / force false
         const newSlots = unit.slots.slice();
         newSlots[slotIdx] = { ...slot, disposable: false };
         const newU = { ...unit, slots: newSlots };
@@ -801,7 +801,7 @@ export default {
 .assigned-list .meta{color:#9ec5e6}
 .unit-card-foot{display:flex;gap:.45rem;align-items:center;margin-top:.6rem}
 .unit-card-foot .pts{margin-left:auto;color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.06rem .45rem}
-.unit-card-foot .pts.over{color:#ffd4d4;border-color:rgba(255,140,140,.55);}
+.unit-card-foot .pts.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
 
 /* Detail slots */
 .group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
@@ -824,8 +824,36 @@ export default {
 .zoom-cert{display:grid;gap:.25rem}
 .zoom-cert label{color:#9ec5e6;font-size:.82rem;letter-spacing:.06em}
 .select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
+
+/* Themed checkbox + brighter label for disposable */
 .disp-row{margin-top:.1rem}
-.check{display:inline-flex;align-items:center;gap:.4rem}
+.check{display:inline-flex;align-items:center;gap:.5rem}
+.check .check-label{color:#eaf4ff} /* near-white label for visibility */
+.check input[type="checkbox"]{
+  appearance:none;
+  width:16px;height:16px;
+  border:1px solid rgba(120,255,190,.55);
+  border-radius:4px;
+  background:rgba(0,20,14,.5);
+  box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);
+  position:relative;
+  transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+.check input[type="checkbox"]:hover{border-color:rgba(120,255,190,.85)}
+.check input[type="checkbox"]:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,255,190,.35)}
+.check input[type="checkbox"]:checked{
+  background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9));
+  border-color:rgba(120,255,190,.85);
+}
+.check input[type="checkbox"]:checked::after{
+  content:"";
+  position:absolute;
+  left:3px;top:1px;right:0;bottom:0;
+  width:8px;height:12px;
+  border-right:2px solid #caffe9;
+  border-bottom:2px solid #caffe9;
+  transform:rotate(45deg);
+}
 
 /* Buttons */
 .actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem}
