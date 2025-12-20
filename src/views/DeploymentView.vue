@@ -58,7 +58,7 @@
                   <div class="slot-body">
                     <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
 
-                    <!-- quick cert chip (view-only; edit in Zoom) -->
+                    <!-- view-only cert chip -->
                     <div v-if="slot.id" class="cert-row">
                       <span class="chip" :title="slot.cert ? `Certification: ${slot.cert}` : 'No certification set'">
                         <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden>
@@ -82,7 +82,6 @@
             </div>
           </div>
 
-          <!-- FOOTER ACTIONS -->
           <div class="actions-row">
             <button type="button" class="btn ghost" @click.stop="resetPlan">Reset</button>
             <button type="button" class="btn ghost" @click.stop="fillAllFromRoster">Auto-fill All</button>
@@ -143,7 +142,7 @@
       </div>
     </section>
 
-    <!-- ASSIGN/SWAP PICKER MODAL -->
+    <!-- ASSIGN/SWAP PICKER -->
     <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
       <div class="picker">
         <div class="picker-head">
@@ -196,7 +195,7 @@
       <div class="zoom">
         <div class="zoom-head">
           <h3>{{ zoomUnit?.title || 'Element' }}</h3>
-          <div class="zoom-actions">
+        <div class="zoom-actions">
             <button class="btn ghost small" @click="fillFromRoster(zoom.unitKey)" title="Auto-fill from roster">Auto-fill</button>
             <button class="btn ghost small" @click="closeZoom">Close</button>
           </div>
@@ -262,6 +261,12 @@ export default {
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
       EXCLUDED_UNITS: /^(fillers?|recruits?|reserves?)$/i,
+
+      // mirror PilotsView labels (order-sensitive)  :contentReference[oaicite:2]{index=2}
+      certLabels: [
+        "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
+        "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
+      ],
     };
   },
   created() {
@@ -345,30 +350,73 @@ export default {
         .map(x => x.s);
     },
 
-    /* personnel + certs */
+    /* cert extraction – mirrors PilotsView semantics */
     extractCertsFromMember(member) {
-      // Accept: Array<string>, string, or object { CertName: 'Y'|'N'|true|false }
-      const raw = member?.certs || member?.certifications || member?.skills || member?.cert || [];
-      // Object: pick keys with truthy value
-      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      // Array-of-flags aligned to certLabels → map truthy flags to label names
+      const arr = member?.certifications;
+      if (Array.isArray(arr) && arr.length) {
         const out = [];
-        for (const [k, v] of Object.entries(raw)) {
-          const val = (v ?? "").toString().trim().toLowerCase();
-          const truthy = v === true || val === "y" || val === "yes" || val === "1" || val === "true";
-          if (truthy) out.push(this.titleCase(k));
+        for (let i = 0; i < Math.min(arr.length, this.certLabels.length); i++) {
+          const v = arr[i];
+          const truthy = v === true || v === 1 || v === "1" || String(v).toUpperCase() === "Y";
+          if (truthy) out.push(this.certLabels[i]);
         }
         return [...new Set(out)];
       }
-      // Array
-      if (Array.isArray(raw)) {
-        return [...new Set(raw.map((x) => this.titleCase(String(x || ""))).filter(Boolean))];
+
+      // Object → use keys with truthy values
+      if (arr && typeof arr === "object") {
+        const out = [];
+        for (const [k, v] of Object.entries(arr)) {
+          const truthy = v === true || v === 1 || v === "1" || String(v).toUpperCase() === "Y";
+          if (!truthy) continue;
+          const label = this.bestCertLabelMatch(k);
+          if (label) out.push(label);
+        }
+        return [...new Set(out)];
       }
-      // String
-      if (typeof raw === "string") {
-        return [...new Set(raw.split(/[;,/|]/g).map((x) => this.titleCase(x)).filter(Boolean))];
+
+      // Fallbacks (misc fields)
+      const raw = member?.certs || member?.skills || member?.cert || "";
+      if (typeof raw === "string" && raw.trim()) {
+        const tokens = raw.split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
+        return [...new Set(tokens.map(this.bestCertLabelMatch).filter(Boolean))];
+      }
+      if (Array.isArray(raw)) {
+        return [...new Set(raw.map(this.bestCertLabelMatch).filter(Boolean))];
       }
       return [];
     },
+    bestCertLabelMatch: function (name) {
+      const n = String(name || "").trim().toLowerCase();
+      const map = {
+        "rifleman": "Rifleman",
+        "mg": "Machine Gunner",
+        "machinegunner": "Machine Gunner",
+        "machine gunner": "Machine Gunner",
+        "anti tank": "Anti Tank",
+        "at": "Anti Tank",
+        "corpsman": "Corpsmen",
+        "medic": "Corpsmen",
+        "combat engineer": "Combat Engineer",
+        "engineer": "Combat Engineer",
+        "marksman": "Marksman",
+        "breacher": "Breacher",
+        "grenadier": "Grenadier",
+        "pilot": "Pilot",
+        "rto": "RTO",
+        "pj": "PJ",
+        "nco": "NCO",
+        "officer": "Officer",
+      };
+      if (map[n]) return map[n];
+      // loose contains
+      for (const label of this.certLabels) {
+        if (n.includes(label.toLowerCase())) return label;
+      }
+      return "";
+    },
+
     getCertsForPersonId(personId) {
       const p = this.personnel.find(pp => String(pp.id) === String(personId));
       return p?.certs || [];
@@ -392,7 +440,7 @@ export default {
           (ft.slots || []).forEach((s, idx) => {
             if (s?.member) {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
-              const certs = this.extractCertsFromMember(s.member); // <-- fixed
+              const certs = this.extractCertsFromMember(s.member); // fixed: labels, not Y/N
               pool.push({
                 id,
                 name: String(s.member.name || "Unknown"),
@@ -616,7 +664,7 @@ export default {
 </script>
 
 <style scoped>
-/* layout + styles unchanged from your current themed version */
+/* (styles unchanged) */
 #deploymentView{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,440px);gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px;}
 @media (max-width:1280px){#deploymentView{grid-template-columns:1fr;}}
 .deployment-window.section-container,.overview-window.section-container{max-width:none!important;width:auto;}
@@ -701,5 +749,5 @@ button.pick{width:100%}
 .select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
 .zoom-foot{padding:.7rem .9rem;border-top:1px solid rgba(30,144,255,0.25);display:flex;justify-content:flex-end;gap:.6rem}
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
-@keyframes contentEntry{0%{opacity:0;filter:brightness(1.15) saturate(1.05) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}}
+@keyframes contentEntry{0%{opacity:0;filter:brightness(1.15) saturate(1.05) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}
 </style>
