@@ -58,6 +58,22 @@
 
                   <div class="slot-body">
                     <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
+
+                    <!-- cert chip (only when someone is assigned) -->
+                    <div v-if="slot.id" class="cert-row">
+                      <button
+                        class="chip"
+                        type="button"
+                        @click.stop="openCertPicker(g.key, sIdx)"
+                        :title="slot.cert ? `Certification: ${slot.cert}` : 'Set certification'"
+                      >
+                        <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden>
+                          <circle cx="10" cy="10" r="8"></circle>
+                        </svg>
+                        <span>{{ slot.cert || 'Set cert' }}</span>
+                      </button>
+                    </div>
+
                     <button
                       type="button"
                       class="btn primary pick"
@@ -72,6 +88,7 @@
             </div>
           </div>
 
+          <!-- FOOTER ACTIONS -->
           <div class="actions-row">
             <button type="button" class="btn ghost" @click.stop="resetPlan">Reset</button>
             <button type="button" class="btn ghost" @click.stop="fillAllFromRoster">Auto-fill All</button>
@@ -189,6 +206,52 @@
         </div>
       </div>
     </div>
+
+    <!-- CERT PICKER MODAL -->
+    <div v-if="certPicker.open" class="picker-veil" @click.self="closeCertPicker">
+      <div class="picker" style="max-width:560px">
+        <div class="picker-head">
+          <h3>
+            Set Certification
+            <span class="muted">— {{ certPicker.memberName || 'Unassigned' }}</span>
+          </h3>
+          <button type="button" class="btn ghost" @click="closeCertPicker">Close</button>
+        </div>
+
+        <div class="picker-controls">
+          <div class="muted small">Choose which certification they’re using for this slot.</div>
+        </div>
+
+        <div class="picker-list">
+          <div
+            v-for="c in certPicker.certs"
+            :key="c"
+            class="pick-row"
+            :class="{ assigned: certPicker.selected === c }"
+            @click="certPicker.selected = c"
+          >
+            <div class="pick-info">
+              <div class="p-name">{{ c }}</div>
+            </div>
+            <div class="pick-actions">
+              <button
+                type="button"
+                class="btn primary small"
+                @click.stop="saveCert(c)"
+              >
+                Use
+              </button>
+            </div>
+          </div>
+
+          <div v-if="!certPicker.certs.length" class="muted small">No certifications found for this member.</div>
+        </div>
+
+        <div class="picker-foot">
+          <button type="button" class="btn ghost" @click="saveCert('')">Clear cert</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -202,19 +265,17 @@ export default {
       animationDelay: "0ms",
       plan: { units: [] },
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
+      certPicker: { open: false, unitKey: "", slotIdx: -1, certs: [], selected: "", memberName: "" },
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
-
-      // new: names to exclude from UI (normalized)
       EXCLUDED_UNITS: /^(fillers?|recruits?|reserves?)$/i,
     };
   },
   created() {
     this.personnel = this.buildPersonnelPool(this.orbat);
     const saved = this.loadSaved();
-    // filter out excluded units if any were persisted before this change
     this.plan.units = (saved ?? this.buildUnitsFromOrbat(this.orbat)).filter(
       (u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title))
     );
@@ -243,26 +304,23 @@ export default {
     unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
-    /* --- helpers --- */
-    normalizeTitle(t) { return String(t || "").trim(); },
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
     },
+    normalizeTitle(t) { return String(t || "").trim(); },
     loadSaved() {
       try {
         const saved = sessionStorage.getItem(this.STORAGE_KEY);
         if (!saved) return null;
         const parsed = JSON.parse(saved);
         if (!Array.isArray(parsed?.units)) return null;
-        // strip excluded if present in a stale save
         return parsed.units.filter((u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title)));
       } catch {}
       return null;
     },
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
-
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -286,7 +344,28 @@ export default {
         .map(x => x.s);
     },
 
-    /* --- data builders --- */
+    /* ---- CERT HELPERS ---- */
+    extractCertsFromMember(member) {
+      // why: be tolerant to different source fields
+      const raw =
+        member?.certs ||
+        member?.certifications ||
+        member?.skills ||
+        [];
+      const arr = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(/[;,/|]/g) : [];
+      return [...new Set(arr.map((x) => String(x || "").trim()).filter(Boolean))];
+    },
+    getCertsForPersonId(personId) {
+      const p = this.personnel.find(pp => String(pp.id) === String(personId));
+      return p?.certs || [];
+    },
+    ensureSlotCert(slot, fallbackRole = "") {
+      if (slot.cert) return slot.cert;
+      const certs = this.getCertsForPersonId(slot.id) || [];
+      return certs[0] || String(fallbackRole || slot.role || "").trim();
+    },
+
+    /* ---- BUILDERS ---- */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -294,11 +373,13 @@ export default {
           (ft.slots || []).forEach((s, idx) => {
             if (s?.member) {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
+              const certs = this.extractCertsFromMember(s.member);
               pool.push({
                 id,
                 name: String(s.member.name || "Unknown"),
                 callsign: String(s.member.callsign || ""),
                 role: String(s.role || s.member.slot || ""),
+                certs, // carry
               });
             }
           });
@@ -309,7 +390,7 @@ export default {
       return out;
     },
     isChalk(title) { return /chalk\s*\d+/i.test(String(title || "")); },
-    padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT" }); return out; },
+    padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
@@ -317,7 +398,6 @@ export default {
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach(sq => {
-        // skip excluded unit titles entirely
         if (this.EXCLUDED_UNITS.test(this.normalizeTitle(sq.squad))) return;
 
         const key = this.keyFromName(sq.squad);
@@ -327,12 +407,15 @@ export default {
             const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
             const origStatus = ["VACANT", "CLOSED"].includes(status) ? status : "FILLED";
             const member = s?.member || null;
-            slots.push({
+            const slot = {
               id: member?.id ? String(member.id) : null,
               name: member?.name || null,
               role: s?.role || member?.slot || "",
               origStatus,
-            });
+              cert: "", // filled below
+            };
+            if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
+            slots.push(slot);
           });
         });
         let finalSlots = this.sortSlotsByRole(slots);
@@ -344,7 +427,6 @@ export default {
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
       if (!unit) return null;
-      // skip if request is for an excluded unit
       if (this.EXCLUDED_UNITS.test(this.normalizeTitle(unit.squad))) return null;
 
       const slots = [];
@@ -353,12 +435,15 @@ export default {
           const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
           const origStatus = ["VACANT", "CLOSED"].includes(status) ? status : "FILLED";
           const member = s?.member || null;
-          slots.push({
+          const slot = {
             id: member?.id ? String(member.id) : null,
             name: member?.name || null,
             role: s?.role || member?.slot || "",
             origStatus,
-          });
+            cert: "",
+          };
+          if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
+          slots.push(slot);
         });
       });
       let finalSlots = this.sortSlotsByRole(slots);
@@ -366,13 +451,43 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    /* --- interactions --- */
+    /* ---- ASSIGN / PICKERS ---- */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
       this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false };
     },
     closePicker() { this.picker.open = false; },
+
+    openCertPicker(unitKey, slotIdx) {
+      const g = this.plan.units.find(u => u.key === unitKey);
+      const slot = g?.slots?.[slotIdx];
+      if (!slot?.id) return;
+
+      const certs = this.getCertsForPersonId(slot.id);
+      this.certPicker = {
+        open: true,
+        unitKey,
+        slotIdx,
+        certs,
+        selected: slot.cert || (certs[0] || ""),
+        memberName: slot.name || "",
+      };
+    },
+    closeCertPicker() { this.certPicker.open = false; },
+    saveCert(value) {
+      const { unitKey, slotIdx } = this.certPicker;
+      const gIdx = this.plan.units.findIndex(u => u.key === unitKey);
+      if (gIdx < 0) return;
+      const g = this.plan.units[gIdx];
+      const newSlots = g.slots.slice();
+      newSlots[slotIdx] = { ...newSlots[slotIdx], cert: String(value || "") };
+      const newG = { ...g, slots: newSlots };
+      this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? newG : u));
+      this.persistPlan();
+      this.closeCertPicker();
+    },
+
     findAssignment(personId) {
       for (const g of this.plan.units) {
         const idx = g.slots.findIndex(s => String(s.id) === String(personId));
@@ -390,35 +505,48 @@ export default {
       const g = this.plan.units[gIdx];
       const target = g.slots[this.picker.slotIdx];
 
+      const chosenCertDefault = (this.getCertsForPersonId(p.id)[0] || target.role || p.role || "");
+
       if (from && target?.id && !(from.unitKey === g.key && from.slotIdx === this.picker.slotIdx)) {
         const srcIdx = this.plan.units.findIndex(u => u.key === from.unitKey);
         const srcGroup = this.plan.units[srcIdx];
         const tmp = { ...target };
-        const newTarget = { ...target, id: p.id, name: p.name, role: target.role || p.role || "" };
+        const newTarget = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: target.cert || chosenCertDefault };
+
         const newSrcSlots = srcGroup.slots.slice();
-        newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name };
+        newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name, cert: tmp.cert || this.ensureSlotCert(tmp, tmp.role) };
         const newSrc = { ...srcGroup, slots: this.sortSlotsByRole(newSrcSlots) };
+
         const newGSlots = g.slots.slice();
         newGSlots[this.picker.slotIdx] = newTarget;
         const newG = { ...g, slots: this.sortSlotsByRole(newGSlots) };
+
         this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? newG : i === srcIdx ? newSrc : u));
       } else {
         const newSlots = g.slots.slice();
-        newSlots[this.picker.slotIdx] = { ...target, id: p.id, name: p.name, role: target.role || p.role || "" };
+        newSlots[this.picker.slotIdx] = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: target.cert || chosenCertDefault };
         const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
         this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? newG : u));
       }
 
       this.persistPlan();
       this.closePicker();
+
+      // if multiple certs, prompt right away
+      const certs = this.getCertsForPersonId(p.id);
+      if (certs.length > 1) this.openCertPicker(this.picker.unitKey, this.picker.slotIdx);
     },
 
+    clearCurrentSlot() {
+      if (!this.picker.open) return;
+      this.clearSlot(this.picker.unitKey, this.picker.slotIdx);
+    },
     clearSlot(unitKey, slotIdx) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
       const g = this.plan.units[idx];
       const newSlots = g.slots.slice();
-      newSlots[slotIdx] = { ...newSlots[slotIdx], id: null, name: null };
+      newSlots[slotIdx] = { ...newSlots[slotIdx], id: null, name: null, cert: "" };
       const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
@@ -427,7 +555,7 @@ export default {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
       const g = this.plan.units[idx];
-      const emptied = g.slots.map(s => ({ ...s, id: null, name: null }));
+      const emptied = g.slots.map(s => ({ ...s, id: null, name: null, cert: "" }));
       const newG = { ...g, slots: this.sortSlotsByRole(emptied) };
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
@@ -437,7 +565,7 @@ export default {
       if (idx < 0) return;
       const g = this.plan.units[idx];
       const newSlots = g.slots.slice();
-      newSlots.push({ id: null, name: null, role: "", origStatus: "VACANT" });
+      newSlots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" });
       const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
@@ -453,24 +581,23 @@ export default {
       this.persistPlan();
     },
 
-    /* --- fill / reset --- */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
-      if (!rebuilt) return; // excluded or not found
+      if (!rebuilt) return;
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
       const keepLen = Math.max(this.plan.units[idx].slots.length, rebuilt.slots.length);
-      while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id: null, name: null, role: "", origStatus: "VACANT" });
+      while (rebuilt.slots.length < keepLen) rebuilt.slots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" });
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? rebuilt : u));
       this.persistPlan();
       this.triggerFlicker(0);
     },
     fillAllFromRoster() {
-      const rebuilt = this.buildUnitsFromOrbat(this.orbat); // already excludes
+      const rebuilt = this.buildUnitsFromOrbat(this.orbat);
       const out = rebuilt.map(u => {
         const prev = this.plan.units.find(x => x.key === u.key);
         const keepLen = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
-        while (u.slots.length < keepLen) u.slots.push({ id: null, name: null, role: "", origStatus: "VACANT" });
+        while (u.slots.length < keepLen) u.slots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "" });
         return u;
       });
       this.plan.units = out;
@@ -478,7 +605,7 @@ export default {
       this.triggerFlicker(0);
     },
     resetPlan() {
-      this.plan.units = this.buildUnitsFromOrbat(this.orbat); // excludes
+      this.plan.units = this.buildUnitsFromOrbat(this.orbat);
       this.persistPlan();
       this.triggerFlicker(0);
     },
@@ -492,56 +619,33 @@ export default {
     },
   },
   watch: {
-    orbat: { deep: true, handler(newV) {
-      if (Array.isArray(newV) && newV.length) this.personnel = this.buildPersonnelPool(newV);
-    }},
-    plan: { deep: true, handler() { this.persistPlan(); } },
+    orbat: { deep: true, handler(newV) { if (Array.isArray(newV) && newV.length) this.personnel = this.buildPersonnelPool(newV); } },
+    plan:  { deep: true, handler() { this.persistPlan(); } },
   },
 };
 </script>
 
 <style scoped>
-/* sizing / layout unchanged from your current version */
+/* sizing from your current version */
 #deploymentView {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
-  gap: 1.2rem;
-  align-items: start;
+  gap: 1.2rem; align-items: start;
   height: calc(94vh - 100px);
-  overflow: hidden;
-  padding: 28px 18px 32px;
+  overflow: hidden; padding: 28px 18px 32px;
 }
 @media (max-width: 1280px) { #deploymentView { grid-template-columns: 1fr; } }
-
-.deployment-window.section-container,
-.overview-window.section-container { max-width: none !important; width: auto; }
-.deployment-window { grid-column: 1; }
-.overview-window   { grid-column: 2; }
-
+.deployment-window.section-container, .overview-window.section-container { max-width: none !important; width: auto; }
+.deployment-window { grid-column: 1; } .overview-window { grid-column: 2; }
 .header-shell { height: 52px; overflow: hidden; }
 .section-header, .section-content-container { width: 100%; }
+.deploy-scroll, .overview-scroll { max-height: calc(94vh - 100px - 52px - 36px); overflow-y: auto; scrollbar-gutter: stable both-edges; padding-bottom: 36px; }
 
-.deploy-scroll,
-.overview-scroll {
-  max-height: calc(94vh - 100px - 52px - 36px);
-  overflow-y: auto;
-  scrollbar-gutter: stable both-edges;
-  padding-bottom: 36px;
-}
-
-.panel {
-  border: 1px dashed rgba(30,144,255,0.35);
-  background: rgba(0,10,30,0.18);
-  border-radius: .6rem;
-  padding: .8rem .9rem;
-  overflow: visible;
-}
-
-.muted { color: #9ec5e6; }
-.small { font-size: .86rem; }
+.panel { border: 1px dashed rgba(30,144,255,0.35); background: rgba(0,10,30,0.18); border-radius: .6rem; padding: .8rem .9rem; overflow: visible; }
+.muted { color: #9ec5e6; } .small { font-size: .86rem; }
 .actions-row { display:flex; gap:.6rem; flex-wrap:wrap; padding-top:.4rem; }
 
-/* buttons / inputs / slots (from your styled version) */
+/* buttons/inputs/slots (from your styled version) */
 .btn { appearance:none; border:1px solid rgba(30,144,255,0.35); background:linear-gradient(180deg, rgba(6,18,30,.75), rgba(2,10,20,.6)); color:#dbeeff; padding:.42rem .7rem; border-radius:.5rem; font-size:.92rem; letter-spacing:.02em; cursor:pointer; transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease; box-shadow: inset 0 0 0 1px rgba(120,200,255,0.08); }
 .btn:hover { background:linear-gradient(180deg, rgba(10,28,44,.85), rgba(2,12,22,.7)); border-color:rgba(120,200,255,0.5); }
 .btn:active { transform: translateY(1px) scale(0.995); }
@@ -554,12 +658,9 @@ export default {
 .btn.ghost{ background: rgba(0,10,30,0.25); }
 button.pick{ width:100%; }
 
-.search{ flex:1 1 auto; padding:.5rem .6rem; border-radius:.45rem; border:1px solid rgba(30,144,255,0.35); background:rgba(1,8,18,0.45); color:#e6f3ff; transition:border-color 120ms ease, box-shadow 120ms ease, background 120ms ease; }
+.search{ flex:1 1 auto; padding:.5rem .6rem; border-radius:.45rem; border:1px solid rgba(30,144,255,0.35); background:rgba(1,8,18,0.45); color:#e6f3ff; }
 .search::placeholder{ color:#86a8c6; }
 .search:focus{ outline:none; border-color:rgba(120,200,255,0.55); box-shadow:0 0 0 2px rgba(120,200,255,0.25); background:rgba(1,12,24,0.55); }
-
-.check{ display:flex; align-items:center; gap:.45rem; color:#cfe7ff; }
-.check input{ width:16px; height:16px; }
 
 .groups{ display:grid; gap:1rem; padding-bottom:2px; }
 .group-card{ border:1px solid rgba(30,144,255,0.28); background:rgba(0,10,30,0.28); border-radius:.6rem; padding:.7rem .8rem; display:grid; gap:.6rem; }
@@ -585,7 +686,17 @@ button.pick{ width:100%; }
 .slot-body{ display:grid; gap:.45rem; }
 .slot-name{ color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:1.2em; }
 
-/* overview list */
+.cert-row { display:flex; }
+.chip {
+  display:inline-flex; align-items:center; gap:.35rem;
+  border:1px solid rgba(90,220,160,0.45);
+  color:#bfffe0; background: rgba(4,24,16,.5);
+  padding:.16rem .45rem; border-radius:999px; font-size:.78rem; letter-spacing:.02em;
+  transition: border-color 120ms ease, background 120ms ease, transform 80ms ease;
+}
+.chip:hover { border-color: rgba(120,255,190,0.7); background: rgba(6,32,22,.65); }
+.chip svg circle { fill:none; stroke: rgba(120,255,190,0.7); stroke-width: 2; }
+
 .overview{ display:grid; gap:.9rem; }
 .ov-subtitle{ margin:.2rem 0; color:#cfe7ff; letter-spacing:.06em; }
 .summary{ display:grid; gap:.25rem; }
@@ -597,12 +708,23 @@ button.pick{ width:100%; }
 .free-list li{ display:flex; gap:.4rem; color:#e6f3ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .free-list .meta{ color:#9ec5e6; }
 
-/* modal flicker */
-.section-content-container.animate{ animation: contentEntry 260ms ease-out both; }
-@keyframes contentEntry{
-  0%{ opacity:0; filter:brightness(1.15) saturate(1.05) blur(1px); }
-  60%{ opacity:1; filter:brightness(1.0) saturate(1.0) blur(0); }
-  80%{ opacity:.98; filter:brightness(1.03); }
-  100%{ opacity:1; filter:none; }
+/* modal + flicker */
+.picker-veil { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: grid; place-items: center; z-index: 1000; }
+.picker { width: min(900px, 92vw); max-height: 80vh; overflow: hidden; border-radius: .8rem; border: 1px solid rgba(30,144,255,0.45); background: rgba(0, 10, 30, 0.98); display: grid; grid-template-rows: auto auto 1fr auto; }
+.picker-head { display: flex; align-items: center; justify-content: space-between; padding: .8rem .9rem; border-bottom: 1px solid rgba(30,144,255,0.25); }
+.picker-controls { display: flex; gap: .8rem; align-items: center; padding: .6rem .9rem; border-bottom: 1px solid rgba(30,144,255,0.18); color:#cfe7ff; }
+.picker-list { overflow: auto; padding: .6rem .4rem; display: grid; gap: .4rem; }
+.pick-row { display: grid; grid-template-columns: 1fr auto auto; gap: .6rem; align-items: center; border: 1px solid rgba(30,144,255,0.25); background: rgba(0,10,30,0.2); border-radius: .5rem; padding: .5rem .6rem; }
+.pick-row.assigned { background: rgba(30,144,255,0.08); }
+.p-name { color: #e6f3ff; font-weight: 600; }
+.p-meta .subtle { color: #9ec5e6; font-size: .86rem; }
+.badge { color: #79ffba; border: 1px solid rgba(120,255,170,0.55); border-radius: 999px; padding: .1rem .5rem; font-size: .78rem; }
+
+.section-content-container.animate { animation: contentEntry 260ms ease-out both; }
+@keyframes contentEntry {
+  0% { opacity: 0; filter: brightness(1.15) saturate(1.05) blur(1px); }
+  60% { opacity: 1; filter: brightness(1.0) saturate(1.0) blur(0); }
+  80% { opacity: .98; filter: brightness(1.03); }
+  100% { opacity: 1; filter: none; }
 }
 </style>
