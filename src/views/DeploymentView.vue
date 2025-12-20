@@ -6,98 +6,35 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- HEADER -->
+    <!-- SINGLE LARGE CONTAINER -->
     <section class="section-container deployment-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
           <img src="/icons/protocol.svg" alt="" />
-          <h1>{{ viewMode === 'summary' ? 'DEPLOYMENT' : currentUnit?.title || 'ELEMENT' }}</h1>
+          <h1>DEPLOYMENT — {{ currentUnit?.title || 'Chalk' }}</h1>
         </div>
         <div class="rhombus-back">&nbsp;</div>
       </div>
 
-      <!-- SUMMARY MODE -->
-      <div
-        v-if="viewMode === 'summary'"
-        class="section-content-container deploy-scroll"
-        :class="{ animate: animateView }"
-      >
+      <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
-          <div class="summary-toolbar">
-            <button class="btn ghost small" @click="fillAllFromRoster">Auto-fill All</button>
-            <button class="btn ghost small" @click="resetPlan">Reset</button>
-            <button class="btn ghost small" @click="exportJson">Export JSON</button>
-            <div class="muted small" style="margin-left:auto;">
-              Assigned: {{ totalAssigned }} / {{ totalSlots }} · Unassigned: {{ unassignedCount }}
-            </div>
-          </div>
-
-          <div v-if="!plan.units.length" class="muted">No eligible elements found.</div>
-
-          <div class="cards-grid">
-            <div
-              v-for="g in plan.units"
-              :key="g.key"
-              class="unit-card"
-              @click="openDetail(g.key)"
-              role="button"
-              tabindex="0"
-            >
-              <div class="unit-card-head">
-                <img src="/icons/license.svg" alt="" />
-                <h2 class="unit-title">{{ g.title }}</h2>
-                <span class="pill">{{ filledCount(g) }}/{{ g.slots.length }}</span>
-              </div>
-
-              <div class="unit-card-body">
-                <ul class="assigned-list">
-                  <li v-for="s in g.slots.filter(s=>!!s.id).slice(0,8)" :key="s.id">
-                    <span class="name" :title="displayName(s)">{{ displayName(s) }}</span>
-                    <span v-if="s.role" class="meta">· {{ s.role }}</span>
-                  </li>
-                </ul>
-                <div v-if="g.slots.filter(s=>!!s.id).length > 8" class="muted small">
-                  +{{ g.slots.filter(s=>!!s.id).length - 8 }} more…
-                </div>
-              </div>
-
-              <div class="unit-card-foot">
-                <button class="btn primary small" @click.stop="openDetail(g.key)">Open</button>
-                <button class="btn ghost small" @click.stop="fillFromRoster(g.key)">Auto-fill</button>
-                <button class="btn ghost small" @click.stop="clearGroup(g.key)">Clear</button>
-
-                <!-- Points only for Chalk 1–4 -->
-                <span
-                  v-if="isPointsUnit(g.title)"
-                  class="pts small"
-                  :class="{ over: unitPointsUsed(g) > SQUAD_POINT_CAP }"
-                  title="Certification points"
-                >
-                  {{ unitPointsUsed(g) }} / {{ SQUAD_POINT_CAP }} pts
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- DETAIL MODE -->
-      <div
-        v-else
-        class="section-content-container deploy-scroll"
-        :class="{ animate: animateView }"
-      >
-        <div class="panel">
+          <!-- Top toolbar: Chalk picker + actions + points (only 1–4) -->
           <div class="detail-toolbar">
-            <button class="btn ghost small" @click="backToSummary">Back</button>
-            <button class="btn ghost small" @click="fillFromRoster(detailKey)">Auto-fill</button>
-            <button class="btn ghost small" @click="clearGroup(detailKey)">Clear</button>
+            <div class="toolbar-left">
+              <label class="muted small">Chalk</label>
+              <select class="select chalk-picker" :value="detailKey" @change="switchUnit($event.target.value)">
+                <option v-for="u in chalkUnits" :key="u.key" :value="u.key">{{ u.title }}</option>
+              </select>
+              <button class="btn ghost small" @click="fillFromRoster(detailKey)">Auto-fill</button>
+              <button class="btn ghost small" @click="clearGroup(detailKey)">Clear</button>
+              <button class="btn ghost small" @click="resetPlan">Reset All</button>
+            </div>
 
-            <div class="muted small" style="margin-left:auto; display:flex; align-items:center; gap:.6rem">
+            <div class="muted small toolbar-right">
               <span>{{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }} assigned</span>
               <span class="divider" />
               <span
-                v-if="currentUnit && isPointsUnit(currentUnit.title)"
+                v-if="currentUnit"
                 class="pts big"
                 :class="{ over: unitPointsUsed(currentUnit) > SQUAD_POINT_CAP }"
               >
@@ -106,8 +43,9 @@
             </div>
           </div>
 
-          <div v-if="!currentUnit" class="muted">No element selected.</div>
+          <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
+          <!-- Detailed editor for the selected Chalk -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
@@ -151,10 +89,7 @@
                   </div>
 
                   <!-- Disposable: show for ALL in Chalk 1–4 -->
-                  <div
-                    v-if="slot.id && currentUnit && isPointsUnit(currentUnit.title)"
-                    class="disp-row"
-                  >
+                  <div v-if="slot.id && currentUnit" class="disp-row">
                     <label class="check">
                       <input
                         type="checkbox"
@@ -196,7 +131,7 @@
             {{ currentSlotTitle }}
             <span class="muted">— select soldier</span>
           </h3>
-          <button type="button" class="btn ghost" @click="closePicker">Close</button>
+            <button type="button" class="btn ghost" @click="closePicker">Close</button>
         </div>
 
         <div class="picker-controls">
@@ -247,7 +182,6 @@ export default {
       animateView: false,
       animationDelay: "0ms",
 
-      viewMode: "summary",
       detailKey: "",
       detailError: "",
 
@@ -259,7 +193,7 @@ export default {
 
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
-      EXCLUDED_UNITS: /^(fillers?|recruits?|reserves?)$/i,
+      /* no need for EXCLUDED_UNITS anymore; we only keep Chalk 1–4 */
 
       /* certification system */
       SQUAD_POINT_CAP: 10,
@@ -287,14 +221,19 @@ export default {
   },
   created() {
     this.personnel = this.buildPersonnelPool(this.orbat);
-    const saved = this.loadSaved();
-    this.plan.units = (saved ?? this.buildUnitsFromOrbat(this.orbat)).filter(
-      (u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title))
-    );
-    this.plan.units.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
+
+    // Build from ORBAT, then keep only Chalk 1–4
+    const built = this.buildUnitsFromOrbat(this.orbat).filter(u => this.isPointsUnit(u.title));
+    // Add padding + defaults
+    built.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
+    this.plan.units = built;
+
+    // Default to first chalk
+    if (this.plan.units.length) this.detailKey = this.plan.units[0].key;
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
+    chalkUnits() { return this.plan.units; },
     currentUnit() { return this.plan.units.find(u => u.key === this.detailKey) || null; },
     currentSlotTitle() {
       if (!this.picker.open) return "";
@@ -312,10 +251,6 @@ export default {
       );
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
-    totalSlots() { return this.plan.units.reduce((n, g) => n + g.slots.length, 0); },
-    totalAssigned() { return this.plan.units.reduce((n, g) => n + g.slots.filter(s => !!s.id).length, 0); },
-    freePersonnel() { return this.personnel.filter(p => !this.findAssignment(p.id)); },
-    unassignedCount() { return this.freePersonnel.length; },
   },
   methods: {
     isPointsUnit(title) {
@@ -330,32 +265,14 @@ export default {
       this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
     },
 
-    /* routing-like mode switches */
-    openDetail(unitKey) {
-      this.detailKey = unitKey;
-      this.viewMode = "detail";
-      this.detailError = "";
-      this.triggerFlicker(0);
-    },
-    backToSummary() {
-      this.viewMode = "summary";
-      this.detailKey = "";
+    switchUnit(key) {
+      if (!key || key === this.detailKey) return;
+      this.detailKey = key;
       this.detailError = "";
       this.triggerFlicker(0);
     },
 
-    /* persistence */
-    normalizeTitle(t) { return String(t || "").trim(); },
-    loadSaved() {
-      try {
-        const saved = sessionStorage.getItem(this.STORAGE_KEY);
-        if (!saved) return null;
-        const parsed = JSON.parse(saved);
-        if (!Array.isArray(parsed?.units)) return null;
-        return parsed.units.filter((u) => !this.EXCLUDED_UNITS.test(this.normalizeTitle(u.title)));
-      } catch {}
-      return null;
-    },
+    /* persistence (optional: keep if you still want session save) */
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
 
     /* role sort helpers */
@@ -472,7 +389,11 @@ export default {
     },
 
     isChalk(title) { return /\bchalk\s*\d+\b/i.test(String(title || "")); },
-    padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false }); return out; },
+    padSlots(arr, min) {
+      const out = arr.slice();
+      while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false });
+      return out;
+    },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
@@ -480,7 +401,7 @@ export default {
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach(sq => {
-        if (this.EXCLUDED_UNITS.test(this.normalizeTitle(sq.squad))) return;
+        // keep all for now; we'll filter to chalk 1–4 later
         const key = this.keyFromName(sq.squad);
         const slots = [];
         (sq.fireteams || []).forEach(ft => {
@@ -506,10 +427,10 @@ export default {
       });
       return units;
     },
+
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
       if (!unit) return null;
-      if (this.EXCLUDED_UNITS.test(this.normalizeTitle(unit.squad))) return null;
 
       const slots = [];
       (unit.fireteams || []).forEach(ft => {
@@ -536,7 +457,7 @@ export default {
 
     /* points helpers */
     unitPointsUsed(unit) {
-      if (!unit || !this.isPointsUnit(unit.title)) return 0;
+      if (!unit) return 0;
       return unit.slots.reduce((sum, s) => {
         if (!s.id) return sum;
         const certPts = this.CERT_POINTS[s.cert] ?? 0;
@@ -546,14 +467,14 @@ export default {
     },
     wouldExceedCap(unitKey, delta) {
       const unit = this.plan.units.find(u => u.key === unitKey);
-      if (!unit || !this.isPointsUnit(unit.title)) return false;
+      if (!unit) return false;
       return this.unitPointsUsed(unit) + delta > this.SQUAD_POINT_CAP;
     },
 
     /* interactions */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
-      if (!g || g.slots[slotIdx]?.origStatus === 'CLOSED') return;
+      if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
       this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false };
     },
     closePicker() { this.picker.open = false; },
@@ -573,19 +494,16 @@ export default {
       if (gIdx < 0) return;
       const g = this.plan.units[gIdx];
       const target = g.slots[this.picker.slotIdx];
-      const isPoints = this.isPointsUnit(g.title);
 
       const available = this.getCertsForPersonId(p.id);
       const chosenCertDefault = available.includes(target.cert) ? target.cert : (available[0] || target.role || p.role || "");
 
-      if (isPoints) {
-        const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
-        const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0);
-        const delta = nextPts - prevPts;
-        if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
-          this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
-          return;
-        }
+      const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
+      const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0); // new assignee starts disposable=false
+      const delta = nextPts - prevPts;
+      if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
+        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+        return;
       }
       this.detailError = "";
 
@@ -663,23 +581,20 @@ export default {
       this.detailError = "";
     },
 
-    /* points-aware handlers */
+    /* points-aware handlers (always relevant for Chalk 1–4) */
     onChangeCert(unitKey, slotIdx, nextCert) {
       const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
       if (uIdx < 0) return;
       const unit = this.plan.units[uIdx];
       const slot = unit.slots[slotIdx];
-      const isPoints = this.isPointsUnit(unit.title);
 
-      if (isPoints) {
-        const prevPts = (this.CERT_POINTS[slot.cert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
-        const nextPts = (this.CERT_POINTS[nextCert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
-        const delta = nextPts - prevPts;
+      const prevPts = (this.CERT_POINTS[slot.cert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
+      const nextPts = (this.CERT_POINTS[nextCert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
+      const delta = nextPts - prevPts;
 
-        if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
-          this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
-          return;
-        }
+      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
+        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+        return;
       }
       this.detailError = "";
 
@@ -694,15 +609,6 @@ export default {
       if (uIdx < 0) return;
       const unit = this.plan.units[uIdx];
       const slot = unit.slots[slotIdx];
-
-      if (!this.isPointsUnit(unit.title)) {
-        const newSlots = unit.slots.slice();
-        newSlots[slotIdx] = { ...slot, disposable: false };
-        const newU = { ...unit, slots: newSlots };
-        this.plan.units = this.plan.units.map((u, i) => (i === uIdx ? newU : u));
-        this.persistPlan();
-        return;
-      }
 
       const add = checked ? this.DISPOSABLE_COST : 0;
       const remove = !checked ? this.DISPOSABLE_COST : 0;
@@ -734,21 +640,12 @@ export default {
       this.detailError = "";
       this.triggerFlicker(0);
     },
-    fillAllFromRoster() {
-      const rebuilt = this.buildUnitsFromOrbat(this.orbat);
-      const out = rebuilt.map(u => {
-        const prev = this.plan.units.find(x => x.key === u.key);
-        const keepLen = prev ? Math.max(prev.slots.length, u.slots.length) : u.slots.length;
-        while (u.slots.length < keepLen) u.slots.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false });
-        return u;
-      });
-      this.plan.units = out;
-      this.persistPlan();
-      this.detailError = "";
-      this.triggerFlicker(0);
-    },
     resetPlan() {
-      this.plan.units = this.buildUnitsFromOrbat(this.orbat);
+      this.plan.units = this.buildUnitsFromOrbat(this.orbat).filter(u => this.isPointsUnit(u.title));
+      this.plan.units.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
+      if (!this.plan.units.find(u => u.key === this.detailKey) && this.plan.units.length) {
+        this.detailKey = this.plan.units[0].key;
+      }
       this.persistPlan();
       this.detailError = "";
       this.triggerFlicker(0);
@@ -769,7 +666,6 @@ export default {
         this.personnel = this.buildPersonnelPool(newV);
       }
     }},
-    plan:  { deep: true, handler() { this.persistPlan(); } },
   },
 };
 </script>
@@ -782,26 +678,11 @@ export default {
 
 .panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
 .muted{color:#9ec5e6}.small{font-size:.86rem}
-.summary-toolbar,.detail-toolbar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem}
+.detail-toolbar{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;justify-content:space-between}
+.toolbar-left{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.toolbar-right{display:flex;gap:.6rem;align-items:center}
+.chalk-picker{min-width:160px}
 .divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block}
-
-/* Cards */
-.cards-grid{display:grid;gap:1rem;grid-template-columns:repeat(3,minmax(260px,1fr))}
-@media (max-width:1400px){.cards-grid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
-@media (max-width:900px){.cards-grid{grid-template-columns:1fr}}
-.unit-card{background:rgba(0,10,30,.32);border:1px solid rgba(30,144,255,.28);border-radius:.7rem;padding:.75rem .8rem;cursor:pointer;transition:transform 80ms ease,border-color 120ms ease,box-shadow 120ms ease}
-.unit-card:hover{transform:translateY(-1px);border-color:rgba(120,200,255,.45);box-shadow:0 0 0 1px rgba(120,200,255,.08) inset}
-.unit-card-head{display:flex;align-items:center;gap:.6rem}
-.unit-card-head img{width:20px;height:20px}
-.unit-title{margin:0;color:#d9ebff;text-transform:uppercase;letter-spacing:.12em;font-size:1.02rem;line-height:1.2;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pill{border:1px solid rgba(120,255,190,.45);color:#caffe9;border-radius:999px;padding:.06rem .5rem;font-size:.78rem}
-.unit-card-body{margin-top:.6rem}
-.assigned-list{list-style:none;margin:0;padding:0;display:grid;gap:.18rem}
-.assigned-list li{display:flex;gap:.35rem;color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.assigned-list .meta{color:#9ec5e6}
-.unit-card-foot{display:flex;gap:.45rem;align-items:center;margin-top:.6rem}
-.unit-card-foot .pts{margin-left:auto;color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.06rem .45rem}
-.unit-card-foot .pts.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
 
 /* Detail slots */
 .group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
