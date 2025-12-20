@@ -406,7 +406,7 @@ export default {
       }
       const raw = member?.certs || member?.skills || member?.cert || "";
       if (typeof raw === "string" && raw.trim()) {
-        const tokens = raw split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
+        const tokens = raw.split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
         return [...new Set(tokens.map(this.bestCertLabelMatch).filter(Boolean))];
       }
       if (Array.isArray(raw)) {
@@ -553,7 +553,7 @@ export default {
     /* interactions */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
-      if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
+      if (!g || g.slots[slotIdx]?.origStatus === 'CLOSED') return;
       this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false };
     },
     closePicker() { this.picker.open = false; },
@@ -828,7 +828,7 @@ export default {
 /* Themed checkbox + brighter label for disposable */
 .disp-row{margin-top:.1rem}
 .check{display:inline-flex;align-items:center;gap:.5rem}
-.check .check-label{color:#eaf4ff} /* near-white label for visibility */
+.check .check-label{color:#eaf4ff}
 .check input[type="checkbox"]{
   appearance:none;
   width:16px;height:16px;
