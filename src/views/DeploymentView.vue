@@ -268,7 +268,8 @@
             </div>
             <div class="row-mid">
               <span class="role">{{ p.role || '—' }}</span>
-              <span v-if="findAssignment(p.id)" class="chip">Assigned</span>
+              <span v-if="p.element" class="element">Element: {{ p.element }}</span>
+              <span v-if="findAssignment(p.id)" class="chip">Assigned: {{ formatAssignment(findAssignment(p.id)) }}</span>
             </div>
             <div class="row-right">
               <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
@@ -385,7 +386,7 @@ export default {
       const sort = this.picker.sort || "name_asc";
       const rankVal = (r) => {
         const code = this.rankLabel(r || "");
-        return this.RANK_ORDER[code] || 999; // higher number = more junior
+        return this.RANK_ORDER[code] || 999;
       };
       const assignedWeight = (p) => (this.findAssignment(p.id) ? 0 : 1);
 
@@ -395,9 +396,9 @@ export default {
       } else if (sort === "role_asc") {
         list.sort((a,b) => (a.role||"").localeCompare(b.role||"", undefined, {sensitivity:"base"}));
       } else if (sort === "rank_desc") {
-        list.sort((a,b) => rankVal(a.rank) - rankVal(b.rank)); // senior first (lower value)
+        list.sort((a,b) => rankVal(a.rank) - rankVal(b.rank));
       } else if (sort === "rank_asc") {
-        list.sort((a,b) => rankVal(b.rank) - rankVal(a.rank)); // junior first
+        list.sort((a,b) => rankVal(b.rank) - rankVal(a.rank));
       } else if (sort === "assigned_first") {
         list.sort((a,b) => assignedWeight(a) - assignedWeight(b));
       } else if (sort === "assigned_last") {
@@ -495,7 +496,7 @@ export default {
       const ext = (this.rankIconExt || "png").replace(/^\.+/,"");
       return `${base}/${code}.${ext}`;
     },
-    onRankImgError(ev) { ev.target.style.display = 'none'; /* why: hide broken icon gracefully */ },
+    onRankImgError(ev) { ev.target.style.display = 'none'; },
 
     squadInitials(name) {
       if (!name) return "UNSC";
@@ -805,6 +806,7 @@ export default {
       return certs[0] || this.titleCase(String(fallbackRole || slot.role || ""));
     },
     titleCase(s) { const t = String(s || "").replace(/[_-]+/g, " ").trim(); if (!t) return ""; return t.replace(/\s+/g," ").toLowerCase().replace(/\b\w/g,m=>m.toUpperCase()); },
+
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -814,7 +816,16 @@ export default {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
               const certs = this.extractCertsFromMember(s.member);
               const rank = this.extractRank(s.member);
-              pool.push({ id, name: String(s.member.name || "Unknown"), callsign: String(s.member.callsign || ""), role: String(s.role || s.member.slot || ""), certs, rank });
+              const element = String(ft?.name || ft?.element || "").trim(); // why: show element in picker
+              pool.push({
+                id,
+                name: String(s.member.name || "Unknown"),
+                callsign: String(s.member.callsign || ""),
+                role: String(s.role || s.member.slot || ""),
+                certs,
+                rank,
+                element
+              });
             }
           });
         });
@@ -823,6 +834,7 @@ export default {
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
+
     isChalk(title) { return /\bchalk\s*\d+\b/i.test(String(title || "")); },
     padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id:null, name:null, role:"", origStatus:"VACANT", cert:"", disposable:false }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
@@ -1094,7 +1106,6 @@ export default {
 }
 
 /* -------- Adopted from PilotsView (card look) -------- */
-/* meta header (points & tag) */
 .squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
 .squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
 .squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
@@ -1182,8 +1193,9 @@ export default {
 .pick-row.compact.assigned{background:rgba(30,144,255,0.08)}
 .row-left{display:flex;align-items:center;gap:.5rem;min-width:0}
 .row-left .name{font-weight:700;color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row-mid{display:flex;align-items:center;gap:.5rem;color:#9ec5e6}
-.row-mid .role{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28ch}
+.row-mid{display:flex;align-items:center;gap:.55rem;color:#9ec5e6}
+.row-mid .role{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24ch}
+.row-mid .element{white-space:nowrap;opacity:.9}
 .chip{border:1px solid rgba(30,144,255,.45);color:#9ec5e6;border-radius:999px;padding:.05rem .45rem;font-size:.78rem}
 .row-right .btn.small{padding:.28rem .55rem}
 </style>
