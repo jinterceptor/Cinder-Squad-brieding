@@ -217,6 +217,9 @@
               <button type="button" class="btn" :disabled="busy || !apiBase" @click="loadRemote(detailKey)">
                 Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
               </button>
+
+              <span class="divider" />
+              <button type="button" class="btn" :disabled="!apiBase" @click="openOverview">Overview</button>
             </div>
           </div>
         </div>
@@ -273,6 +276,63 @@
             </div>
             <div class="row-right">
               <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overview Modal -->
+    <div v-if="overview.open" class="squad-overlay" @click.self="closeOverview">
+      <div class="squad-modal overview">
+        <div class="compact-header">
+          <h3>Saved Loadouts Overview</h3>
+          <div style="display:flex; gap:.5rem;">
+            <button class="btn ghost small" @click="refreshOverview" :disabled="overview.loading">
+              {{ overview.loading ? 'Refreshing…' : 'Refresh' }}
+            </button>
+            <button class="btn small" @click="clearAllSaved" :disabled="overview.loading">Clear All Saved</button>
+            <button class="squad-close" @click="closeOverview">✕</button>
+          </div>
+        </div>
+
+        <div v-if="overview.error" class="warn" style="margin-top:.5rem">{{ overview.error }}</div>
+
+        <div class="squad-modal-scroll">
+          <div class="overview-grid">
+            <div v-for="u in chalkUnits" :key="u.key" class="overview-card">
+              <div class="overview-head">
+                <div class="left">
+                  <div class="title">{{ u.title }}</div>
+                  <div class="meta">
+                    <span v-if="ovItem(u.key)?.version !== undefined">v{{ ovItem(u.key).version }}</span>
+                    <span v-if="ovItem(u.key)?.savedBy">by {{ ovItem(u.key).savedBy }}</span>
+                    <span v-if="ovItem(u.key)?.savedAt">at {{ formatDate(ovItem(u.key).savedAt) }}</span>
+                    <span v-if="ovItem(u.key) && ovItem(u.key).points !== undefined">· {{ ovItem(u.key).points }} pts</span>
+                    <span v-if="!ovItem(u.key)" class="muted">Not saved yet</span>
+                  </div>
+                </div>
+                <div class="right">
+                  <button class="btn small" :disabled="!apiBase || overview.loading" @click="loadRemote(u.key)">
+                    Load
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="ovItem(u.key)" class="overview-body">
+                <div class="slot-row" v-for="(s, idx) in ovItem(u.key).slots" :key="idx">
+                  <div class="slot-left">
+                    <span class="slot-name">{{ s.name || 'VACANT' }}</span>
+                    <span class="slot-id" v-if="s.id">ID: {{ s.id }}</span>
+                  </div>
+                  <div class="slot-right">
+                    <span class="slot-role">{{ s.role || '—' }}</span>
+                    <span class="slot-cert" v-if="s.cert">{{ s.cert }}</span>
+                    <span class="slot-disp" v-if="s.disposable">Disp</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="overview-empty">—</div>
             </div>
           </div>
         </div>
@@ -349,11 +409,16 @@ export default {
       ],
       identityToken: "",
       RANK_ORDER: {
-        /* why: sorting seniority */
         "GEN": 1, "COL": 2, "MAJ": 3, "CPT": 4, "1LT": 5, "2LT": 6,
         "CWO4": 7, "CWO3": 8, "CWO2": 9, "WO": 10,
         "GYSGT": 11, "SSGT": 12, "SSG": 13, "SGT": 14, "CPL": 15, "LCPL": 16, "PFC": 17, "PV2": 18, "PVT": 19
       },
+      overview: {
+        open: false,
+        loading: false,
+        error: "",
+        items: {} /* key -> { version, savedBy, savedAt, slots[], points } */
+      }
     };
   },
   async created() {
@@ -504,6 +569,104 @@ export default {
       if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
       return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
                   .join("").toUpperCase();
+    },
+
+    /* Overview helpers */
+    ovItem(key) { return this.overview.items[key]; },
+    formatDate(ts) {
+      try {
+        const d = new Date(ts);
+        if (!isFinite(d)) return String(ts);
+        return d.toLocaleString();
+      } catch { return String(ts); }
+    },
+
+    async openOverview() {
+      this.overview.open = true;
+      await this.refreshOverview();
+    },
+    closeOverview() { this.overview.open = false; },
+
+    async refreshOverview() {
+      if (!this.apiBase) { this.overview.error = "execUrl missing"; return; }
+      this.overview.loading = true; this.overview.error = "";
+      try {
+        // Try bulk list
+        const list = await this.apiPost("config:list", {});
+        if (list && list.ok && Array.isArray(list.data)) {
+          const map = {};
+          for (const it of list.data) {
+            const uid = it.unitId || it.key;
+            if (!uid) continue;
+            const parsed = it.configJSON ? JSON.parse(it.configJSON) : (it.config || {});
+            const slots = (parsed.slots || []).map(s => ({
+              id: s.id ?? null, name: s.name ?? null, role: s.role || "", cert: s.cert || "", disposable: !!s.disposable
+            }));
+            map[uid] = {
+              version: Number(it.version || 0),
+              savedBy: it.savedBy || it.user || "",
+              savedAt: it.savedAt || it.updatedAt || it.timestamp || "",
+              slots,
+              points: this.slotsPoints(slots)
+            };
+          }
+          this.overview.items = map;
+          return;
+        }
+        // Fallback: per unit fetch
+        const results = await Promise.allSettled(
+          this.chalkUnits.map(u => this.apiPost("config:get", { unitId: u.key }))
+        );
+        const map = {};
+        results.forEach((r, idx) => {
+          const unitKey = this.chalkUnits[idx].key;
+          if (r.status === "fulfilled" && r.value && r.value.ok && r.value.data) {
+            const it = r.value.data;
+            const parsed = it.configJSON ? JSON.parse(it.configJSON) : (it.config || {});
+            const slots = (parsed.slots || []).map(s => ({
+              id: s.id ?? null, name: s.name ?? null, role: s.role || "", cert: s.cert || "", disposable: !!s.disposable
+            }));
+            map[unitKey] = {
+              version: Number(it.version || 0),
+              savedBy: it.savedBy || it.user || "",
+              savedAt: it.savedAt || it.updatedAt || it.timestamp || "",
+              slots,
+              points: this.slotsPoints(slots)
+            };
+          }
+        });
+        this.overview.items = map;
+      } catch (e) {
+        this.overview.error = String(e.message || e);
+      } finally {
+        this.overview.loading = false;
+      }
+    },
+
+    async clearAllSaved() {
+      if (!confirm("Clear ALL saved loadouts for all Chalks? This cannot be undone.")) return;
+      this.overview.loading = true; this.overview.error = "";
+      try {
+        const res = await this.apiPost("config:clearAll", {});
+        if (!res || res.ok !== true) {
+          // Fallback: clear each unit
+          await Promise.allSettled(this.chalkUnits.map(u => this.apiPost("config:clear", { unitId: u.key })));
+        }
+        await this.refreshOverview();
+      } catch (e) {
+        this.overview.error = String(e.message || e);
+      } finally {
+        this.overview.loading = false;
+      }
+    },
+
+    slotsPoints(slots) {
+      return (slots || []).reduce((sum, s) => {
+        if (!s.id) return sum;
+        const certPts = this.CERT_POINTS[s.cert] ?? 0;
+        const dispPts = s.disposable ? this.DISPOSABLE_COST : 0;
+        return sum + certPts + dispPts;
+      }, 0);
     },
 
     async resetPlan() {
@@ -806,7 +969,6 @@ export default {
       return certs[0] || this.titleCase(String(fallbackRole || slot.role || ""));
     },
     titleCase(s) { const t = String(s || "").replace(/[_-]+/g, " ").trim(); if (!t) return ""; return t.replace(/\s+/g," ").toLowerCase().replace(/\b\w/g,m=>m.toUpperCase()); },
-
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -816,16 +978,8 @@ export default {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
               const certs = this.extractCertsFromMember(s.member);
               const rank = this.extractRank(s.member);
-              const element = String(ft?.name || ft?.element || "").trim(); // why: show element in picker
-              pool.push({
-                id,
-                name: String(s.member.name || "Unknown"),
-                callsign: String(s.member.callsign || ""),
-                role: String(s.role || s.member.slot || ""),
-                certs,
-                rank,
-                element
-              });
+              const element = String(ft?.name || ft?.element || "").trim();
+              pool.push({ id, name: String(s.member.name || "Unknown"), callsign: String(s.member.callsign || ""), role: String(s.role || s.member.slot || ""), certs, rank, element });
             }
           });
         });
@@ -834,7 +988,6 @@ export default {
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
-
     isChalk(title) { return /\bchalk\s*\d+\b/i.test(String(title || "")); },
     padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id:null, name:null, role:"", origStatus:"VACANT", cert:"", disposable:false }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
@@ -1171,6 +1324,7 @@ export default {
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
 .squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1000px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
 .squad-modal.compact{padding:0.8rem 0.9rem 1rem}
+.squad-modal.overview{max-width:1200px}
 
 .compact-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(30,144,255,.35);padding-bottom:.4rem}
 .compact-header h3{margin:0;font-size:1.05rem;color:#e6f3ff}
@@ -1185,17 +1339,28 @@ export default {
 .squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 180px)}
 .squad-modal-scroll.compact-list{max-height:calc(90vh - 170px)}
 
-.pick-row.compact{
-  display:grid; grid-template-columns:1fr auto auto; align-items:center;
-  gap:.6rem; padding:.5rem .55rem; border:1px solid rgba(30,144,255,.15);
-  background:rgba(5,12,24,.6); border-radius:.5rem; margin-bottom:.5rem;
+/* Overview grid/cards */
+.overview-grid{
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.9rem;
 }
-.pick-row.compact.assigned{background:rgba(30,144,255,0.08)}
-.row-left{display:flex;align-items:center;gap:.5rem;min-width:0}
-.row-left .name{font-weight:700;color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row-mid{display:flex;align-items:center;gap:.55rem;color:#9ec5e6}
-.row-mid .role{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24ch}
-.row-mid .element{white-space:nowrap;opacity:.9}
-.chip{border:1px solid rgba(30,144,255,.45);color:#9ec5e6;border-radius:999px;padding:.05rem .45rem;font-size:.78rem}
-.row-right .btn.small{padding:.28rem .55rem}
+@media (max-width:1000px){ .overview-grid{ grid-template-columns:1fr; } }
+.overview-card{
+  background:rgba(5,12,24,.6); border:1px solid rgba(30,144,255,.2);
+  border-radius:.6rem; padding:.7rem .8rem;
+}
+.overview-head{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; }
+.overview-head .title{ font-weight:800; color:#e6f3ff; }
+.overview-head .meta{ color:#9ec5e6; display:flex; gap:.5rem; flex-wrap:wrap; }
+
+.overview-body{
+  margin-top:.5rem; border-top:1px dashed rgba(30,144,255,.2); padding-top:.5rem;
+  display:grid; gap:.3rem;
+}
+.slot-row{ display:flex; justify-content:space-between; gap:.6rem; font-size:.92rem; }
+.slot-left{ display:flex; gap:.45rem; align-items:baseline; }
+.slot-name{ color:#e6f3ff; font-weight:600; }
+.slot-id{ color:#9ec5e6; }
+.slot-right{ display:flex; gap:.45rem; color:#9ec5e6; }
+.slot-disp{ color:#55ff88; }
+.overview-empty{ color:#9ec5e6; padding:.35rem 0; text-align:center; }
 </style>
