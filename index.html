@@ -1,37 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<link rel="icon" href="" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta property="og:type" content="website" />
-	</head>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta property="og:type" content="website" />
 
-	<body style="margin: 0px">
-		<div id="app"></div>
+    <!-- ===== ADDED: Apps Script /exec endpoint (read by DeploymentView auto-resolver) ===== -->
+    <meta
+      name="apps-script-exec"
+      content="https://script.google.com/macros/s/AKfycbzDhKyzdKylfdCKV5n--av0_AmkqDgVeNBPtUoLWQFic7E3YiVBnaZDNope_7B3hkem/exec"
+    />
 
-		<script type="module" src="/src/main.js"></script>
+    <!-- ===== ADDED: Data sources (CSV) ===== -->
+    <meta
+      name="defaults-csv"
+      content="https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv"
+    />
+    <meta
+      name="members-master-csv"
+      content="https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv"
+    />
+    <meta
+      name="attendance-csv"
+      content="https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv"
+    />
 
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-		<script type="module" src="/src/assets/scripts/vanta.globe.min.js"></script>
+    <!-- ===== ADDED: Safe globals + persistence (no impact on existing code) ===== -->
+    <script>
+      (function () {
+        const exec =
+          "https://script.google.com/macros/s/AKfycbzDhKyzdKylfdCKV5n--av0_AmkqDgVeNBPtUoLWQFic7E3YiVBnaZDNope_7B3hkem/exec";
+        const defaultsCsv =
+          "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
+        const membersCsv =
+          "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv";
+        const attendanceCsv =
+          "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
 
-		<script type="module">
-			VANTA.GLOBE({
-				el: "body",
-				mouseControls: false,
-				touchControls: false,
-				gyroControls: false,
-				minHeight: 200.0,
-				minWidth: 200.0,
-				scale: 1.0,
-				scaleMobile: 1.0,
-				color: 0x4c6944,
-				color2: 0x368fb6,
-				backgroundColor: 0x111111,
-				size: 2.0,
-				sphereRotation: -0.002,
-				meshRotation: 0.004,
-			});
-		</script>
-	</body>
+        // Globals (readable from any view/component)
+        window.APP_EXEC_URL = exec;
+        window.DEFAULTS_CSV_URL = defaultsCsv;
+        window.MEMBERS_MASTER_CSV = membersCsv;
+        window.ATTENDANCE_CSV = attendanceCsv;
+
+        // Persist exec for components that look in storage
+        try {
+          localStorage.setItem("execUrl", exec);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+
+  <body style="margin: 0px">
+    <div id="app"></div>
+
+    <script type="module" src="/src/main.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script type="module" src="/src/assets/scripts/vanta.globe.min.js"></script>
+
+    <script type="module">
+      VANTA.GLOBE({
+        el: "body",
+        mouseControls: false,
+        touchControls: false,
+        gyroControls: false,
+        minHeight: 200.0,
+        minWidth: 200.0,
+        scale: 1.0,
+        scaleMobile: 1.0,
+        color: 0x4c6944,
+        color2: 0x368fb6,
+        backgroundColor: 0x111111,
+        size: 2.0,
+        sphereRotation: -0.002,
+        meshRotation: 0.004,
+      });
+    </script>
+  </body>
 </html>
