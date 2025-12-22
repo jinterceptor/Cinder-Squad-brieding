@@ -15,11 +15,9 @@
           <div class="detail-toolbar">
             <div class="toolbar-left">
               <label class="muted small">Chalk</label>
-
               <select class="select chalk-picker" v-model="detailKey">
                 <option v-for="u in chalkUnits" :key="u.key" :value="u.key">{{ u.title }}</option>
               </select>
-
               <button class="btn ghost small" @click="fillFromRoster(detailKey)">Auto-fill</button>
               <button class="btn ghost small" @click="clearGroup(detailKey)">Clear</button>
               <button class="btn ghost small" @click="resetPlan">Reset All</button>
@@ -34,6 +32,16 @@
               <span class="divider" />
               <span class="muted small">{{ authModeLabel }}</span>
             </div>
+          </div>
+
+          <div v-if="!apiBase" class="warn">
+            Apps Script /exec URL missing. Set one of:
+            <ul style="margin:.3rem 0 .1rem .9rem">
+              <li><code>&lt;DeploymentView :execUrl="'https://script.google.com/.../exec'" /&gt;</code></li>
+              <li><code>&lt;meta name="apps-script-exec" content="https://script.google.com/.../exec"&gt;</code></li>
+              <li><code>window.APP_EXEC_URL = "https://script.google.com/.../exec"</code></li>
+              <li><code>localStorage.setItem('execUrl', 'https://script.google.com/.../exec')</code></li>
+            </ul>
           </div>
 
           <div v-if="debugInfo" class="muted small" style="opacity:.8">Status: {{ debugInfo }}</div>
@@ -89,12 +97,12 @@
               <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON (Local)</button>
 
               <span class="divider" />
-              <button type="button" class="btn primary" :disabled="busy" @click="saveRemote(detailKey)">{{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}</button>
-              <button type="button" class="btn" :disabled="busy" @click="loadRemote(detailKey)">
+              <button type="button" class="btn primary" :disabled="busy || !apiBase" @click="saveRemote(detailKey)">{{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}</button>
+              <button type="button" class="btn" :disabled="busy || !apiBase" @click="loadRemote(detailKey)">
                 Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
               </button>
-              <button type="button" class="btn" :disabled="busy" @click="exportRemote('json')">Export Remote JSON</button>
-              <button type="button" class="btn" :disabled="busy" @click="exportRemote('csv')">Export Remote CSV</button>
+              <button type="button" class="btn" :disabled="busy || !apiBase" @click="exportRemote('json')">Export Remote JSON</button>
+              <button type="button" class="btn" :disabled="busy || !apiBase" @click="exportRemote('csv')">Export Remote CSV</button>
             </div>
           </div>
         </div>
@@ -147,34 +155,28 @@ export default {
   props: {
     animate: { type: Boolean, default: true },
     orbat: { type: Array, default: () => [] },
-    execUrl: { type: String, default: "" },
+    execUrl: { type: String, default: "" },          // Preferred
     secret: { type: String, default: "PLEX" },
-    token:  { type: String, default: "" },    // optional; site can pass a real token
-    defaultsCsvUrl: { type: String, default: "" }, // published CSV of default Chalk layouts
+    token:  { type: String, default: "" },           // Optional
+    defaultsCsvUrl: { type: String, default: "" },   // CSV defaults
   },
   data() {
     return {
       animateView: false,
       animationDelay: "0ms",
-
       detailKey: "",
       detailError: "",
       apiError: "",
       busy: false,
-
       plan: { units: [] },
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
-
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
       versions: {},
       deviceId: "",
-
       debugInfo: "",
-
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
-
       SQUAD_POINT_CAP: 10,
       DISPOSABLE_COST: 1,
       CERT_POINTS: {
@@ -226,14 +228,34 @@ export default {
     authModeLabel() {
       return this.authToken ? "User mode (token)" : "Device mode (anonymous)";
     },
-    apiBase() { return this.execUrl || ""; },
-    /* --- fix: compute points once; no function call in template --- */
+    // Robust resolver for /exec URL
+    apiBase() {
+      const direct = (this.execUrl || "").trim();
+      if (direct) return direct;
+      try {
+        const meta = document?.querySelector('meta[name="apps-script-exec"]')?.content || "";
+        if (meta && meta.trim()) return meta.trim();
+      } catch {}
+      try {
+        // eslint-disable-next-line no-undef
+        if (typeof APP_EXEC_URL !== "undefined" && APP_EXEC_URL) return String(APP_EXEC_URL).trim();
+        // eslint-disable-next-line no-underscore-dangle
+        if (typeof window !== "undefined" && window.APP_EXEC_URL) return String(window.APP_EXEC_URL).trim();
+      } catch {}
+      try {
+        const ls = typeof localStorage !== "undefined" ? localStorage : null;
+        const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
+        const a = ls?.getItem("execUrl") || ss?.getItem("execUrl") || "";
+        if (a && a.trim()) return a.trim();
+      } catch {}
+      return "";
+    },
     pointsUsed() {
       return this.calcUnitPoints(this.currentUnit);
     },
   },
   methods: {
-    /* ---------------- CSV Defaults (Reset) ---------------- */
+    /* -------- CSV Defaults (Reset) -------- */
     async resetPlan() {
       this.detailError = ""; this.apiError = ""; this.debugInfo = "";
       if (this.defaultsCsvUrl) {
@@ -257,20 +279,18 @@ export default {
       this.triggerFlicker(0);
       if (!this.debugInfo) this.debugInfo = "Fallback defaults applied (ORBAT/template).";
     },
-
     parseCsvDefaults(csvText) {
       const rows = this.csvToRows(csvText);
       if (!rows.length) return {};
       const headers = rows[0].map(h => String(h || "").trim());
       const idx = {
         chalk: this.findHeader(headers, /(chalk|unit)/i),
-        slot:  this.findHeader(headers, /(slot|index|position|#)/i, true), // optional
+        slot:  this.findHeader(headers, /(slot|index|position|#)/i, true),
         role:  this.findHeader(headers, /(role)/i),
         cert:  this.findHeader(headers, /(cert)/i, true),
         disp:  this.findHeader(headers, /(disp(osable)?|launcher)/i, true),
       };
       if (idx.chalk < 0 || idx.role < 0) throw new Error("Missing required columns (Chalk/Unit and Role).");
-
       const out = {};
       for (let r = 1; r < rows.length; r++) {
         const row = rows[r]; if (!row || !row.length) continue;
@@ -280,15 +300,9 @@ export default {
         const cert = idx.cert >= 0 ? String(row[idx.cert] || "").trim() : "";
         const dispRaw = idx.disp >= 0 ? String(row[idx.disp] || "").trim().toUpperCase() : "";
         const disposable = dispRaw === "Y" || dispRaw === "YES" || dispRaw === "TRUE" || dispRaw === "1";
-
         const key = chalkName.toLowerCase();
         if (!out[key]) out[key] = [];
-        out[key].push({
-          idx: Number(slotNumRaw) || out[key].length + 1,
-          role,
-          cert,
-          disposable: !!disposable,
-        });
+        out[key].push({ idx: Number(slotNumRaw) || out[key].length + 1, role, cert, disposable: !!disposable });
       }
       Object.keys(out).forEach(k => out[k].sort((a,b)=> (a.idx||9999) - (b.idx||9999)));
       return out;
@@ -299,7 +313,6 @@ export default {
         const key = String(u.title || "").trim().toLowerCase();
         const rows = defaultsByChalk[key];
         if (!rows) return u;
-
         const slots = rows.map(row => ({
           id: null, name: null, role: this.titleCase(row.role || ""), origStatus: "VACANT",
           cert: row.cert || "", disposable: !!row.disposable,
@@ -308,7 +321,6 @@ export default {
         touched++;
         return { ...u, slots: this.sortSlotsByRole(padded) };
       });
-
       if (touched > 0) {
         this.plan.units = nextUnits;
         if (!this.plan.units.find(x => x.key === this.detailKey) && this.plan.units.length) {
@@ -318,19 +330,14 @@ export default {
       }
       return false;
     },
-
     csvToRows(text) {
-      const rows = [];
-      let i = 0, field = "", row = [], inQuotes = false;
+      const rows = []; let i = 0, field = "", row = [], inQuotes = false;
       const pushField = () => { row.push(field); field = ""; };
       const pushRow = () => { rows.push(row); row = []; };
       while (i < text.length) {
         const ch = text[i];
         if (inQuotes) {
-          if (ch === '"') {
-            if (text[i+1] === '"') { field += '"'; i += 2; continue; }
-            inQuotes = false; i++; continue;
-          }
+          if (ch === '"') { if (text[i+1] === '"') { field += '"'; i += 2; continue; } inQuotes = false; i++; continue; }
           field += ch; i++; continue;
         } else {
           if (ch === '"') { inQuotes = true; i++; continue; }
@@ -349,7 +356,7 @@ export default {
       return idx;
     },
 
-    /* ---------------- Bootstrap & fallback ---------------- */
+    /* -------- Bootstrap & fallback -------- */
     ensureUnitsBuilt(orbat) {
       const built = this.buildUnitsFromOrbat(orbat).filter(u => this.isPointsUnit(u.title));
       if (built.length === 0) {
@@ -374,7 +381,7 @@ export default {
       return arr;
     },
 
-    /* ---------------- Device ID (anon mode) ---------------- */
+    /* -------- Device ID (anon mode) -------- */
     ensureDeviceId() {
       try {
         const key = "orbatDeviceId";
@@ -390,7 +397,7 @@ export default {
       return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
     },
 
-    /* ---------------- Remote API ---------------- */
+    /* -------- Remote API -------- */
     async apiPost(action, body, raw = false) {
       if (!this.apiBase) throw new Error("execUrl missing");
       const payload = {
@@ -416,7 +423,6 @@ export default {
         const idx = this.plan.units.findIndex(u => u.key === unitKey);
         if (idx === -1) return;
         const curr = this.plan.units[idx];
-
         const nextSlots = (parsed.slots || []).map(s => ({
           id: s.id ?? null, name: s.name ?? null, role: s.role || "", origStatus: "FILLED", cert: s.cert || "", disposable: !!s.disposable,
         }));
@@ -437,8 +443,7 @@ export default {
       try {
         const expectedVersion = this.versions[unitKey];
         const payload = this.unitPayload(unit);
-        theRes = await this.apiPost("config:save", { unitId: unitKey, config: payload, expectedVersion });
-        const res = theRes; // keep simple
+        const res = await this.apiPost("config:save", { unitId: unitKey, config: payload, expectedVersion });
         if (res.conflict && res.current) {
           this.apiError = `Remote conflict (v${res.current.version}). Press Save again to overwrite.`;
           this.versions = { ...this.versions, [unitKey]: Number(res.current.version || 0) };
@@ -466,7 +471,7 @@ export default {
       } finally { this.busy = false; }
     },
 
-    /* ---------------- Local helpers ---------------- */
+    /* -------- Local helpers -------- */
     isPointsUnit(title) { const t = String(title || "").toLowerCase(); return /\bchalk\s*[1-4]\b/.test(t); },
     triggerFlicker(delayMs = 0) { this.animateView = false; this.animationDelay = `${delayMs}ms`; this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true))); },
     switchUnit(key) { if (!key || key === this.detailKey) return; this.detailKey = key; this.detailError = ""; this.triggerFlicker(0); },
@@ -595,7 +600,7 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    /* ---------------- Points helpers (renamed) ---------------- */
+    /* -------- Points helpers -------- */
     calcUnitPoints(unit) {
       if (!unit || !unit.slots) return 0;
       return unit.slots.reduce((sum, s) => {
@@ -611,7 +616,7 @@ export default {
       return this.calcUnitPoints(unit) + delta > this.SQUAD_POINT_CAP;
     },
 
-    /* ---------------- Interactions ---------------- */
+    /* -------- Interactions -------- */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
@@ -717,14 +722,11 @@ export default {
       if (uIdx < 0) return;
       const unit = this.plan.units[uIdx];
       const slot = unit.slots[slotIdx];
-
       const prevPts = (this.CERT_POINTS[slot.cert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
       const nextPts = (this.CERT_POINTS[nextCert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
       const delta = nextPts - prevPts;
-
       if (this.wouldExceedCap(unitKey, Math.max(0, delta))) { this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`; return; }
       this.detailError = "";
-
       const newSlots = unit.slots.slice();
       newSlots[slotIdx] = { ...slot, cert: nextCert };
       const newU = { ...unit, slots: this.sortSlotsByRole(newSlots) };
@@ -736,14 +738,11 @@ export default {
       if (uIdx < 0) return;
       const unit = this.plan.units[uIdx];
       const slot = unit.slots[slotIdx];
-
       const add = checked ? this.DISPOSABLE_COST : 0;
       const remove = !checked ? this.DISPOSABLE_COST : 0;
       const delta = add - remove;
-
       if (this.wouldExceedCap(unitKey, Math.max(0, delta))) { this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`; return; }
       this.detailError = "";
-
       const newSlots = unit.slots.slice();
       newSlots[slotIdx] = { ...slot, disposable: checked === true };
       const newU = { ...unit, slots: newSlots };
@@ -751,7 +750,7 @@ export default {
       this.persistPlan();
     },
 
-    /* ---------------- Fill / Export ---------------- */
+    /* -------- Fill / Export -------- */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       if (!rebuilt) { this.detailError = "No matching unit in ORBAT."; return; }
