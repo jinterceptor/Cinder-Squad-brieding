@@ -6,7 +6,6 @@
     :class="{ animate: animateView }"
     :style="{ 'animation-delay': animationDelay }"
   >
-    <!-- SINGLE LARGE CONTAINER -->
     <section class="section-container deployment-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -18,7 +17,7 @@
 
       <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
-          <!-- Top toolbar: Chalk picker + actions + points (only 1–4) -->
+          <!-- Top toolbar: Chalk picker + actions + points -->
           <div class="detail-toolbar">
             <div class="toolbar-left">
               <label class="muted small">Chalk</label>
@@ -43,6 +42,7 @@
             </div>
           </div>
 
+          <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
           <!-- Detailed editor for the selected Chalk -->
@@ -88,7 +88,7 @@
                     </select>
                   </div>
 
-                  <!-- Disposable: show for ALL in Chalk 1–4 -->
+                  <!-- Disposable -->
                   <div v-if="slot.id && currentUnit" class="disp-row">
                     <label class="check">
                       <input
@@ -116,7 +116,18 @@
 
             <div class="actions-row">
               <button type="button" class="btn ghost" @click.stop="addSlot(detailKey)">Add slot</button>
-              <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON</button>
+              <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON (Local)</button>
+
+              <!-- Remote actions -->
+              <span class="divider" />
+              <button type="button" class="btn primary" :disabled="busy" @click="saveRemote(detailKey)">
+                {{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}
+              </button>
+              <button type="button" class="btn" :disabled="busy" @click="loadRemote(detailKey)">
+                Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
+              </button>
+              <button type="button" class="btn" :disabled="busy" @click="exportRemote('json')">Export Remote JSON</button>
+              <button type="button" class="btn" :disabled="busy" @click="exportRemote('csv')">Export Remote CSV</button>
             </div>
           </div>
         </div>
@@ -131,7 +142,7 @@
             {{ currentSlotTitle }}
             <span class="muted">— select soldier</span>
           </h3>
-            <button type="button" class="btn ghost" @click="closePicker">Close</button>
+          <button type="button" class="btn ghost" @click="closePicker">Close</button>
         </div>
 
         <div class="picker-controls">
@@ -174,9 +185,19 @@
 </template>
 
 <script>
+/**
+ * NOTE: Set execUrl/secret/token via props from your app shell.
+ * token fallback: tries localStorage.getItem('token').
+ */
 export default {
   name: "DeploymentView",
-  props: { animate: { type: Boolean, default: true }, orbat: { type: Array, default: () => [] } },
+  props: {
+    animate: { type: Boolean, default: true },
+    orbat: { type: Array, default: () => [] },
+    execUrl: { type: String, default: "" },   // e.g. https://script.google.com/macros/s/.../exec
+    secret: { type: String, default: "PLEX" },
+    token:  { type: String, default: "" },
+  },
   data() {
     return {
       animateView: false,
@@ -184,6 +205,8 @@ export default {
 
       detailKey: "",
       detailError: "",
+      apiError: "",
+      busy: false,
 
       plan: { units: [] },
       picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
@@ -191,27 +214,18 @@ export default {
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
 
+      // Remote versions tracker per unitId (unit key)
+      versions: {},
+
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
-      /* no need for EXCLUDED_UNITS anymore; we only keep Chalk 1–4 */
 
-      /* certification system */
       SQUAD_POINT_CAP: 10,
       DISPOSABLE_COST: 1,
       CERT_POINTS: {
-        "Rifleman": 0,
-        "Grenadier": 1,
-        "Breacher": 1,
-        "RTO": 1,
-        "Machine Gunner": 2,
-        "Marksman": 2,
-        "Combat Engineer": 2,
-        "Anti Tank": 3,
-        "Corpsmen": 3,
-        "PJ": 3,
-        "Pilot": 3,
-        "NCO": 0,
-        "Officer": 0,
+        "Rifleman": 0, "Grenadier": 1, "Breacher": 1, "RTO": 1,
+        "Machine Gunner": 2, "Marksman": 2, "Combat Engineer": 2,
+        "Anti Tank": 3, "Corpsmen": 3, "PJ": 3, "Pilot": 3, "NCO": 0, "Officer": 0,
       },
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
@@ -222,13 +236,10 @@ export default {
   created() {
     this.personnel = this.buildPersonnelPool(this.orbat);
 
-    // Build from ORBAT, then keep only Chalk 1–4
     const built = this.buildUnitsFromOrbat(this.orbat).filter(u => this.isPointsUnit(u.title));
-    // Add padding + defaults
     built.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
     this.plan.units = built;
 
-    // Default to first chalk
     if (this.plan.units.length) this.detailKey = this.plan.units[0].key;
   },
   mounted() { this.triggerFlicker(0); },
@@ -251,31 +262,121 @@ export default {
       );
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
+    authToken() {
+      return this.token || (typeof localStorage !== "undefined" ? localStorage.getItem("token") : "") || "";
+    },
+    apiBase() {
+      return this.execUrl || "";
+    },
   },
   methods: {
+    /* -------- Remote API -------- */
+    async apiPost(action, body, raw = false) {
+      if (!this.apiBase) throw new Error("execUrl missing");
+      const res = await fetch(this.apiBase, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: this.secret || "PLEX", action, token: this.authToken, ...body }),
+      });
+      return raw ? res : res.json();
+    },
+    unitPayload(unit) {
+      return {
+        title: unit.title,
+        slots: unit.slots.map(s => ({ id: s.id, name: s.name, role: s.role, cert: s.cert, disposable: !!s.disposable })),
+      };
+    },
+    async loadRemote(unitKey) {
+      if (!unitKey) return;
+      if (!this.authToken) { this.apiError = "Missing token."; return; }
+      this.apiError = ""; this.busy = true;
+      try {
+        const { ok, data, error } = await this.apiPost("config:get", { unitId: unitKey });
+        if (!ok) throw new Error(error || "Load failed");
+        if (!data) { this.apiError = "No remote config yet for this Chalk."; return; }
+        const parsed = JSON.parse(data.configJSON || "{}");
+        const idx = this.plan.units.findIndex(u => u.key === unitKey);
+        if (idx === -1) return;
+        const curr = this.plan.units[idx];
+        // Minimal merge: replace slots by id/name/role/cert/disposable
+        const nextSlots = (parsed.slots || []).map(s => ({
+          id: s.id ?? null, name: s.name ?? null, role: s.role || "", origStatus: "FILLED",
+          cert: s.cert || "", disposable: !!s.disposable,
+        }));
+        const padded = this.isChalk(curr.title) ? this.padSlots(nextSlots, this.MIN_CHALK_SLOTS) : nextSlots;
+        const nextUnit = { ...curr, slots: this.sortSlotsByRole(padded) };
+        this.plan.units = this.plan.units.map((u, i) => (i === idx ? nextUnit : u));
+        this.versions = { ...this.versions, [unitKey]: Number(data.version || 0) };
+        this.triggerFlicker(0);
+      } catch (e) {
+        this.apiError = String(e.message || e);
+      } finally {
+        this.busy = false;
+      }
+    },
+    async saveRemote(unitKey) {
+      if (!unitKey) return;
+      if (!this.authToken) { this.apiError = "Missing token."; return; }
+      const unit = this.plan.units.find(u => u.key === unitKey);
+      if (!unit) return;
+      this.apiError = ""; this.busy = true;
+      try {
+        const expectedVersion = this.versions[unitKey];
+        const payload = this.unitPayload(unit);
+        const res = await this.apiPost("config:save", { unitId: unitKey, config: payload, expectedVersion });
+        if (res.conflict && res.current) {
+          // why: notify conflict and allow overwrite
+          const theirs = JSON.parse(res.current.configJSON || "{}");
+          this.apiError = `Remote conflict (v${res.current.version}). Reload or press Save again to overwrite.`;
+          // Overwrite path: save again using current server version
+          // (Keep conservative: only auto-overwrite if user tries again)
+          this.versions = { ...this.versions, [unitKey]: Number(res.current.version || 0) };
+          return;
+        }
+        if (!res.ok) throw new Error(res.error || "Save failed");
+        this.versions = { ...this.versions, [unitKey]: Number(res.data?.version || 0) };
+      } catch (e) {
+        this.apiError = String(e.message || e);
+      } finally {
+        this.busy = false;
+      }
+    },
+    async exportRemote(format = "json") {
+      if (!this.authToken) { this.apiError = "Missing token."; return; }
+      this.apiError = ""; this.busy = true;
+      try {
+        const res = await this.apiPost("config:export", { format }, true);
+        if (format === "csv") {
+          const text = await res.text();
+          this.downloadBlob(new Blob([text], { type: "text/csv" }), `chalk-configs-${Date.now()}.csv`);
+        } else {
+          const j = await res.json();
+          this.downloadBlob(new Blob([JSON.stringify(j.data ?? [], null, 2)], { type: "application/json" }), `chalk-configs-${Date.now()}.json`);
+        }
+      } catch (e) {
+        this.apiError = String(e.message || e);
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    /* -------- Existing logic (trimmed to essentials) -------- */
     isPointsUnit(title) {
       const t = String(title || "").toLowerCase();
       return /\bchalk\s*[1-4]\b/.test(t);
     },
-
-    /* animation */
     triggerFlicker(delayMs = 0) {
       this.animateView = false;
       this.animationDelay = `${delayMs}ms`;
       this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
     },
-
     switchUnit(key) {
       if (!key || key === this.detailKey) return;
       this.detailKey = key;
       this.detailError = "";
       this.triggerFlicker(0);
     },
-
-    /* persistence (optional: keep if you still want session save) */
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
-
-    /* role sort helpers */
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
       if (/\bsquad\s*lead(er)?\b|\bsl\b|\bactual\b/.test(t)) return "squad lead";
@@ -298,8 +399,6 @@ export default {
         .sort((a, b) => a.p - b.p || a.i - b.i)
         .map(x => x.s);
     },
-
-    /* cert extraction */
     extractCertsFromMember(member) {
       const arr = member?.certifications;
       if (Array.isArray(arr) && arr.length) {
@@ -351,7 +450,6 @@ export default {
       const pts = this.CERT_POINTS[label] ?? 0;
       return pts ? ` (+${pts})` : "";
     },
-
     ensureSlotCert(slot, fallbackRole = "") {
       if (slot.cert) return slot.cert;
       const certs = this.getCertsForPersonId(slot.id) || [];
@@ -362,8 +460,6 @@ export default {
       if (!t) return "";
       return t.replace(/\s+/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
     },
-
-    /* builders */
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -387,7 +483,6 @@ export default {
       for (const p of pool) if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
       return out;
     },
-
     isChalk(title) { return /\bchalk\s*\d+\b/i.test(String(title || "")); },
     padSlots(arr, min) {
       const out = arr.slice();
@@ -397,11 +492,9 @@ export default {
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
-
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach(sq => {
-        // keep all for now; we'll filter to chalk 1–4 later
         const key = this.keyFromName(sq.squad);
         const slots = [];
         (sq.fireteams || []).forEach(ft => {
@@ -427,11 +520,9 @@ export default {
       });
       return units;
     },
-
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
       if (!unit) return null;
-
       const slots = [];
       (unit.fireteams || []).forEach(ft => {
         (ft.slots || []).forEach(s => {
@@ -486,7 +577,6 @@ export default {
       return null;
     },
     formatAssignment(a) { return `${a.title} #${a.slotIdx + 1}`; },
-
     selectPersonnel(p) {
       if (!this.picker.open) return;
       const from = this.findAssignment(p.id);
@@ -499,7 +589,7 @@ export default {
       const chosenCertDefault = available.includes(target.cert) ? target.cert : (available[0] || target.role || p.role || "");
 
       const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
-      const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0); // new assignee starts disposable=false
+      const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0);
       const delta = nextPts - prevPts;
       if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
         this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
@@ -536,7 +626,6 @@ export default {
       this.persistPlan();
       this.closePicker();
     },
-
     clearCurrentSlot() { if (!this.picker.open) return; this.clearSlot(this.picker.unitKey, this.picker.slotIdx); },
     clearSlot(unitKey, slotIdx) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
@@ -581,7 +670,7 @@ export default {
       this.detailError = "";
     },
 
-    /* points-aware handlers (always relevant for Chalk 1–4) */
+    /* points-aware handlers */
     onChangeCert(unitKey, slotIdx, nextCert) {
       const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
       if (uIdx < 0) return;
@@ -654,9 +743,12 @@ export default {
     /* utility */
     exportJson() {
       const blob = new Blob([JSON.stringify(this.plan, null, 2)], { type: "application/json" });
+      this.downloadBlob(blob, "deployment-plan.json");
+    },
+    downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = "deployment-plan.json"; a.click();
+      a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
     },
   },
@@ -671,6 +763,7 @@ export default {
 </script>
 
 <style scoped>
+/* (original styles kept) */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
@@ -684,7 +777,6 @@ export default {
 .chalk-picker{min-width:160px}
 .divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block}
 
-/* Detail slots */
 .group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
 .warn{border:1px solid rgba(255,120,120,.5);background:rgba(90,0,0,.25);color:#ffdcdc;border-radius:.5rem;padding:.4rem .6rem}
 .slots-grid{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:.7rem}
@@ -706,38 +798,20 @@ export default {
 .zoom-cert label{color:#9ec5e6;font-size:.82rem;letter-spacing:.06em}
 .select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
 
-/* Themed checkbox + brighter label for disposable */
 .disp-row{margin-top:.1rem}
 .check{display:inline-flex;align-items:center;gap:.5rem}
 .check .check-label{color:#eaf4ff}
 .check input[type="checkbox"]{
-  appearance:none;
-  width:16px;height:16px;
-  border:1px solid rgba(120,255,190,.55);
-  border-radius:4px;
-  background:rgba(0,20,14,.5);
-  box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);
-  position:relative;
-  transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
-}
+  appearance:none;width:16px;height:16px;border:1px solid rgba(120,255,190,.55);border-radius:4px;background:rgba(0,20,14,.5);box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);position:relative;transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease}
 .check input[type="checkbox"]:hover{border-color:rgba(120,255,190,.85)}
 .check input[type="checkbox"]:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,255,190,.35)}
 .check input[type="checkbox"]:checked{
   background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9));
-  border-color:rgba(120,255,190,.85);
-}
+  border-color:rgba(120,255,190,.85)}
 .check input[type="checkbox"]:checked::after{
-  content:"";
-  position:absolute;
-  left:3px;top:1px;right:0;bottom:0;
-  width:8px;height:12px;
-  border-right:2px solid #caffe9;
-  border-bottom:2px solid #caffe9;
-  transform:rotate(45deg);
-}
+  content:"";position:absolute;left:3px;top:1px;right:0;bottom:0;width:8px;height:12px;border-right:2px solid #caffe9;border-bottom:2px solid #caffe9;transform:rotate(45deg)}
 
-/* Buttons */
-.actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem}
+.actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem;align-items:center}
 .btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08)}
 .btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,22,.7));border-color:rgba(120,200,255,0.5)}
 .btn:active{transform:translateY(1px) scale(0.995)}
@@ -752,7 +826,6 @@ button.pick{width:100%}
 .pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
 .pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
 
-/* Picker modal */
 .picker-veil{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:grid;place-items:center;z-index:1000}
 .picker{width:min(900px,92vw);max-height:80vh;overflow:hidden;border-radius:.8rem;border:1px solid rgba(30,144,255,0.45);background:rgba(0,10,30,0.98);display:grid;grid-template-rows:auto auto 1fr auto}
 .picker-head{display:flex;align-items:center;justify-content:space-between;padding:.8rem .9rem;border-bottom:1px solid rgba(30,144,255,0.25)}
@@ -764,7 +837,6 @@ button.pick{width:100%}
 .p-meta .subtle{color:#9ec5e6;font-size:.86rem}
 .badge{color:#79ffba;border:1px solid rgba(120,255,170,0.55);border-radius:999px;padding:.1rem .5rem;font-size:.78rem}
 
-/* Flicker */
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
 @keyframes contentEntry{
   0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}
