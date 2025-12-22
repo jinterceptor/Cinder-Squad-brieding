@@ -338,8 +338,8 @@ export default {
     defaultsCsvUrl: { type: String, default: "" },
     /* where rank icons live; e.g., '/assets/ranks' or '/ranks' */
     rankIconBase: { type: String, default: () => (typeof window !== 'undefined' && window.RANK_ICON_BASE) ? window.RANK_ICON_BASE : '/ranks' },
-    /* icon extension: 'svg' or 'png' */
-    rankIconExt:  { type: String, default: 'svg' },
+    /* icon extension: now default to PNGs under public/ranks */
+    rankIconExt:  { type: String, default: 'png' },
   },
   data() {
     return {
@@ -486,13 +486,11 @@ export default {
     rankIcon(code) {
       if (!code) return "";
       const base = (this.rankIconBase || "/ranks").replace(/\/+$/,"");
-      const ext = (this.rankIconExt || "svg").replace(/^\.+/,"");
-      // filenames typically match the code; e.g., /ranks/CPL.svg
+      const ext = (this.rankIconExt || "png").replace(/^\.+/,"");
       return `${base}/${code}.${ext}`;
     },
     onRankImgError(ev) {
-      // why: hide broken image without affecting layout; title/alt remains useful
-      ev.target.style.display = 'none';
+      ev.target.style.display = 'none'; /* why: hide broken icon gracefully */
     },
 
     squadInitials(name) {
