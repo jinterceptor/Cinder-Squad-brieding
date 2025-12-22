@@ -49,7 +49,7 @@
           <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
-          <!-- Cards grid -->
+          <!-- Cards grid styled like PilotsView -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
@@ -223,7 +223,7 @@
       </div>
     </section>
 
-    <!-- Assign/Swap Picker -->
+    <!-- Assign/Swap Picker (unchanged logic) -->
     <div v-if="picker.open" class="squad-overlay" @click.self="closePicker">
       <div class="squad-modal">
         <div class="squad-modal-header">
@@ -336,9 +336,7 @@ export default {
     secret: { type: String, default: "PLEX" },
     token:  { type: String, default: "" },
     defaultsCsvUrl: { type: String, default: "" },
-    /* where rank icons live; e.g., '/assets/ranks' or '/ranks' */
     rankIconBase: { type: String, default: () => (typeof window !== 'undefined' && window.RANK_ICON_BASE) ? window.RANK_ICON_BASE : '/ranks' },
-    /* icon extension: now default to PNGs under public/ranks */
     rankIconExt:  { type: String, default: 'png' },
   },
   data() {
@@ -1082,9 +1080,15 @@ export default {
 .pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
 .pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
-@keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}
+@keyframes contentEntry{
+  0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}
+  60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}
+  80%{opacity:.98;filter:brightness(1.03)}
+  100%{opacity:1;filter:none}
+} /* ✅ close @keyframes */
 
-/* -------- Cards -------- */
+/* -------- Adopted from PilotsView (card look) -------- */
+/* meta header (points & tag) */
 .squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
 .squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
 .squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
@@ -1092,12 +1096,14 @@ export default {
 .loadout-status .points{color:#9ec5e6}.loadout-status .warn{color:rgba(255,190,80,0.95)}.loadout-status .ok{color:rgba(120,255,170,0.9)}
 .squad-tag{border:2px solid #1e90ff;border-radius:.6rem;padding:.35rem .6rem;color:#1e90ff;font-weight:700}
 
+/* grid */
 .squad-members-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.95rem}
 @media (max-width:1680px){.squad-members-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:1350px){.squad-members-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:980px){.squad-members-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.squad-members-grid{grid-template-columns:1fr}}
 
+/* card */
 .member-card{position:relative;background:rgba(0,10,30,0.95);border-radius:.4rem;border-left:4px solid #1e90ff;box-shadow:0 0 10px rgba(0,0,0,0.6);padding:.9rem 1.1rem;display:flex;flex-direction:column}
 .member-card.vacant,.member-card.closed{border-left-color:rgba(30,144,255,0.35)}
 .member-card.vacant{background:repeating-linear-gradient(45deg,rgba(30,144,255,0.06) 0,rgba(30,144,255,0.06) 10px,transparent 10px,transparent 20px),rgba(0,12,25,0.9);border-left-style:dashed}
@@ -1120,7 +1126,7 @@ export default {
   user-select:none; -webkit-user-drag:none;
 }
 
-/* cert list */
+/* cert list look */
 .detail-line strong{color:#9ec5e6}
 .role-accent{color:#55ff88;font-weight:600}
 .primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:#9ec5e6}
@@ -1142,7 +1148,7 @@ export default {
 }
 .disposable input[type="checkbox"]:hover{ filter:brightness(1.05); }
 
-/* picker */
+/* picker shell (reuse PilotsView modal look) */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
 .squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
 .squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
