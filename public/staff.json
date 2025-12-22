@@ -1,0 +1,6 @@
+// public/staff.json
+[
+  { "login": "jinterceptor" },
+  { "login": "otherstaff" },
+  { "email": "officer@example.com" }
+]
