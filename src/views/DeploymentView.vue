@@ -1,4 +1,3 @@
-<!-- File: src/views/DeploymentView.vue -->
 <template>
   <div id="deploymentView" class="content-container" :class="{ animate: animateView }" :style="{ 'animation-delay': animationDelay }">
     <section class="section-container deployment-window">
@@ -89,7 +88,13 @@
                     </label>
                   </div>
 
-                  <button type="button" class="btn primary pick" :disabled="slot.origStatus === "CLOSED"" @click.stop="openPicker(detailKey, sIdx)">
+                  <!-- ✅ Fix: use single quotes inside the JS expression -->
+                  <button
+                    type="button"
+                    class="btn primary pick"
+                    :disabled="slot.origStatus === 'CLOSED'"
+                    @click.stop="openPicker(detailKey, sIdx)"
+                  >
                     {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
                   </button>
                 </div>
@@ -652,7 +657,7 @@ export default {
         });
       });
       let finalSlots = this.sortSlotsByRole(slots);
-      if (this.isChalk(unit.squad)) finalSlots = this.padSlots(finalSlots, this.MIN_CHALK_SLOTS); /* fix */
+      if (this.isChalk(unit.squad)) finalSlots = this.padSlots(finalSlots, this.MIN_CHALK_SLOTS);
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
