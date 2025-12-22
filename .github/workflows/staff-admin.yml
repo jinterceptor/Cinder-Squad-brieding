@@ -21,15 +21,21 @@ on:
         description: "Role (staff/officer) for create/update"
         required: false
 
+permissions:
+  contents: write   # needed to commit staff.json back to repo
+
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Validate secrets
         run: |
-          test -n "${{ secrets.GAS_ENDPOINT }}" || (echo "GAS_ENDPOINT missing" && exit 1)
-          test -n "${{ secrets.GAS_SECRET }}"   || (echo "GAS_SECRET missing" && exit 1)
-          test -n "${{ secrets.GAS_ADMIN_KEY }}"|| (echo "GAS_ADMIN_KEY missing" && exit 1)
+          test -n "${{ secrets.GAS_ENDPOINT }}"   || (echo "GAS_ENDPOINT missing" && exit 1)
+          test -n "${{ secrets.GAS_SECRET }}"     || (echo "GAS_SECRET missing" && exit 1)
+          test -n "${{ secrets.GAS_ADMIN_KEY }}"  || (echo "GAS_ADMIN_KEY missing" && exit 1)
 
       - name: Build request body
         id: build
@@ -64,11 +70,11 @@ jobs:
               echo "Unknown action: $ACTION"; exit 1;;
           esac
 
-          # Save & print redacted preview
           echo "$BODY" > body.json
           echo "Request: $(sed -E 's/"secret":"[^"]+"/"secret":"***"/; s/"adminKey":"[^"]+"/"adminKey":"***"/; s/"password":"[^"]+"/"password":"***"/; s/"newPassword":"[^"]+"/"newPassword":"***"/' body.json)"
 
       - name: Call Apps Script (follow redirects)
+        id: call
         env:
           ENDPOINT: ${{ secrets.GAS_ENDPOINT }}
         run: |
@@ -79,18 +85,55 @@ jobs:
             "$ENDPOINT")
 
           echo "HTTP $CODE"
-          echo "Response:"
-          cat resp.txt
-          echo
+          echo "Response:"; cat resp.txt; echo
 
-          # Must be 200
           test "$CODE" = "200"
-
-          # Must be JSON with ok:true
           jq -e '.ok == true' resp.txt > /dev/null
-
-          # Pretty-print for convenience
           jq . resp.txt || true
+
+      # --- NEW: Generate staff.json (works best when action==list; safe otherwise) ---
+      - name: Generate public/staff.json
+        if: always()  # will no-op if response doesn't contain staff data
+        run: |
+          set -euo pipefail
+          mkdir -p public
+
+          # Try to find staff array in common places:
+          #  - { ok:true, data:{ staff:[...] } }
+          #  - { ok:true, staff:[...] }
+          #  - { ok:true, data:[...] }
+          # Fallback to empty array if not found.
+          jq '
+            ( .data.staff // .staff // .data // [] )
+            | map(
+                if type == "string" then
+                  if test("@") then {email: ascii_downcase(.)} else {login: ascii_downcase(.)} end
+                elif type == "object" then
+                  {
+                    login: ( .login // .github // .user // .username // .name // "" | ascii_downcase ),
+                    email: ( .email // .mail // "" | ascii_downcase )
+                  }
+                else empty end
+              )
+            | map( with_entries( select(.value != "") ) )
+          ' resp.txt > public/staff.json || echo '[]' > public/staff.json
+
+          echo "Generated public/staff.json:"
+          cat public/staff.json
+
+      - name: Commit staff.json if changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- public/staff.json; then
+            echo "No changes in public/staff.json"
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/staff.json
+          git commit -m "chore(staff): update staff.json from '${{ github.event.inputs.action }}'"
+          git push
 
       - name: Done
         run: echo "Success."
