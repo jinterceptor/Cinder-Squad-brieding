@@ -286,7 +286,7 @@
       </div>
     </div>
 
-    <!-- Overview Modal (2×2 grid, remote-or-default) -->
+    <!-- Overview Modal -->
     <div v-if="overview.open" class="squad-overlay" @click.self="closeOverview">
       <div class="squad-modal overview">
         <div class="compact-header">
@@ -355,7 +355,6 @@
 </template>
 
 <script>
-/* cookie reader (why: keep auth parity with existing site) */
 function readCookie(name) {
   try {
     const target = `${name}=`;
@@ -368,7 +367,6 @@ function readCookie(name) {
   } catch { return ''; }
 }
 
-/* optional Netlify Identity */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -430,7 +428,7 @@ export default {
         open: false,
         loading: false,
         error: "",
-        items: {} /* key -> { version, savedBy, savedAt, slots[], points } */
+        items: {} // key -> { version, savedBy, savedAt, slots[], points }
       }
     };
   },
@@ -584,20 +582,62 @@ export default {
                   .join("").toUpperCase();
     },
 
+    /* ===== Robust config extraction (fix) ===== */
+    extractSlotsFromAny(rec) {
+      // why: GAS may return different shapes; normalize to [{id,name,role,cert,disposable}]
+      const normSlots = (arr) => (Array.isArray(arr) ? arr : []).map(s => ({
+        id: s?.id ?? null,
+        name: s?.name ?? null,
+        role: s?.role || "",
+        cert: s?.cert || "",
+        disposable: !!s?.disposable
+      }));
+
+      // candidate 1: stringified configJSON
+      try {
+        const rawJSON = rec?.configJSON || rec?.loadoutJSON;
+        if (typeof rawJSON === "string" && rawJSON.trim()) {
+          const obj = JSON.parse(rawJSON);
+          if (Array.isArray(obj?.slots)) return normSlots(obj.slots);
+          if (Array.isArray(obj?.config?.slots)) return normSlots(obj.config.slots);
+        }
+      } catch {}
+
+      // candidate 2: config field (object or string)
+      if (rec?.config) {
+        if (typeof rec.config === "string") {
+          try {
+            const obj = JSON.parse(rec.config);
+            if (Array.isArray(obj?.slots)) return normSlots(obj.slots);
+            if (Array.isArray(obj?.config?.slots)) return normSlots(obj.config.slots);
+          } catch {}
+        } else if (typeof rec.config === "object") {
+          if (Array.isArray(rec.config.slots)) return normSlots(rec.config.slots);
+          if (Array.isArray(rec.config?.config?.slots)) return normSlots(rec.config.config.slots);
+        }
+      }
+
+      // candidate 3: rec.slots directly
+      if (Array.isArray(rec?.slots)) return normSlots(rec.slots);
+
+      // candidate 4: rec.data nesting
+      const d = rec?.data;
+      if (d) {
+        const sub = this.extractSlotsFromAny(d);
+        if (sub && sub.length) return sub;
+      }
+
+      return [];
+    },
+
     /* Overview helpers */
     ovItem(key) { return this.overview.items[key]; },
     formatDate(ts) {
-      try {
-        const d = new Date(ts);
-        if (!isFinite(d)) return String(ts);
-        return d.toLocaleString();
-      } catch { return String(ts); }
+      try { const d = new Date(ts); if (!isFinite(d)) return String(ts); return d.toLocaleString(); }
+      catch { return String(ts); }
     },
 
-    async openOverview() {
-      this.overview.open = true;
-      await this.refreshOverview();
-    },
+    async openOverview() { this.overview.open = true; await this.refreshOverview(); },
     closeOverview() { this.overview.open = false; },
 
     async refreshOverview() {
@@ -609,12 +649,10 @@ export default {
         if (list && list.ok && Array.isArray(list.data)) {
           const map = {};
           for (const it of list.data) {
-            const uid = it.unitId || it.key;
+            const uid = it.unitId || it.key || it.id;
             if (!uid) continue;
-            const parsed = it.configJSON ? JSON.parse(it.configJSON) : (it.config || {});
-            const slots = (parsed.slots || []).map(s => ({
-              id: s.id ?? null, name: s.name ?? null, role: s.role || "", cert: s.cert || "", disposable: !!s.disposable
-            }));
+            const slots = this.extractSlotsFromAny(it);
+            if (!slots.length) continue; // ignore empty saves
             map[uid] = {
               version: Number(it.version || 0),
               savedBy: it.savedBy || it.user || "",
@@ -635,10 +673,8 @@ export default {
           const unitKey = this.chalkUnits[idx].key;
           if (r.status === "fulfilled" && r.value && r.value.ok && r.value.data) {
             const it = r.value.data;
-            const parsed = it.configJSON ? JSON.parse(it.configJSON) : (it.config || {});
-            const slots = (parsed.slots || []).map(s => ({
-              id: s.id ?? null, name: s.name ?? null, role: s.role || "", cert: s.cert || "", disposable: !!s.disposable
-            }));
+            const slots = this.extractSlotsFromAny(it);
+            if (!slots.length) return;
             map[unitKey] = {
               version: Number(it.version || 0),
               savedBy: it.savedBy || it.user || "",
@@ -662,7 +698,6 @@ export default {
       try {
         const res = await this.apiPost("config:clearAll", {});
         if (!res || res.ok !== true) {
-          // Fallback: clear each unit
           await Promise.allSettled(this.chalkUnits.map(u => this.apiPost("config:clear", { unitId: u.key })));
         }
         await this.refreshOverview();
@@ -868,14 +903,12 @@ export default {
         const { ok, data, error } = await this.apiPost("config:get", { unitId: unitKey });
         if (!ok) throw new Error(error || "Load failed");
         if (!data) { this.apiError = "No remote config yet for this Chalk."; return; }
-        const parsed = JSON.parse(data.configJSON || "{}");
+        const nextSlots = this.extractSlotsFromAny(data);
+        if (!nextSlots.length) { this.apiError = "Saved config has no slots."; return; }
         const idx = this.plan.units.findIndex(u => u.key === unitKey);
         if (idx === -1) return;
         const curr = this.plan.units[idx];
-        const nextSlots = (parsed.slots || []).map(s => ({
-          id: s.id ?? null, name: s.name ?? null, role: s.role || "", origStatus: "FILLED", cert: s.cert || "", disposable: !!s.disposable,
-        }));
-        const padded = this.isChalk(curr.title) ? this.padSlots(nextSlots, this.MIN_CHALK_SLOTS) : nextSlots;
+        const padded = this.isChalk(curr.title) ? this.padSlots(nextSlots.map(s => ({...s, origStatus: "FILLED"})), this.MIN_CHALK_SLOTS) : nextSlots;
         const nextUnit = { ...curr, slots: this.sortSlotsByRole(padded) };
         this.plan.units = this.plan.units.map((u, i) => (i === idx ? nextUnit : u));
         this.versions = { ...this.versions, [unitKey]: Number(data.version || 0) };
@@ -1234,10 +1267,9 @@ export default {
 </script>
 
 <style scoped>
-/* Light default text for the whole view */
 #deploymentView { color: #e6f3ff; }
 
-/* -------- Shell / toolbar -------- */
+/* Shell / toolbar */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
@@ -1273,7 +1305,7 @@ export default {
   100%{opacity:1;filter:none}
 }
 
-/* -------- Adopted from PilotsView (card look) -------- */
+/* Cards */
 .squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
 .squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
 .squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
@@ -1304,16 +1336,11 @@ export default {
 .member-column p{margin:.18rem 0}
 .member-footer{margin-top:.6rem;font-size:.75rem;color:#7aa7c7;display:flex;justify-content:space-between}
 
-/* rank icon (big in cards) */
-.rank-icon{
-  width: 44px; height: 44px; object-fit: contain;
-  filter: drop-shadow(0 0 2px rgba(0,0,0,.5));
-  user-select:none; -webkit-user-drag:none;
-}
-/* rank icon small in picker */
+/* rank icons */
+.rank-icon{ width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 0 2px rgba(0,0,0,.5)); user-select:none; -webkit-user-drag:none; }
 .rank-icon.small{ width:28px; height:28px; }
 
-/* cert list look */
+/* cert list */
 .detail-line strong{color:#9ec5e6}
 .role-accent{color:#55ff88;font-weight:600}
 .primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:#9ec5e6}
@@ -1325,7 +1352,7 @@ export default {
 .cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
 .checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
 
-/* picker shell (compact) */
+/* picker */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
 .squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
 .squad-modal.compact{max-width:1000px}
