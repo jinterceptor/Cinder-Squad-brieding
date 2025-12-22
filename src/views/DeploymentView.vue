@@ -16,7 +16,6 @@
             <div class="toolbar-left">
               <label class="muted small">Chalk</label>
 
-              <!-- v-model binding -->
               <select class="select chalk-picker" v-model="detailKey">
                 <option v-for="u in chalkUnits" :key="u.key" :value="u.key">{{ u.title }}</option>
               </select>
@@ -29,8 +28,8 @@
             <div class="toolbar-right">
               <span class="muted small">{{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }} assigned</span>
               <span class="divider" />
-              <span v-if="currentUnit" class="pts big" :class="{ over: unitPointsUsed(currentUnit) > SQUAD_POINT_CAP }">
-                Points: {{ unitPointsUsed(currentUnit) }} / {{ SQUAD_POINT_CAP }}
+              <span v-if="currentUnit" class="pts big" :class="{ over: pointsUsed > SQUAD_POINT_CAP }">
+                Points: {{ pointsUsed }} / {{ SQUAD_POINT_CAP }}
               </span>
               <span class="divider" />
               <span class="muted small">{{ authModeLabel }}</span>
@@ -45,8 +44,12 @@
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
             <div class="slots-grid">
-              <div v-for="(slot, sIdx) in currentUnit.slots" :key="`slot-${detailKey}-${sIdx}`"
-                   class="slot" :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }">
+              <div
+                v-for="(slot, sIdx) in currentUnit.slots"
+                :key="`slot-${detailKey}-${sIdx}`"
+                class="slot"
+                :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
+              >
                 <div class="slot-topline">
                   <span class="slot-tag">#{{ sIdx + 1 }}</span>
                   <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
@@ -224,18 +227,21 @@ export default {
       return this.authToken ? "User mode (token)" : "Device mode (anonymous)";
     },
     apiBase() { return this.execUrl || ""; },
+    /* --- fix: compute points once; no function call in template --- */
+    pointsUsed() {
+      return this.calcUnitPoints(this.currentUnit);
+    },
   },
   methods: {
     /* ---------------- CSV Defaults (Reset) ---------------- */
     async resetPlan() {
       this.detailError = ""; this.apiError = ""; this.debugInfo = "";
-      // Prefer live CSV if provided; fallback if anything fails.
       if (this.defaultsCsvUrl) {
         try {
           const res = await fetch(this.defaultsCsvUrl, { cache: "no-store" });
           if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
           const text = await res.text();
-          const defaults = this.parseCsvDefaults(text); // { "chalk 1": [slots], ... }
+          const defaults = this.parseCsvDefaults(text);
           const updated = this.applyCsvDefaults(defaults);
           if (!updated) throw new Error("No matching chalks in CSV.");
           this.persistPlan();
@@ -246,7 +252,6 @@ export default {
           this.apiError = `CSV fallback: ${String(e.message || e)}`;
         }
       }
-      // Fallback to ORBAT or built-in template so you're never stuck.
       this.ensureUnitsBuilt(this.orbat);
       this.persistPlan();
       this.triggerFlicker(0);
@@ -254,7 +259,6 @@ export default {
     },
 
     parseCsvDefaults(csvText) {
-      // Minimal CSV parser with quotes support
       const rows = this.csvToRows(csvText);
       if (!rows.length) return {};
       const headers = rows[0].map(h => String(h || "").trim());
@@ -277,7 +281,7 @@ export default {
         const dispRaw = idx.disp >= 0 ? String(row[idx.disp] || "").trim().toUpperCase() : "";
         const disposable = dispRaw === "Y" || dispRaw === "YES" || dispRaw === "TRUE" || dispRaw === "1";
 
-        const key = chalkName.toLowerCase(); // allow "Chalk 1" or "chalk 1"
+        const key = chalkName.toLowerCase();
         if (!out[key]) out[key] = [];
         out[key].push({
           idx: Number(slotNumRaw) || out[key].length + 1,
@@ -286,17 +290,13 @@ export default {
           disposable: !!disposable,
         });
       }
-
-      // Order by provided slot/index if present
-      Object.keys(out).forEach(k => {
-        out[k].sort((a,b)=> (a.idx||9999) - (b.idx||9999));
-      });
+      Object.keys(out).forEach(k => out[k].sort((a,b)=> (a.idx||9999) - (b.idx||9999)));
       return out;
     },
     applyCsvDefaults(defaultsByChalk) {
       let touched = 0;
       const nextUnits = this.plan.units.map(u => {
-        const key = String(u.title || "").trim().toLowerCase(); // e.g., "chalk 1"
+        const key = String(u.title || "").trim().toLowerCase();
         const rows = defaultsByChalk[key];
         if (!rows) return u;
 
@@ -340,9 +340,7 @@ export default {
           field += ch; i++; continue;
         }
       }
-      // flush last
-      field !== "" || row.length ? (pushField(), pushRow()) : null;
-      // trim trailing blank rows
+      (field !== "" || row.length) && (pushField(), pushRow());
       return rows.filter(r => r.some(c => String(c).trim() !== ""));
     },
     findHeader(headers, regex, optional = false) {
@@ -439,7 +437,8 @@ export default {
       try {
         const expectedVersion = this.versions[unitKey];
         const payload = this.unitPayload(unit);
-        const res = await this.apiPost("config:save", { unitId: unitKey, config: payload, expectedVersion });
+        theRes = await this.apiPost("config:save", { unitId: unitKey, config: payload, expectedVersion });
+        const res = theRes; // keep simple
         if (res.conflict && res.current) {
           this.apiError = `Remote conflict (v${res.current.version}). Press Save again to overwrite.`;
           this.versions = { ...this.versions, [unitKey]: Number(res.current.version || 0) };
@@ -467,7 +466,7 @@ export default {
       } finally { this.busy = false; }
     },
 
-    /* ---------------- Local helpers (unchanged core) ---------------- */
+    /* ---------------- Local helpers ---------------- */
     isPointsUnit(title) { const t = String(title || "").toLowerCase(); return /\bchalk\s*[1-4]\b/.test(t); },
     triggerFlicker(delayMs = 0) { this.animateView = false; this.animationDelay = `${delayMs}ms`; this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true))); },
     switchUnit(key) { if (!key || key === this.detailKey) return; this.detailKey = key; this.detailError = ""; this.triggerFlicker(0); },
@@ -596,7 +595,23 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    /* ---------------- Interactions (unchanged) ---------------- */
+    /* ---------------- Points helpers (renamed) ---------------- */
+    calcUnitPoints(unit) {
+      if (!unit || !unit.slots) return 0;
+      return unit.slots.reduce((sum, s) => {
+        if (!s.id) return sum;
+        const certPts = this.CERT_POINTS[s.cert] ?? 0;
+        const dispPts = s.disposable ? this.DISPOSABLE_COST : 0;
+        return sum + certPts + dispPts;
+      }, 0);
+    },
+    wouldExceedCap(unitKey, delta) {
+      const unit = this.plan.units.find(u => u.key === unitKey);
+      if (!unit) return false;
+      return this.calcUnitPoints(unit) + delta > this.SQUAD_POINT_CAP;
+    },
+
+    /* ---------------- Interactions ---------------- */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
@@ -761,7 +776,6 @@ export default {
     },
   },
   watch: {
-    // if ORBAT arrives/changes, rebuild chalks; selection stays valid
     orbat: { deep: true, handler(newV) {
       this.personnel = this.buildPersonnelPool(newV || []);
       const oldKey = this.detailKey;
@@ -813,7 +827,7 @@ export default {
 .check{display:inline-flex;align-items:center;gap:.5rem}
 .check .check-label{color:#eaf4ff}
 .check input[type="checkbox"]{
-  appearance:none;width:16px;height:16px;border:1px solid rgba(120,255,190,.55);border-radius:4px;background:rgba(0,20,14,.5);box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);position:relative;transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease}
+  appearance:none;width:16px;height:16px;border:1px solid rgba(120,255,190,.55);border-radius:4px;background:rgba(0,20,14,.5);box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);position:relative;transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease,opacity 120ms ease}
 .check input[type="checkbox"]:hover{border-color:rgba(120,255,190,.85)}
 .check input[type="checkbox"]:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,255,190,.35)}
 .check input[type="checkbox"]:checked{
