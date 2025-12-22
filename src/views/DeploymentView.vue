@@ -1,3 +1,4 @@
+<!-- File: src/views/DeploymentView.vue -->
 <template>
   <div id="deploymentView" class="content-container" :class="{ animate: animateView }" :style="{ 'animation-delay': animationDelay }">
     <section class="section-container deployment-window">
@@ -41,8 +42,6 @@
               <li class="muted">Legacy: meta <code>apps-script-exec</code>, <code>window.APP_EXEC_URL</code>, <code>localStorage.execUrl</code></li>
             </ul>
           </div>
-
-          <!-- removed the client-side login warning; server enforces save auth -->
 
           <div v-if="debugInfo" class="muted small" style="opacity:.8">Status: {{ debugInfo }}</div>
           <div v-if="apiError" class="warn">{{ apiError }}</div>
@@ -99,7 +98,6 @@
 
             <div class="actions-row">
               <button type="button" class="btn ghost" @click.stop="addSlot(detailKey)">Add slot</button>
-              <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON (Local)</button>
 
               <span class="divider" />
               <button
@@ -113,8 +111,6 @@
               <button type="button" class="btn" :disabled="busy || !apiBase" @click="loadRemote(detailKey)">
                 Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
               </button>
-              <button type="button" class="btn" :disabled="busy || !apiBase" @click="exportRemote('json')">Export Remote JSON</button>
-              <button type="button" class="btn" :disabled="busy || !apiBase" @click="exportRemote('csv')">Export Remote CSV</button>
             </div>
           </div>
         </div>
@@ -175,7 +171,7 @@ function readCookie(name) {
   } catch { return ''; }
 }
 
-/* support Netlify Identity token if present (optional, not required for save) */
+/* support Netlify Identity token if present (optional) */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -253,7 +249,6 @@ export default {
       );
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
-    /* keep for display only */
     authToken() {
       const tProp = (this.token || "").trim();
       if (tProp) return tProp;
@@ -449,21 +444,18 @@ export default {
       return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
     },
 
-    /* server-enforced auth: forward existing app identity, no client gate */
     async apiPost(action, body, raw = false) {
       if (!this.apiBase) throw new Error("execUrl missing");
 
       const ls = typeof localStorage !== "undefined" ? localStorage : null;
       const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
 
-      // best-effort user hints
       let userObj = null;
       try { userObj = JSON.parse(ls?.getItem("user") || ss?.getItem("user") || "null"); } catch {}
       const candidateUser =
         (userObj?.username || userObj?.login || userObj?.name || userObj?.email || "").trim();
       const candidateRole = (userObj?.role || "").trim();
 
-      // optional Authorization if your app stores one
       const authHeader =
         (ls?.getItem("Authorization") || ss?.getItem("Authorization") || "").trim();
 
@@ -539,22 +531,6 @@ export default {
       } finally { this.busy = false; }
     },
 
-    async exportRemote(format = "json") {
-      this.apiError = ""; this.busy = true;
-      try {
-        const res = await this.apiPost("config:export", { format }, true);
-        if (format === "csv") {
-          const text = await res.text();
-          this.downloadBlob(new Blob([text], { type: "text/csv" }), `chalk-configs-${Date.now()}.csv`);
-        } else {
-          const j = await res.json();
-          this.downloadBlob(new Blob([JSON.stringify(j.data ?? [], null, 2)], { type: "application/json" }), `chalk-configs-${Date.now()}.json`);
-        }
-      } catch (e) {
-        this.apiError = String(e.message || e);
-      } finally { this.busy = false; }
-    },
-
     isPointsUnit(title) { const t = String(title || "").toLowerCase(); return /\bchalk\s*[1-4]\b/.test(t); },
     triggerFlicker(delayMs = 0) { this.animateView = false; this.animationDelay = `${delayMs}ms`; this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true))); },
     switchUnit(key) { if (!key || key === this.detailKey) return; this.detailKey = key; this.detailError = ""; this.triggerFlicker(0); },
@@ -584,7 +560,7 @@ export default {
         return [...new Set(out)];
       }
       if (arr && typeof arr === "object") {
-               const out = [];
+        const out = [];
         for (const [k, v] of Object.entries(arr)) {
           const truthy = v === true || v === 1 || v === "1" || String(v).toUpperCase() === "Y";
           if (!truthy) continue;
@@ -855,18 +831,6 @@ export default {
       this.persistPlan();
       this.detailError = "";
       this.triggerFlicker(0);
-    },
-
-    exportJson() {
-      const blob = new Blob([JSON.stringify(this.plan, null, 2)], { type: "application/json" });
-      this.downloadBlob(blob, "deployment-plan.json");
-    },
-
-    downloadBlob(blob, filename) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
     },
   },
   watch: {
