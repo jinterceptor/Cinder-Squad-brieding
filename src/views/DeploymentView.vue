@@ -43,9 +43,7 @@
             </ul>
           </div>
 
-          <div v-if="!authToken" class="warn" style="margin-top:.4rem">
-            Login required to <strong>Save</strong>. Viewing/Loading is open to everyone.
-          </div>
+          <!-- removed the client-side login warning; server enforces save auth -->
 
           <div v-if="debugInfo" class="muted small" style="opacity:.8">Status: {{ debugInfo }}</div>
           <div v-if="apiError" class="warn">{{ apiError }}</div>
@@ -88,7 +86,6 @@
                     </label>
                   </div>
 
-                  <!-- ✅ Fix: use single quotes inside the JS expression -->
                   <button
                     type="button"
                     class="btn primary pick"
@@ -109,9 +106,8 @@
               <button
                 type="button"
                 class="btn primary"
-                :disabled="busy || !apiBase || !authToken"
+                :disabled="busy || !apiBase"
                 @click="saveRemote(detailKey)"
-                :title="!authToken ? 'Login required to save' : ''"
               >
                 {{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}
               </button>
@@ -180,7 +176,7 @@ function readCookie(name) {
   } catch { return ''; }
 }
 
-/* support Netlify Identity token if present */
+/* support Netlify Identity token if present (optional, not required for save) */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -258,6 +254,7 @@ export default {
       );
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
+    /* keep for display only */
     authToken() {
       const tProp = (this.token || "").trim();
       if (tProp) return tProp;
@@ -453,16 +450,41 @@ export default {
       return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
     },
 
+    /* server-enforced auth: forward existing app identity, no client gate */
     async apiPost(action, body, raw = false) {
       if (!this.apiBase) throw new Error("execUrl missing");
-      if (action === "config:save" && !this.authToken) throw new Error("AUTH_REQUIRED: Login required to save.");
+
+      const ls = typeof localStorage !== "undefined" ? localStorage : null;
+      const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
+
+      // best-effort user hints
+      let userObj = null;
+      try { userObj = JSON.parse(ls?.getItem("user") || ss?.getItem("user") || "null"); } catch {}
+      const candidateUser =
+        (userObj?.username || userObj?.login || userObj?.name || userObj?.email || "").trim();
+      const candidateRole = (userObj?.role || "").trim();
+
+      // optional Authorization if your app stores one
+      const authHeader =
+        (ls?.getItem("Authorization") || ss?.getItem("Authorization") || "").trim();
+
       const payload = {
         secret: this.secret || "PLEX",
         action,
-        ...(this.authToken ? { token: this.authToken } : { deviceId: this.deviceId }),
+        deviceId: this.deviceId,
         ...body,
       };
-      const res = await fetch(this.apiBase, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+
+      const res = await fetch(this.apiBase, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authHeader ? { Authorization: authHeader } : {}),
+          ...(candidateUser ? { "X-User": candidateUser } : {}),
+          ...(candidateRole ? { "X-Role": candidateRole } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
       return raw ? res : res.json();
     },
 
@@ -511,7 +533,10 @@ export default {
         if (!res.ok) throw new Error(res.error || "Save failed");
         this.versions = { ...this.versions, [unitKey]: Number(res.data?.version || 0) };
       } catch (e) {
-        this.apiError = String(e.message || e);
+        const msg = String(e.message || e);
+        if (/UNAUTHORIZED/i.test(msg)) this.apiError = "Please log in to save.";
+        else if (/FORBIDDEN/i.test(msg)) this.apiError = "You are not authorized to save.";
+        else this.apiError = msg;
       } finally { this.busy = false; }
     },
 
