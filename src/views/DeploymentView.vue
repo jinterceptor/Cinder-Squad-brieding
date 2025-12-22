@@ -1085,7 +1085,7 @@ export default {
   60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}
   80%{opacity:.98;filter:brightness(1.03)}
   100%{opacity:1;filter:none}
-} /* ✅ close @keyframes */
+}
 
 /* -------- Adopted from PilotsView (card look) -------- */
 /* meta header (points & tag) */
@@ -1119,9 +1119,9 @@ export default {
 .member-column p{margin:.18rem 0}
 .member-footer{margin-top:.6rem;font-size:.75rem;color:#7aa7c7;display:flex;justify-content:space-between}
 
-/* rank icon */
+/* rank icon (doubled size) */
 .rank-icon{
-  width: 22px; height: 22px; object-fit: contain;
+  width: 44px; height: 44px; object-fit: contain;
   filter: drop-shadow(0 0 2px rgba(0,0,0,.5));
   user-select:none; -webkit-user-drag:none;
 }
