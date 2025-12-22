@@ -704,7 +704,7 @@ export default {
       }
       const raw = member?.certs || member?.skills || member?.cert || "";
       if (typeof raw === "string" && raw.trim()) {
-        const tokens = raw split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
+        const tokens = raw.split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
         return [...new Set(tokens.map(this.bestCertLabelMatch).filter(Boolean))];
       }
       if (Array.isArray(raw)) { return [...new Set(raw.map(this.bestCertLabelMatch).filter(Boolean))]; }
