@@ -1,82 +1,337 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" href="" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta property="og:type" content="website" />
+<template>
+  <div id="deploymentView" class="content-container" :class="{ animate: animateView }" :style="{ 'animation-delay': animationDelay }">
+    <section class="section-container deployment-window">
+      <div class="header-shell">
+        <div class="section-header clipped-medium-backward-pilot">
+          <img src="/icons/protocol.svg" alt="" />
+          <h1>DEPLOYMENT — {{ currentUnit?.title || 'Chalk' }}</h1>
+        </div>
+        <div class="rhombus-back">&nbsp;</div>
+      </div>
 
-    <!-- Apps Script /exec for DeploymentView auto-resolver -->
-    <meta
-      name="apps-script-exec"
-      content="https://script.google.com/macros/s/AKfycbzDhKyzdKylfdCKV5n--av0_AmkqDgVeNBPtUoLWQFic7E3YiVBnaZDNope_7B3hkem/exec"
-    />
+      <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
+        <div class="panel">
+          <div class="detail-toolbar">
+            <div class="toolbar-left">
+              <label class="muted small">Chalk</label>
+              <select class="select chalk-picker" v-model="detailKey">
+                <option v-for="u in chalkUnits" :key="u.key" :value="u.key">{{ u.title }}</option>
+              </select>
+              <button class="btn ghost small" @click="fillFromRoster(detailKey)">Auto-fill</button>
+              <button class="btn ghost small" @click="clearGroup(detailKey)">Clear</button>
+              <button class="btn ghost small" @click="resetPlan">Reset All</button>
+            </div>
 
-    <!-- Data sources (CSV) -->
-    <meta
-      name="defaults-csv"
-      content="https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv"
-    />
-    <meta
-      name="members-master-csv"
-      content="https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv"
-    />
-    <meta
-      name="attendance-csv"
-      content="https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv"
-    />
+            <div class="toolbar-right">
+              <span class="muted small">{{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }} assigned</span>
+              <span class="divider" />
+              <span v-if="currentUnit" class="pts big" :class="{ over: pointsUsed > SQUAD_POINT_CAP }">
+                Points: {{ pointsUsed }} / {{ SQUAD_POINT_CAP }}
+              </span>
+              <span class="divider" />
+              <span class="muted small">{{ authModeLabel }}</span>
+            </div>
+          </div>
 
-    <!-- Safe globals (NO write to 'execUrl'; use namespaced key) -->
-    <script>
-      (function () {
-        const exec =
-          "https://script.google.com/macros/s/AKfycbzDhKyzdKylfdCKV5n--av0_AmkqDgVeNBPtUoLWQFic7E3YiVBnaZDNope_7B3hkem/exec";
-        const defaultsCsv =
-          "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
-        const membersCsv =
-          "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1185035639&single=true&output=csv";
-        const attendanceCsv =
-          "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
+          <div v-if="!apiBase" class="warn">
+            Apps Script /exec URL missing. Provide via prop, <code>&lt;meta name="apps-script-exec" ...&gt;</code>, <code>window.DEPLOYMENT_EXEC_URL</code>,
+            or <code>localStorage.setItem('deploymentExecUrl','...')</code>.
+          </div>
 
-        // Expose as globals
-        window.APP_EXEC_URL = exec;
-        window.DEFAULTS_CSV_URL = defaultsCsv;
-        window.MEMBERS_MASTER_CSV = membersCsv;
-        window.ATTENDANCE_CSV = attendanceCsv;
+          <div v-if="debugInfo" class="muted small" style="opacity:.8">Status: {{ debugInfo }}</div>
+          <div v-if="apiError" class="warn">{{ apiError }}</div>
+          <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
-        // Persist under a *namespaced* key so we don't collide with your auth system
+          <div v-else class="group-card">
+            <div v-if="detailError" class="warn">{{ detailError }}</div>
+
+            <div class="slots-grid">
+              <div
+                v-for="(slot, sIdx) in currentUnit.slots"
+                :key="`slot-${detailKey}-${sIdx}`"
+                class="slot"
+                :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
+              >
+                <div class="slot-topline">
+                  <span class="slot-tag">#{{ sIdx + 1 }}</span>
+                  <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
+                  <div style="display:flex; gap:.35rem;">
+                    <button v-if="slot.id" type="button" class="btn ghost xsmall" @click.stop="clearSlot(detailKey, sIdx)">Clear</button>
+                    <button type="button" class="btn ghost xsmall" @click.stop="removeSlot(detailKey, sIdx)">–</button>
+                  </div>
+                </div>
+
+                <div class="slot-body">
+                  <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
+
+                  <div v-if="slot.id" class="zoom-cert">
+                    <label>Cert</label>
+                    <select class="select" :value="slot.cert || ''" @change="onChangeCert(detailKey, sIdx, $event.target.value)">
+                      <option value="">—</option>
+                      <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">{{ c }}{{ certPointSuffix(c) }}</option>
+                    </select>
+                  </div>
+
+                  <div v-if="slot.id && currentUnit" class="disp-row">
+                    <label class="check">
+                      <input type="checkbox" :checked="!!slot.disposable" @change="onToggleDisposable(detailKey, sIdx, $event.target.checked)" />
+                      <span class="check-label">Disposable launcher <span class="muted small">( +{{ DISPOSABLE_COST }} pt )</span></span>
+                    </label>
+                  </div>
+
+                  <button type="button" class="btn primary pick" :disabled="slot.origStatus === 'CLOSED'" @click.stop="openPicker(detailKey, sIdx)">
+                    {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions-row">
+              <button type="button" class="btn ghost" @click.stop="addSlot(detailKey)">Add slot</button>
+              <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON (Local)</button>
+
+              <span class="divider" />
+              <button type="button" class="btn primary" :disabled="busy || !apiBase" @click="saveRemote(detailKey)">{{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}</button>
+              <button type="button" class="btn" :disabled="busy || !apiBase" @click="loadRemote(detailKey)">
+                Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
+              </button>
+              <button type="button" class="btn" :disabled="busy || !apiBase" @click="exportRemote('json')">Export Remote JSON</button>
+              <button type="button" class="btn" :disabled="busy || !apiBase" @click="exportRemote('csv')">Export Remote CSV</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Picker -->
+    <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
+      <div class="picker">
+        <div class="picker-head">
+          <h3>{{ currentSlotTitle }} <span class="muted">— select soldier</span></h3>
+          <button type="button" class="btn ghost" @click="closePicker">Close</button>
+        </div>
+
+        <div class="picker-controls">
+          <input v-model="picker.query" placeholder="Search by name / callsign / role" class="search" @keydown.stop />
+          <label class="check"><input type="checkbox" v-model="picker.onlyFree" /> <span class="check-label">Show only unassigned</span></label>
+        </div>
+
+        <div class="picker-list">
+          <div v-for="p in filteredPersonnel" :key="p.id" class="pick-row" :class="{ assigned: !!findAssignment(p.id) }">
+            <div class="pick-info">
+              <div class="p-name" :title="p.name">{{ p.name }}</div>
+              <div class="p-meta">
+                <span v-if="p.callsign" class="subtle">{{ p.callsign }}</span>
+                <span v-if="p.role" class="subtle">• {{ p.role }}</span>
+              </div>
+            </div>
+            <div class="pick-status">
+              <span v-if="findAssignment(p.id)" class="badge">Assigned: {{ formatAssignment(findAssignment(p.id)) }}</span>
+            </div>
+            <div class="pick-actions">
+              <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="picker-foot">
+          <button type="button" class="btn ghost" @click="clearCurrentSlot">Clear slot</button>
+          <span class="muted">Selecting someone already assigned will swap them.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "DeploymentView",
+  props: {
+    animate: { type: Boolean, default: true },
+    orbat: { type: Array, default: () => [] },
+    execUrl: { type: String, default: "" },
+    secret: { type: String, default: "PLEX" },
+    token:  { type: String, default: "" },
+    defaultsCsvUrl: { type: String, default: "" },
+  },
+  data() {
+    return {
+      animateView: false,
+      animationDelay: "0ms",
+      detailKey: "",
+      detailError: "",
+      apiError: "",
+      busy: false,
+      plan: { units: [] },
+      picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
+      personnel: [],
+      STORAGE_KEY: "deploymentPlan2",
+      versions: {},
+      deviceId: "",
+      debugInfo: "",
+      MIN_CHALK_SLOTS: 12,
+      ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
+      SQUAD_POINT_CAP: 10,
+      DISPOSABLE_COST: 1,
+      CERT_POINTS: {
+        Rifleman: 0, Grenadier: 1, Breacher: 1, RTO: 1,
+        "Machine Gunner": 2, Marksman: 2, "Combat Engineer": 2,
+        "Anti Tank": 3, Corpsmen: 3, PJ: 3, Pilot: 3, NCO: 0, Officer: 0,
+      },
+      certLabels: [
+        "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
+        "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
+      ],
+    };
+  },
+  created() {
+    this.ensureDeviceId();
+    this.personnel = this.buildPersonnelPool(this.orbat);
+    this.ensureUnitsBuilt(this.orbat);
+  },
+  mounted() { this.triggerFlicker(0); },
+  computed: {
+    chalkUnits() { return this.plan.units; },
+    currentUnit() { return this.plan.units.find(u => u.key === this.detailKey) || null; },
+    currentSlotTitle() {
+      if (!this.picker.open) return "";
+      const g = this.plan.units.find(u => u.key === this.picker.unitKey);
+      return g ? `${g.title} #${this.picker.slotIdx + 1}` : "";
+    },
+    filteredPersonnel() {
+      const q = this.picker.query.trim().toLowerCase();
+      const base = this.personnel.filter(
+        p => !q ||
+          (p.name || "").toLowerCase().includes(q) ||
+          (p.callsign || "").toLowerCase().includes(q) ||
+          (p.role || "").toLowerCase().includes(q)
+      );
+      return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
+    },
+    authToken() {
+      const tProp = (this.token || "").trim();
+      if (tProp) return tProp;
+      try {
+        const ls = typeof localStorage !== "undefined" ? localStorage : null;
+        const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
+        const fromLS = ls?.getItem("token") || ls?.getItem("authToken") || ls?.getItem("jwt") || "";
+        const fromSS = ss?.getItem("token") || ss?.getItem("authToken") || ss?.getItem("jwt") || "";
+        return (fromLS || fromSS || "").trim();
+      } catch { return ""; }
+    },
+    authModeLabel() {
+      return this.authToken ? "User mode (token)" : "Device mode (anonymous)";
+    },
+    // Deployment-only resolver; never touches generic keys your login might use
+    apiBase() {
+      const direct = (this.execUrl || "").trim();
+      if (direct) return direct;
+      try {
+        const meta = document?.querySelector('meta[name="apps-script-exec"]')?.content || "";
+        if (meta && meta.trim()) return meta.trim();
+      } catch {}
+      try {
+        if (typeof window !== "undefined" && window.DEPLOYMENT_EXEC_URL)
+          return String(window.DEPLOYMENT_EXEC_URL).trim();
+      } catch {}
+      try {
+        const ls = typeof localStorage !== "undefined" ? localStorage : null;
+        const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
+        const a = ls?.getItem("deploymentExecUrl") || ss?.getItem("deploymentExecUrl") || "";
+        if (a && a.trim()) return a.trim();
+      } catch {}
+      return "";
+    },
+    pointsUsed() {
+      return this.calcUnitPoints(this.currentUnit);
+    },
+  },
+  methods: {
+    /* CSV reset (same as before) */
+    async resetPlan() {
+      this.detailError = ""; this.apiError = ""; this.debugInfo = "";
+      const metaUrl = typeof document !== "undefined" ? document.querySelector('meta[name="defaults-csv"]')?.content : "";
+      const url = this.defaultsCsvUrl || metaUrl || "";
+      if (url) {
         try {
-          localStorage.setItem("deploymentExecUrl", exec);
-        } catch (e) {}
-      })();
-    </script>
-  </head>
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
+          const text = await res.text();
+          const defaults = this.parseCsvDefaults(text);
+          const updated = this.applyCsvDefaults(defaults);
+          if (!updated) throw new Error("No matching chalks in CSV.");
+          this.persistPlan(); this.triggerFlicker(0);
+          this.debugInfo = "Reset from latest CSV defaults."; return;
+        } catch (e) { this.apiError = `CSV fallback: ${String(e.message || e)}`; }
+      }
+      this.ensureUnitsBuilt(this.orbat); this.persistPlan(); this.triggerFlicker(0);
+      if (!this.debugInfo) this.debugInfo = "Fallback defaults applied (ORBAT/template).";
+    },
 
-  <body style="margin: 0px">
-    <div id="app"></div>
+    /* … (rest of file unchanged from previous working version: parseCsvDefaults, applyCsvDefaults,
+          csvToRows, findHeader, ensureUnitsBuilt, deviceId, apiPost, save/load/export,
+          helpers, points, interactions, etc.) … */
 
-    <script type="module" src="/src/main.js"></script>
+    // --- keep your existing methods block content here exactly as before ---
+    parseCsvDefaults(csvText) { /* unchanged body */ },
+    applyCsvDefaults(defaultsByChalk) { /* unchanged body */ },
+    csvToRows(text) { /* unchanged body */ },
+    findHeader(headers, regex, optional = false) { /* unchanged body */ },
+    ensureUnitsBuilt(orbat) { /* unchanged body */ },
+    makeDefaultChalks(count, size) { /* unchanged body */ },
+    ensureDeviceId() { /* unchanged body */ },
+    makeDeviceId() { /* unchanged body */ },
+    async apiPost(action, body, raw = false) { /* unchanged body */ },
+    unitPayload(unit) { /* unchanged body */ },
+    async loadRemote(unitKey) { /* unchanged body */ },
+    async saveRemote(unitKey) { /* unchanged body */ },
+    async exportRemote(format = "json") { /* unchanged body */ },
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script type="module" src="/src/assets/scripts/vanta.globe.min.js"></script>
+    isPointsUnit(title) { /* unchanged body */ },
+    triggerFlicker(delayMs = 0) { /* unchanged body */ },
+    switchUnit(key) { /* unchanged body */ },
+    persistPlan() { /* unchanged body */ },
+    normalizeRole(txt) { /* unchanged body */ },
+    rolePriority(role) { /* unchanged body */ },
+    sortSlotsByRole(slots) { /* unchanged body */ },
+    extractCertsFromMember(member) { /* unchanged body */ },
+    bestCertLabelMatch(name) { /* unchanged body */ },
+    getCertsForPersonId(personId) { /* unchanged body */ },
+    certPointSuffix(label) { /* unchanged body */ },
+    ensureSlotCert(slot, fallbackRole = "") { /* unchanged body */ },
+    titleCase(s) { /* unchanged body */ },
+    buildPersonnelPool(orbat) { /* unchanged body */ },
+    isChalk(title) { /* unchanged body */ },
+    padSlots(arr, min) { /* unchanged body */ },
+    keyFromName(name) { /* unchanged body */ },
+    filledCount(g) { /* unchanged body */ },
+    displayName(slot) { /* unchanged body */ },
+    buildUnitsFromOrbat(orbat) { /* unchanged body */ },
+    buildUnitFromOrbatByKey(orbat, unitKey) { /* unchanged body */ },
+    calcUnitPoints(unit) { /* unchanged body */ },
+    wouldExceedCap(unitKey, delta) { /* unchanged body */ },
+    openPicker(unitKey, slotIdx) { /* unchanged body */ },
+    closePicker() { /* unchanged body */ },
+    findAssignment(personId) { /* unchanged body */ },
+    formatAssignment(a) { /* unchanged body */ },
+    selectPersonnel(p) { /* unchanged body */ },
+    clearCurrentSlot() { /* unchanged body */ },
+    clearSlot(unitKey, slotIdx) { /* unchanged body */ },
+    clearGroup(unitKey) { /* unchanged body */ },
+    addSlot(unitKey) { /* unchanged body */ },
+    removeSlot(unitKey, slotIdx) { /* unchanged body */ },
+    onChangeCert(unitKey, slotIdx, nextCert) { /* unchanged body */ },
+    onToggleDisposable(unitKey, slotIdx, checked) { /* unchanged body */ },
+    fillFromRoster(unitKey) { /* unchanged body */ },
+    exportJson() { /* unchanged body */ },
+    downloadBlob(blob, filename) { /* unchanged body */ },
+  },
+  watch: {
+    orbat: { deep: true, handler(newV) { /* unchanged body */ } },
+  },
+};
+</script>
 
-    <script type="module">
-      VANTA.GLOBE({
-        el: "body",
-        mouseControls: false,
-        touchControls: false,
-        gyroControls: false,
-        minHeight: 200.0,
-        minWidth: 200.0,
-        scale: 1.0,
-        scaleMobile: 1.0,
-        color: 0x4c6944,
-        color2: 0x368fb6,
-        backgroundColor: 0x111111,
-        size: 2.0,
-        sphereRotation: -0.002,
-        meshRotation: 0.004,
-      });
-    </script>
-  </body>
-</html>
+<style scoped>
+/* keep your existing styles */
+</style>
