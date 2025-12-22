@@ -12,6 +12,7 @@
 
       <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
+          <!-- Toolbar -->
           <div class="detail-toolbar">
             <div class="toolbar-left">
               <label class="muted small">Chalk</label>
@@ -33,6 +34,7 @@
             </div>
           </div>
 
+          <!-- Exec URL warning -->
           <div v-if="!apiBase" class="warn">
             Apps Script /exec URL missing. Use your Netlify proxy to avoid CORS:
             <ul style="margin:.3rem 0 .1rem .9rem">
@@ -47,52 +49,146 @@
           <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
+          <!-- Cards grid styled like PilotsView -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
-            <div class="slots-grid">
+            <div class="squad-modal-meta" :class="{ invalid: pointsUsed > SQUAD_POINT_CAP }">
+              <div class="squad-title">
+                <h2 style="margin:0">{{ currentUnit.title }}</h2>
+                <p class="subtitle">{{ filledCount(currentUnit) }} / {{ currentUnit.slots.length }} PERSONNEL</p>
+                <div class="loadout-status">
+                  <span class="points">LOADOUT: {{ pointsUsed }}/{{ SQUAD_POINT_CAP }} PTS</span>
+                  <span v-if="pointsUsed > SQUAD_POINT_CAP" class="warn">⚠ EXCEEDS CAP</span>
+                  <span v-else class="ok">✓ VALID</span>
+                </div>
+              </div>
+              <div class="squad-tag"><span>{{ squadInitials(currentUnit.title) }}</span></div>
+            </div>
+
+            <div class="squad-members-grid">
               <div
                 v-for="(slot, sIdx) in currentUnit.slots"
                 :key="`slot-${detailKey}-${sIdx}`"
-                class="slot"
-                :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
+                class="member-card"
+                :class="{ vacant: slot.origStatus === 'VACANT' && !slot.id, closed: slot.origStatus === 'CLOSED' }"
               >
-                <div class="slot-topline">
-                  <span class="slot-tag">#{{ sIdx + 1 }}</span>
-                  <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
-                  <div style="display:flex; gap:.35rem;">
-                    <button v-if="slot.id" type="button" class="btn ghost xsmall" @click.stop="clearSlot(detailKey, sIdx)">Clear</button>
-                    <button type="button" class="btn ghost xsmall" @click.stop="removeSlot(detailKey, sIdx)">–</button>
-                  </div>
-                </div>
-
-                <div class="slot-body">
-                  <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
-
-                  <div v-if="slot.id" class="zoom-cert">
-                    <label>Cert</label>
-                    <select class="select" :value="slot.cert || ''" @change="onChangeCert(detailKey, sIdx, $event.target.value)">
-                      <option value="">—</option>
-                      <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">{{ c }}{{ certPointSuffix(c) }}</option>
-                    </select>
-                  </div>
-
-                  <div v-if="slot.id && currentUnit" class="disp-row">
-                    <label class="check">
-                      <input type="checkbox" :checked="!!slot.disposable" @change="onToggleDisposable(detailKey, sIdx, $event.target.checked)" />
-                      <span class="check-label">Disposable launcher <span class="muted small">( +{{ DISPOSABLE_COST }} pt )</span></span>
-                    </label>
+                <!-- VACANT / CLOSED -->
+                <template v-if="slot.origStatus === 'VACANT' && !slot.id || slot.origStatus === 'CLOSED'">
+                  <div class="member-header">
+                    <div class="member-header-text">
+                      <h3>{{ (slot.origStatus || 'VACANT').toUpperCase() }}</h3>
+                      <p class="rank-line">
+                        <span class="rank">{{ slot.role || 'Slot' }}</span>
+                        <span class="id">UNFILLED SLOT</span>
+                      </p>
+                    </div>
+                    <div style="display:flex; gap:.35rem; margin-left:auto;">
+                      <button
+                        type="button"
+                        class="btn ghost xsmall"
+                        :disabled="slot.origStatus === 'CLOSED'"
+                        @click.stop="openPicker(detailKey, sIdx)"
+                      >
+                        {{ slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign' }}
+                      </button>
+                      <button type="button" class="btn ghost xsmall" @click.stop="removeSlot(detailKey, sIdx)">–</button>
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    class="btn primary pick"
-                    :disabled="slot.origStatus === 'CLOSED'"
-                    @click.stop="openPicker(detailKey, sIdx)"
-                  >
-                    {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
-                  </button>
-                </div>
+                  <div class="member-body">
+                    <div class="member-column left">
+                      <p class="detail-line">
+                        <strong>Role:</strong>
+                        <span class="role-accent">{{ slot.role || 'Slot' }}</span>
+                      </p>
+                    </div>
+                    <div class="member-column right">
+                      <p><strong>Certifications:</strong></p>
+                      <span class="cert-none">N/A</span>
+                    </div>
+                  </div>
+
+                  <div class="member-footer">
+                    <span>SLOT STATUS: {{ slot.origStatus || 'VACANT' }}</span>
+                    <span>UNSC SYSTEMS DATABASE</span>
+                  </div>
+                </template>
+
+                <!-- FILLED -->
+                <template v-else>
+                  <div class="member-header">
+                    <div class="member-header-text">
+                      <h3>{{ (slot.name || 'UNKNOWN').toUpperCase() }}</h3>
+                      <p class="rank-line">
+                        <span class="rank">{{ slot.role || 'N/A' }}</span>
+                        <span class="id">ID: {{ slot.id || 'N/A' }}</span>
+                      </p>
+                    </div>
+                    <div style="display:flex; gap:.35rem; margin-left:auto;">
+                      <button v-if="slot.id" type="button" class="btn ghost xsmall" @click.stop="clearSlot(detailKey, sIdx)">Clear</button>
+                      <button type="button" class="btn ghost xsmall" @click.stop="removeSlot(detailKey, sIdx)">–</button>
+                    </div>
+                  </div>
+
+                  <div class="member-body">
+                    <div class="member-column left">
+                      <p class="detail-line">
+                        <strong>Role:</strong>
+                        <span class="role-accent">{{ slot.role || 'Unassigned' }}</span>
+                      </p>
+
+                      <div class="loadout-row">
+                        <label class="disposable">
+                          <input
+                            type="checkbox"
+                            :checked="!!slot.disposable"
+                            @change="onToggleDisposable(detailKey, sIdx, $event.target.checked)"
+                          />
+                          Disposable Rocket ({{ DISPOSABLE_COST }}pt)
+                        </label>
+                      </div>
+
+                      <div class="loadout-row">
+                        <label class="primary-label">Assigned Certification</label>
+                        <select
+                          class="loadout-select"
+                          :value="slot.cert || ''"
+                          @change="onChangeCert(detailKey, sIdx, $event.target.value)"
+                        >
+                          <option value="">None / Standard</option>
+                          <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">
+                            {{ c }}{{ certPointSuffix(c) }}
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="member-column right">
+                      <p><strong>Certifications:</strong></p>
+                      <div class="cert-list">
+                        <div v-for="(label, cidx) in certLabels" :key="label" class="cert-row">
+                          <span class="cert-checkbox" :class="{ checked: (slot.cert || '') === label || hasCertId(slot.id, cidx) }">
+                            <span v-if="(slot.cert || '') === label || hasCertId(slot.id, cidx)" class="checkbox-dot"></span>
+                          </span>
+                          <span class="cert-label">{{ label }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="member-footer">
+                    <button
+                      type="button"
+                      class="btn primary small"
+                      :disabled="slot.origStatus === 'CLOSED'"
+                      @click.stop="openPicker(detailKey, sIdx)"
+                    >
+                      {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
+                    </button>
+                    <span>UNSC SYSTEMS DATABASE</span>
+                  </div>
+                </template>
               </div>
             </div>
 
@@ -117,40 +213,68 @@
       </div>
     </section>
 
-    <!-- Assign/Swap Picker -->
-    <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
-      <div class="picker">
-        <div class="picker-head">
-          <h3>{{ currentSlotTitle }} <span class="muted">— select soldier</span></h3>
-          <button type="button" class="btn ghost" @click="closePicker">Close</button>
+    <!-- Assign/Swap Picker (unchanged logic) -->
+    <div v-if="picker.open" class="squad-overlay" @click.self="closePicker">
+      <div class="squad-modal">
+        <div class="squad-modal-header">
+          <div class="squad-header-left">
+            <div class="section-header clipped-medium-backward-bio">
+              <img src="/icons/license.svg" />
+              <h1>SLOT ASSIGNMENT</h1>
+            </div>
+            <div class="rhombus-back">&nbsp;</div>
+          </div>
+          <button class="squad-close" @click="closePicker">✕</button>
         </div>
 
-        <div class="picker-controls">
+        <div class="squad-modal-meta">
+          <div class="squad-title">
+            <h2>{{ currentSlotTitle }}</h2>
+            <p class="subtitle">Select a soldier to assign or swap</p>
+          </div>
+          <div class="squad-tag"><span>{{ squadInitials(currentUnit?.title || 'Chalk') }}</span></div>
+        </div>
+
+        <div class="picker-controls" style="padding:.6rem .2rem 0;">
           <input v-model="picker.query" placeholder="Search by name / callsign / role" class="search" @keydown.stop />
           <label class="check"><input type="checkbox" v-model="picker.onlyFree" /> <span class="check-label">Show only unassigned</span></label>
         </div>
 
-        <div class="picker-list">
-          <div v-for="p in filteredPersonnel" :key="p.id" class="pick-row" :class="{ assigned: !!findAssignment(p.id) }">
-            <div class="pick-info">
-              <div class="p-name" :title="p.name">{{ p.name }}</div>
-              <div class="p-meta">
-                <span v-if="p.callsign" class="subtle">{{ p.callsign }}</span>
-                <span v-if="p.role" class="subtle">• {{ p.role }}</span>
+        <div class="squad-modal-scroll">
+          <div v-for="p in filteredPersonnel" :key="p.id" class="pick-row member-card" :class="{ assigned: !!findAssignment(p.id) }">
+            <div class="member-header">
+              <div class="member-header-text">
+                <h3>{{ (p.name || 'UNKNOWN').toUpperCase() }}</h3>
+                <p class="rank-line">
+                  <span class="rank">{{ p.role || '—' }}</span>
+                  <span class="id">{{ p.callsign || '' }}</span>
+                </p>
+              </div>
+              <div class="pick-actions" style="display:flex; gap:.5rem; margin-left:auto;">
+                <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
               </div>
             </div>
-            <div class="pick-status">
-              <span v-if="findAssignment(p.id)" class="badge">Assigned: {{ formatAssignment(findAssignment(p.id)) }}</span>
+            <div class="member-body">
+              <div class="member-column left">
+                <p class="detail-line"><strong>Role:</strong> <span class="role-accent">{{ p.role || '—' }}</span></p>
+              </div>
+              <div class="member-column right">
+                <p><strong>Certifications:</strong></p>
+                <div class="cert-list">
+                  <div v-for="(label, cidx) in certLabels" :key="label" class="cert-row">
+                    <span class="cert-checkbox" :class="{ checked: hasCertId(p.id, cidx) }">
+                      <span v-if="hasCertId(p.id, cidx)" class="checkbox-dot"></span>
+                    </span>
+                    <span class="cert-label">{{ label }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="pick-actions">
-              <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
+            <div class="member-footer">
+              <span v-if="findAssignment(p.id)" class="badge">Assigned: {{ formatAssignment(findAssignment(p.id)) }}</span>
+              <span>UNSC SYSTEMS DATABASE</span>
             </div>
           </div>
-        </div>
-
-        <div class="picker-foot">
-          <button type="button" class="btn ghost" @click="clearCurrentSlot">Clear slot</button>
-          <span class="muted">Selecting someone already assigned will swap them.</span>
         </div>
       </div>
     </div>
@@ -158,7 +282,7 @@
 </template>
 
 <script>
-/* cookie reader without regex (build-safe) */
+/* cookie reader */
 function readCookie(name) {
   try {
     const target = `${name}=`;
@@ -171,7 +295,7 @@ function readCookie(name) {
   } catch { return ''; }
 }
 
-/* support Netlify Identity token if present (optional) */
+/* optional Netlify Identity */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -304,6 +428,14 @@ export default {
     pointsUsed() { return this.calcUnitPoints(this.currentUnit); },
   },
   methods: {
+    squadInitials(name) {
+      if (!name) return "UNSC";
+      const parts = String(name).trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+      return parts.map((p, i) => (i === parts.length - 1 && /\d+/.test(p) ? p : p[0]))
+                  .join("").toUpperCase();
+    },
+
     async resetPlan() {
       this.detailError = ""; this.apiError = ""; this.debugInfo = "";
       const url = this.defaultsCsvUrl || (typeof window !== "undefined" ? window.DEFAULTS_CSV_URL : "");
@@ -531,6 +663,7 @@ export default {
       } finally { this.busy = false; }
     },
 
+    /* helpers & transforms */
     isPointsUnit(title) { const t = String(title || "").toLowerCase(); return /\bchalk\s*[1-4]\b/.test(t); },
     triggerFlicker(delayMs = 0) { this.animateView = false; this.animationDelay = `${delayMs}ms`; this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true))); },
     switchUnit(key) { if (!key || key === this.detailKey) return; this.detailKey = key; this.detailError = ""; this.triggerFlicker(0); },
@@ -590,6 +723,12 @@ export default {
       return "";
     },
     getCertsForPersonId(personId) { const p = this.personnel.find(pp => String(pp.id) === String(personId)); return p?.certs || []; },
+    hasCertId(personId, idx) {
+      const p = this.personnel.find(pp => String(pp.id) === String(personId));
+      if (!p) return false;
+      const label = this.certLabels[idx];
+      return (p.certs || []).includes(label);
+    },
     certPointSuffix(label) { const pts = this.CERT_POINTS[label] ?? 0; return pts ? ` (+${pts})` : ""; },
     ensureSlotCert(slot, fallbackRole = "") {
       if (slot.cert) return slot.cert;
@@ -847,6 +986,7 @@ export default {
 </script>
 
 <style scoped>
+/* -------- Shell / toolbar (kept) -------- */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
@@ -859,42 +999,7 @@ export default {
 .toolbar-right{display:flex;gap:.6rem;align-items:center}
 .chalk-picker{min-width:160px}
 .divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block}
-
-.group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
 .warn{border:1px solid rgba(255,120,120,.5);background:rgba(90,0,0,.25);color:#ffdcdc;border-radius:.5rem;padding:.4rem .6rem}
-.slots-grid{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:.7rem}
-@media (min-width:1680px){.slots-grid{grid-template-columns:repeat(6,minmax(200px,1fr))}}
-@media (max-width:1500px){.slots-grid{grid-template-columns:repeat(4,minmax(180px,1fr))}}
-@media (max-width:1100px){.slots-grid{grid-template-columns:repeat(3,minmax(160px,1fr))}}
-@media (max-width:820px){.slots-grid{grid-template-columns:repeat(2,minmax(150px,1fr))}}
-@media (max-width:560px){.slots-grid{grid-template-columns:1fr}}
-.slot{border:1px solid rgba(30,144,255,0.25);background:linear-gradient(180deg,rgba(1,8,16,0.6),rgba(0,10,20,0.32));border-radius:.55rem;padding:.55rem .6rem;display:grid;gap:.45rem;transition:border-color 120ms ease,box-shadow 120ms ease,transform 80ms ease}
-.slot:hover{border-color:rgba(120,200,255,0.45);box-shadow:0 0 0 1px rgba(120,200,255,0.08) inset}
-.slot.vacant{border-style:dashed;opacity:.98}
-.slot.closed{filter:grayscale(85%);opacity:.6;background:rgba(1,6,14,.9)}
-.slot-topline{display:flex;align-items:center;gap:.5rem}
-.slot-tag{font-size:.78rem;letter-spacing:.12em;color:#9ec5e6}
-.slot-role{margin-left:auto;color:#9ec5e6;font-size:.82rem;opacity:.9}
-.slot-body{display:grid;gap:.45rem}
-.slot-name{color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.2em}
-.zoom-cert{display:grid;gap:.25rem}
-.zoom-cert label{color:#9ec5e6;font-size:.82rem;letter-spacing:.06em}
-.select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
-
-.disp-row{margin-top:.1rem}
-.check{display:inline-flex;align-items:center;gap:.5rem}
-.check .check-label{color:#eaf4ff}
-.check input[type="checkbox"]{
-  appearance:none;width:16px;height:16px;border:1px solid rgba(120,255,190,.55);border-radius:4px;background:rgba(0,20,14,.5);box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);position:relative;transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease,opacity 120ms ease}
-.check input[type="checkbox"]:hover{border-color:rgba(120,255,190,.85)}
-.check input[type="checkbox"]:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,255,190,.35)}
-.check input[type="checkbox"]:checked{
-  background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9));
-  border-color:rgba(120,255,190,.85)}
-.check input[type="checkbox"]:checked::after{
-  content:"";position:absolute;left:3px;top:1px;right:0;bottom:0;width:8px;height:12px;border-right:2px solid #caffe9;border-bottom:2px solid #caffe9;transform:rotate(45deg)}
-
-.actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem;align-items:center}
 .btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08)}
 .btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,20,.7));border-color:rgba(120,200,255,0.5)}
 .btn:active{transform:translateY(1px) scale(0.995)}
@@ -905,26 +1010,61 @@ export default {
 .btn.primary{background:linear-gradient(180deg,rgba(8,40,22,.9),rgba(6,28,18,.85));border-color:rgba(90,220,160,0.45);box-shadow:inset 0 0 0 1px rgba(90,220,160,0.15)}
 .btn.primary:hover{border-color:rgba(120,255,190,0.6);background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9))}
 .btn.ghost{background:rgba(0,10,30,0.25)}
-button.pick{width:100%}
 .pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
 .pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
-
-.picker-veil{position:fixed;inset:0;background:rgba(0, 0, 0, 0.55);display:grid;place-items:center;z-index:1000}
-.picker{width:min(900px,92vw);max-height:80vh;overflow:hidden;border-radius:.8rem;border:1px solid rgba(30,144,255,0.45);background:rgba(0,10,30,0.98);display:grid;grid-template-rows:auto auto 1fr auto}
-.picker-head{display:flex;align-items:center;justify-content:space-between;padding:.8rem .9rem;border-bottom:1px solid rgba(30,144,255,0.25)}
-.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.6rem .9rem;border-bottom:1px solid rgba(30,144,255,0.18)}
-.picker-list{overflow:auto;padding:.6rem .4rem;display:grid;gap:.4rem}
-.pick-row{display:grid;grid-template-columns:1fr auto auto;gap:.6rem;align-items:center;border:1px solid rgba(30,144,255,0.25);background:rgba(0,10,30,0.2);border-radius:.5rem;padding:.5rem .6rem}
-.pick-row.assigned{background:rgba(30,144,255,0.08)}
-.p-name{color:#e6f3ff;font-weight:600}
-.p-meta .subtle{color:#9ec5e6;font-size:.86rem}
-.badge{color:#79ffba;border:1px solid rgba(120,255,170,0.55);border-radius:999px;padding:.1rem .5rem;font-size:.78rem}
-
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
-@keyframes contentEntry{
-  0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}
-  60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}
-  80%{opacity:.98;filter:brightness(1.03)}
-  100%{opacity:1;filter:none}
-}
+@keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}}
+
+/* -------- Adopted from PilotsView (card look) -------- */
+/* meta header (points & tag) */
+.squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
+.squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
+.squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
+.loadout-status{margin-top:.35rem;display:flex;gap:.75rem;align-items:center;font-size:.85rem;text-transform:uppercase}
+.loadout-status .points{color:#9ec5e6}.loadout-status .warn{color:rgba(255,190,80,0.95)}.loadout-status .ok{color:rgba(120,255,170,0.9)}
+.squad-tag{border:2px solid #1e90ff;border-radius:.6rem;padding:.35rem .6rem;color:#1e90ff;font-weight:700}
+
+/* grid */
+.squad-members-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.95rem}
+@media (max-width:1680px){.squad-members-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:1350px){.squad-members-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:980px){.squad-members-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.squad-members-grid{grid-template-columns:1fr}}
+
+/* card */
+.member-card{position:relative;background:rgba(0,10,30,0.95);border-radius:.4rem;border-left:4px solid #1e90ff;box-shadow:0 0 10px rgba(0,0,0,0.6);padding:.9rem 1.1rem;display:flex;flex-direction:column}
+.member-card.vacant,.member-card.closed{border-left-color:rgba(30,144,255,0.35)}
+.member-card.vacant{background:repeating-linear-gradient(45deg,rgba(30,144,255,0.06) 0,rgba(30,144,255,0.06) 10px,transparent 10px,transparent 20px),rgba(0,12,25,0.9);border-left-style:dashed}
+.member-card.closed{filter:grayscale(85%);opacity:.6;background:repeating-linear-gradient(45deg,rgba(200,200,200,0.06) 0,rgba(200,200,200,0.06) 8px,transparent 8px,transparent 16px),repeating-linear-gradient(-45deg,rgba(200,200,200,0.04) 0,rgba(200,200,200,0.04) 8px,transparent 8px,transparent 16px),rgba(1,6,14,0.9)}
+.member-card.closed .member-header h3,.member-card.closed .rank-line,.member-card.closed .detail-line,.member-card.closed .cert-label,.member-card.closed .cert-none,.member-card.closed .member-footer{opacity:.75}
+
+/* header/body/footer */
+.member-header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.9rem}
+.member-header h3{margin:0;font-size:1.1rem;color:#e0f0ff;word-break:break-word}
+.rank-line{margin:.15rem 0 0;font-size:.88rem;color:#9ec5e6;display:flex;gap:.6rem;flex-wrap:wrap}
+.member-body{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-top:.6rem;font-size:.9rem}
+.member-column p{margin:.18rem 0}
+.member-footer{margin-top:.6rem;font-size:.75rem;color:#7aa7c7;display:flex;justify-content:space-between}
+
+/* cert list look */
+.detail-line strong{color:#9ec5e6}
+.role-accent{color:#55ff88;font-weight:600}
+.primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:#9ec5e6}
+.loadout-row{margin-top:.4rem}
+.loadout-select{width:100%;background:#040a14;border:1px solid rgba(30,144,255,.45);color:#dce6f1;border-radius:.3rem;padding:.25rem .35rem}
+.cert-list{display:grid;grid-template-columns:20px 1fr;row-gap:.28rem}
+.cert-row{display:contents}
+.cert-checkbox{width:16px;height:16px;border:1px solid rgba(30,144,255,.6);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
+.cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
+.checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
+
+/* picker shell (reuse PilotsView modal look) */
+.squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
+.squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
+.squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+.squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:#dce6f1;border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer}
+.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.4rem 0 .2rem}
+.search{flex:1;min-width:260px;padding:.4rem .6rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
+.pick-row.assigned{background:rgba(30,144,255,0.08)}
+.squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 200px)}
 </style>
