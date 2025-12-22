@@ -223,76 +223,55 @@
       </div>
     </section>
 
-    <!-- Assign/Swap Picker (unchanged logic) -->
+    <!-- Assign/Swap Picker — compact -->
     <div v-if="picker.open" class="squad-overlay" @click.self="closePicker">
-      <div class="squad-modal">
-        <div class="squad-modal-header">
-          <div class="squad-header-left">
-            <div class="section-header clipped-medium-backward-bio">
-              <img src="/icons/license.svg" />
-              <h1>SLOT ASSIGNMENT</h1>
-            </div>
-            <div class="rhombus-back">&nbsp;</div>
-          </div>
+      <div class="squad-modal compact">
+        <div class="compact-header">
+          <h3>Assign to {{ currentSlotTitle }}</h3>
           <button class="squad-close" @click="closePicker">✕</button>
         </div>
 
-        <div class="squad-modal-meta">
-          <div class="squad-title">
-            <h2>{{ currentSlotTitle }}</h2>
-            <p class="subtitle">Select a soldier to assign or swap</p>
-          </div>
-          <div class="squad-tag"><span>{{ squadInitials(currentUnit?.title || 'Chalk') }}</span></div>
-        </div>
-
-        <div class="picker-controls" style="padding:.6rem .2rem 0;">
+        <div class="picker-toolbar">
           <input v-model="picker.query" placeholder="Search by name / callsign / role" class="search" @keydown.stop />
-          <label class="check"><input type="checkbox" v-model="picker.onlyFree" /> <span class="check-label">Show only unassigned</span></label>
+          <label class="check smallish">
+            <input type="checkbox" v-model="picker.onlyFree" />
+            <span class="check-label">Only unassigned</span>
+          </label>
+          <select v-model="picker.sort" class="sort">
+            <option value="name_asc">Name A–Z</option>
+            <option value="name_desc">Name Z–A</option>
+            <option value="role_asc">Role A–Z</option>
+            <option value="rank_desc">Rank (senior→junior)</option>
+            <option value="rank_asc">Rank (junior→senior)</option>
+            <option value="assigned_first">Assigned first</option>
+            <option value="assigned_last">Assigned last</option>
+          </select>
         </div>
 
-        <div class="squad-modal-scroll">
-          <div v-for="p in filteredPersonnel" :key="p.id" class="pick-row member-card" :class="{ assigned: !!findAssignment(p.id) }">
-            <div class="member-header">
-              <div class="member-header-text">
-                <div class="name-line">
-                  <img
-                    v-if="p.rank"
-                    class="rank-icon"
-                    :src="rankIcon(rankLabel(p.rank))"
-                    :alt="rankLabel(p.rank)"
-                    :title="rankLabel(p.rank)"
-                    @error="onRankImgError($event)"
-                  />
-                  <h3>{{ (p.name || 'UNKNOWN').toUpperCase() }}</h3>
-                </div>
-                <p class="rank-line">
-                  <span class="rank">{{ p.role || '—' }}</span>
-                  <span class="id">{{ p.callsign || '' }}</span>
-                </p>
-              </div>
-              <div class="pick-actions" style="display:flex; gap:.5rem; margin-left:auto;">
-                <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
-              </div>
+        <div class="squad-modal-scroll compact-list">
+          <div
+            v-for="p in filteredAndSortedPersonnel"
+            :key="p.id"
+            class="pick-row compact"
+            :class="{ assigned: !!findAssignment(p.id) }"
+          >
+            <div class="row-left">
+              <img
+                v-if="rankLabel(p.rank)"
+                class="rank-icon small"
+                :src="rankIcon(rankLabel(p.rank))"
+                :alt="rankLabel(p.rank)"
+                :title="rankLabel(p.rank)"
+                @error="onRankImgError($event)"
+              />
+              <span class="name">{{ (p.name || 'UNKNOWN').toUpperCase() }}</span>
             </div>
-            <div class="member-body">
-              <div class="member-column left">
-                <p class="detail-line"><strong>Role:</strong> <span class="role-accent">{{ p.role || '—' }}</span></p>
-              </div>
-              <div class="member-column right">
-                <p><strong>Certifications:</strong></p>
-                <div class="cert-list">
-                  <div v-for="(label, cidx) in certLabels" :key="label" class="cert-row">
-                    <span class="cert-checkbox" :class="{ checked: hasCertId(p.id, cidx) }">
-                      <span v-if="hasCertId(p.id, cidx)" class="checkbox-dot"></span>
-                    </span>
-                    <span class="cert-label">{{ label }}</span>
-                  </div>
-                </div>
-              </div>
+            <div class="row-mid">
+              <span class="role">{{ p.role || '—' }}</span>
+              <span v-if="findAssignment(p.id)" class="chip">Assigned</span>
             </div>
-            <div class="member-footer">
-              <span v-if="findAssignment(p.id)" class="badge">Assigned: {{ formatAssignment(findAssignment(p.id)) }}</span>
-              <span>UNSC SYSTEMS DATABASE</span>
+            <div class="row-right">
+              <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
             </div>
           </div>
         </div>
@@ -348,7 +327,7 @@ export default {
       apiError: "",
       busy: false,
       plan: { units: [] },
-      picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false },
+      picker: { open: false, unitKey: "", slotIdx: -1, query: "", onlyFree: false, sort: "name_asc" },
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
       versions: {},
@@ -368,6 +347,12 @@ export default {
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
       identityToken: "",
+      RANK_ORDER: {
+        /* why: sorting seniority */
+        "GEN": 1, "COL": 2, "MAJ": 3, "CPT": 4, "1LT": 5, "2LT": 6,
+        "CWO4": 7, "CWO3": 8, "CWO2": 9, "WO": 10,
+        "GYSGT": 11, "SSGT": 12, "SSG": 13, "SGT": 14, "CPL": 15, "LCPL": 16, "PFC": 17, "PV2": 18, "PVT": 19
+      },
     };
   },
   async created() {
@@ -395,6 +380,31 @@ export default {
       );
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
+    filteredAndSortedPersonnel() {
+      const list = this.filteredPersonnel.slice();
+      const sort = this.picker.sort || "name_asc";
+      const rankVal = (r) => {
+        const code = this.rankLabel(r || "");
+        return this.RANK_ORDER[code] || 999; // higher number = more junior
+      };
+      const assignedWeight = (p) => (this.findAssignment(p.id) ? 0 : 1);
+
+      if (sort === "name_asc" || sort === "name_desc") {
+        list.sort((a,b) => (a.name||"").localeCompare(b.name||"", undefined, {sensitivity:"base"}));
+        if (sort === "name_desc") list.reverse();
+      } else if (sort === "role_asc") {
+        list.sort((a,b) => (a.role||"").localeCompare(b.role||"", undefined, {sensitivity:"base"}));
+      } else if (sort === "rank_desc") {
+        list.sort((a,b) => rankVal(a.rank) - rankVal(b.rank)); // senior first (lower value)
+      } else if (sort === "rank_asc") {
+        list.sort((a,b) => rankVal(b.rank) - rankVal(a.rank)); // junior first
+      } else if (sort === "assigned_first") {
+        list.sort((a,b) => assignedWeight(a) - assignedWeight(b));
+      } else if (sort === "assigned_last") {
+        list.sort((a,b) => assignedWeight(b) - assignedWeight(a));
+      }
+      return list;
+    },
     authToken() {
       const tProp = (this.token || "").trim();
       if (tProp) return tProp;
@@ -418,9 +428,7 @@ export default {
       } catch {}
       return "";
     },
-    authModeLabel() {
-      return this.authToken ? "User mode (token)" : "Device mode (anonymous)";
-    },
+    authModeLabel() { return this.authToken ? "User mode (token)" : "Device mode (anonymous)"; },
     apiBase() {
       const direct = (this.execUrl || "").trim();
       if (direct) return direct;
@@ -487,9 +495,7 @@ export default {
       const ext = (this.rankIconExt || "png").replace(/^\.+/,"");
       return `${base}/${code}.${ext}`;
     },
-    onRankImgError(ev) {
-      ev.target.style.display = 'none'; /* why: hide broken icon gracefully */
-    },
+    onRankImgError(ev) { ev.target.style.display = 'none'; /* why: hide broken icon gracefully */ },
 
     squadInitials(name) {
       if (!name) return "UNSC";
@@ -883,7 +889,7 @@ export default {
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
-      this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false };
+      this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false, sort: this.picker.sort || "name_asc" };
     },
 
     closePicker() { this.picker.open = false; },
@@ -1119,12 +1125,14 @@ export default {
 .member-column p{margin:.18rem 0}
 .member-footer{margin-top:.6rem;font-size:.75rem;color:#7aa7c7;display:flex;justify-content:space-between}
 
-/* rank icon (doubled size) */
+/* rank icon (big in cards) */
 .rank-icon{
   width: 44px; height: 44px; object-fit: contain;
   filter: drop-shadow(0 0 2px rgba(0,0,0,.5));
   user-select:none; -webkit-user-drag:none;
 }
+/* rank icon small in picker */
+.rank-icon.small{ width:28px; height:28px; }
 
 /* cert list look */
 .detail-line strong{color:#9ec5e6}
@@ -1148,13 +1156,34 @@ export default {
 }
 .disposable input[type="checkbox"]:hover{ filter:brightness(1.05); }
 
-/* picker shell (reuse PilotsView modal look) */
+/* -------- Compact Picker styles -------- */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
-.squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
-.squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+.squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1000px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
+.squad-modal.compact{padding:0.8rem 0.9rem 1rem}
+
+.compact-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(30,144,255,.35);padding-bottom:.4rem}
+.compact-header h3{margin:0;font-size:1.05rem;color:#e6f3ff}
+
 .squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:#dce6f1;border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer}
-.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.4rem 0 .2rem}
-.search{flex:1;min-width:260px;padding:.4rem .6rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
-.pick-row.assigned{background:rgba(30,144,255,0.08)}
-.squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 200px)}
+
+.picker-toolbar{display:flex;gap:.6rem;align-items:center;padding:.5rem 0}
+.picker-toolbar .search{flex:1;min-width:220px;padding:.38rem .55rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
+.picker-toolbar .check.smallish{font-size:.9rem;color:#c7d9ea}
+.picker-toolbar .sort{min-width:170px;padding:.38rem .55rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
+
+.squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 180px)}
+.squad-modal-scroll.compact-list{max-height:calc(90vh - 170px)}
+
+.pick-row.compact{
+  display:grid; grid-template-columns:1fr auto auto; align-items:center;
+  gap:.6rem; padding:.5rem .55rem; border:1px solid rgba(30,144,255,.15);
+  background:rgba(5,12,24,.6); border-radius:.5rem; margin-bottom:.5rem;
+}
+.pick-row.compact.assigned{background:rgba(30,144,255,0.08)}
+.row-left{display:flex;align-items:center;gap:.5rem;min-width:0}
+.row-left .name{font-weight:700;color:#e6f3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-mid{display:flex;align-items:center;gap:.5rem;color:#9ec5e6}
+.row-mid .role{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28ch}
+.chip{border:1px solid rgba(30,144,255,.45);color:#9ec5e6;border-radius:999px;padding:.05rem .45rem;font-size:.78rem}
+.row-right .btn.small{padding:.28rem .55rem}
 </style>
