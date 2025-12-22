@@ -1,10 +1,8 @@
-// File: netlify/functions/gas.js
-// Proxy to Google Apps Script AND gate "save" by staff list published via GitHub Actions.
-// Required env:
-//   GAS_ENDPOINT     = https://script.google.com/.../exec
-//   STAFF_JSON_URL   = https://<your-site>/staff.json (published by GitHub Actions)
-//
-// Optional: set "public" GET to always pass-through; POST "config:save" is staff-only.
+// netlify/functions/gas.js
+// Proxy to Google Apps Script AND enforce staff-only saves using staff.json.
+// Env vars required in Netlify:
+//   GAS_ENDPOINT    = https://script.google.com/.../exec
+//   STAFF_JSON_URL  = https://150th-orbat.netlify.app/staff.json
 
 const GAS_ENDPOINT = process.env.GAS_ENDPOINT;
 const STAFF_JSON_URL = process.env.STAFF_JSON_URL;
@@ -22,10 +20,9 @@ function corsHeaders(extra = {}) {
   };
 }
 
-// simple in-memory cache for staff list
 let cachedStaff = null;
 let cachedAt = 0;
-const STAFF_TTL_MS = 60_000; // 1 min
+const STAFF_TTL_MS = 60_000;
 
 async function fetchStaffList() {
   if (!STAFF_JSON_URL) return [];
@@ -34,15 +31,16 @@ async function fetchStaffList() {
   const r = await fetch(STAFF_JSON_URL, { headers: { "Cache-Control": "no-cache" } });
   if (!r.ok) throw new Error(`Fetch staff.json HTTP ${r.status}`);
   const data = await r.json();
-  // normalize to { login?, email? }[]
   const arr = Array.isArray(data) ? data : [];
-  const norm = arr.map(it => {
+  const norm = arr.map((it) => {
     if (typeof it === "string") {
       if (it.includes("@")) return { email: it.toLowerCase().trim() };
       return { login: it.toLowerCase().trim() };
     }
     return {
-      login: (it.login || it.github || it.user || "").toLowerCase().trim() || undefined,
+      login: (it.login || it.github || it.user || it.username || it.name || "")
+        .toLowerCase()
+        .trim() || undefined,
       email: (it.email || it.mail || "").toLowerCase().trim() || undefined,
     };
   });
@@ -51,10 +49,27 @@ async function fetchStaffList() {
   return norm;
 }
 
-function isStaff(user, staffList) {
+function looksLikeStaff(user, staffList) {
   if (!user) return false;
-  const login = (user.user_metadata?.full_name || user.user_metadata?.github_username || user.app_metadata?.provider === "github" && user.user_metadata?.user_name || user?.user_metadata?.name || user?.username || user?.login || "").toLowerCase().trim();
-  const email = (user.email || user?.user_metadata?.email || "").toLowerCase().trim();
+  const email =
+    (user.email ||
+      user?.user_metadata?.email ||
+      user?.email_verified && user?.user_metadata?.full_name?.includes("@") && user?.user_metadata?.full_name ||
+      "") // tolerate weird identity payloads
+      .toLowerCase()
+      .trim();
+
+  // Try to derive a login-style handle if available
+  const login =
+    (
+      user?.user_metadata?.user_name || // GitHub provider
+      user?.user_metadata?.full_name || // sometimes provider puts username here
+      user?.username ||
+      user?.login ||
+      ""
+    )
+      .toLowerCase()
+      .trim();
 
   for (const s of staffList) {
     if (!s) continue;
@@ -64,7 +79,7 @@ function isStaff(user, staffList) {
   return false;
 }
 
-function parseBody(event) {
+function parseJsonBody(event) {
   try {
     if (!event.body) return {};
     return JSON.parse(event.body);
@@ -74,6 +89,11 @@ function parseBody(event) {
 }
 
 exports.handler = async (event, context) => {
+  // CORS preflight
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: corsHeaders() };
+  }
+
   if (!GAS_ENDPOINT) {
     return {
       statusCode: 500,
@@ -82,34 +102,46 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // CORS preflight
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: corsHeaders() };
-  }
-
   try {
     const method = event.httpMethod.toUpperCase();
     const isBodyMethod = method === "POST" || method === "PUT" || method === "PATCH";
-    const url =
+    const user = context.clientContext?.user || null;
+
+    // Lightweight GET utilities for debugging
+    // e.g. /.netlify/functions/gas?action=whoami
+    const urlParams = new URLSearchParams(event.rawQueryString || "");
+    const qAction = (urlParams.get("action") || "").toLowerCase();
+    if (method === "GET" && qAction === "whoami") {
+      let isStaff = false;
+      try {
+        const staff = await fetchStaffList();
+        isStaff = looksLikeStaff(user, staff);
+      } catch {
+        // swallow: if staff.json missing, we still show user payload
+      }
+      return {
+        statusCode: 200,
+        headers: corsHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          ok: true,
+          user: user || null,
+          isStaff,
+          staffJson: STAFF_JSON_URL || null,
+        }),
+      };
+    }
+
+    // Build proxied request
+    const upstreamUrl =
       GAS_ENDPOINT +
       (method === "GET" && event.rawQueryString ? `?${event.rawQueryString}` : "");
 
-    // Identify user (Netlify Identity). If enabled on the site, you'll get a user.
-    const idUser = context.clientContext?.user || null;
+    let bodyJson = parseJsonBody(event);
+    const action = String(bodyJson.action || "").toLowerCase();
 
-    // Determine action when POST-ing JSON
-    let action = "";
-    let originalBody = event.body;
-    let parsed = {};
-    if (method === "POST") {
-      parsed = parseBody(event);
-      action = String(parsed.action || "").toLowerCase();
-    }
-
-    // Enforce staff for "config:save" and allow "config:get" / exports for everyone
+    // Gate staff-only actions
     if (method === "POST" && (action === "config:save" || action === "config:delete")) {
-      // Require staff.json and logged-in user
-      if (!idUser) {
+      if (!user) {
         return {
           statusCode: 401,
           headers: corsHeaders({ "Content-Type": "application/json" }),
@@ -117,37 +149,33 @@ exports.handler = async (event, context) => {
         };
       }
       const staff = await fetchStaffList();
-      if (!isStaff(idUser, staff)) {
+      if (!looksLikeStaff(user, staff)) {
         return {
           statusCode: 403,
           headers: corsHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ ok: false, error: "FORBIDDEN: not in staff" }),
         };
       }
-      // mark request as staff for GAS if it wants to know
-      parsed._staff = true;
-      parsed._staffLogin = idUser?.user_metadata?.user_name || idUser?.user_metadata?.full_name || idUser?.email || "unknown";
-      originalBody = JSON.stringify(parsed);
+      // Optional: let GAS know who's saving
+      bodyJson._staff = true;
+      bodyJson._staffLogin =
+        user?.user_metadata?.user_name ||
+        user?.user_metadata?.full_name ||
+        user?.email ||
+        "unknown";
     }
 
-    // Proxy downstream
-    const resp = await fetch(url, {
+    const upstream = await fetch(upstreamUrl, {
       method,
       redirect: "follow",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-        // Optionally forward identity info (GAS can read this if desired)
-        "X-Staff": parsed?._staff ? "1" : "0",
-        "X-Staff-Login": parsed?._staffLogin || "",
-      },
-      body: isBodyMethod ? originalBody : undefined,
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: isBodyMethod ? JSON.stringify(bodyJson) : undefined,
     });
 
-    const text = await resp.text();
-    const contentType = resp.headers.get("content-type") || "application/json";
-
+    const text = await upstream.text();
+    const contentType = upstream.headers.get("content-type") || "application/json";
     return {
-      statusCode: resp.status,
+      statusCode: upstream.status,
       headers: corsHeaders({ "Content-Type": contentType }),
       body: text,
     };
