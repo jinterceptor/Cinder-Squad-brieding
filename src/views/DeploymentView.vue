@@ -587,7 +587,6 @@ export default {
 
     /* ===== STRICT configJSON parser (matches how chalks save/load) ===== */
     parseConfigJSONSlots(rec) {
-      // why: prefer the exact `configJSON` the sheet stores/returns
       const txt = typeof rec?.configJSON === 'string' ? rec.configJSON
                 : typeof rec?.data?.configJSON === 'string' ? rec.data.configJSON
                 : null;
@@ -682,7 +681,6 @@ export default {
       if (!this.apiBase) { this.overview.error = "execUrl missing"; return; }
       this.overview.loading = true; this.overview.error = "";
       try {
-        // Per-unit fetch, but prefer configJSON slots strictly
         const results = await Promise.allSettled(
           this.chalkUnits.map(u => this.apiPost("config:get", { unitId: u.key }))
         );
@@ -692,9 +690,7 @@ export default {
           const unitKey = this.chalkUnits[idx].key;
           if (r.status === "fulfilled" && r.value && r.value.ok && r.value.data) {
             const it = r.value.data;
-            // STRICT path first
             let slots = this.parseConfigJSONSlots(it);
-            // fallback if needed
             if (!slots.length) slots = this.extractSlotsFromAny(it);
             map[unitKey] = {
               version: Number(it.version || 0),
@@ -926,7 +922,6 @@ export default {
         const { ok, data, error } = resp || {};
         if (!ok) throw new Error(error || "Load failed");
         if (!data) { this.apiError = "No remote config yet for this Chalk."; return; }
-        // Prefer the same configJSON path used by overview & save
         let nextSlots = this.parseConfigJSONSlots(data);
         if (!nextSlots.length) nextSlots = this.extractSlotsFromAny(data);
         const idx = this.plan.units.findIndex(u => u.key === unitKey);
@@ -1111,7 +1106,7 @@ export default {
       return unit.slots.reduce((sum, s) => {
         if (!s.id) return sum;
         const certPts = this.CERT_POINTS[s.cert] ?? 0;
-        the const dispPts = s.disposable ? this.DISPOSABLE_COST : 0; /* keep */
+        const dispPts = s.disposable ? this.DISPOSABLE_COST : 0; /* fixed */
         return sum + certPts + dispPts;
       }, 0);
     },
