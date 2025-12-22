@@ -49,7 +49,7 @@
           <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
-          <!-- Cards grid styled like PilotsView -->
+          <!-- Cards grid (PilotsView-like look) -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
@@ -74,7 +74,7 @@
                 :class="{ vacant: slot.origStatus === 'VACANT' && !slot.id, closed: slot.origStatus === 'CLOSED' }"
               >
                 <!-- VACANT / CLOSED -->
-                <template v-if="slot.origStatus === 'VACANT' && !slot.id || slot.origStatus === 'CLOSED'">
+                <template v-if="(slot.origStatus === 'VACANT' && !slot.id) || slot.origStatus === 'CLOSED'">
                   <div class="member-header">
                     <div class="member-header-text">
                       <h3>{{ (slot.origStatus || 'VACANT').toUpperCase() }}</h3>
@@ -213,7 +213,7 @@
       </div>
     </section>
 
-    <!-- Assign/Swap Picker (unchanged logic) -->
+    <!-- Assign/Swap Picker -->
     <div v-if="picker.open" class="squad-overlay" @click.self="closePicker">
       <div class="squad-modal">
         <div class="squad-modal-header">
@@ -515,7 +515,10 @@ export default {
       while (i < text.length) {
         const ch = text[i];
         if (inQuotes) {
-          if (ch === '"') { if (text[i+1] === '"') { field += '"'; i += 2; continue; } inQuotes = false; i++; continue; }
+          if (ch === '"') {
+            if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+            inQuotes = false; i++; continue;
+          }
           field += ch; i++; continue;
         } else {
           if (ch === '"') { inQuotes = true; i++; continue; }
@@ -572,7 +575,9 @@ export default {
     },
 
     makeDeviceId() {
-      const r = (crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(12)) : Array.from({length:12},()=>Math.floor(Math.random()*256));
+      const r = (crypto && crypto.getRandomValues)
+        ? crypto.getRandomValues(new Uint8Array(12))
+        : Array.from({length:12}, () => Math.floor(Math.random()*256));
       return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
     },
 
@@ -612,7 +617,12 @@ export default {
     },
 
     unitPayload(unit) {
-      return { title: unit.title, slots: unit.slots.map(s => ({ id: s.id, name: s.name, role: s.role, cert: s.cert, disposable: !!s.disposable })) };
+      return {
+        title: unit.title,
+        slots: unit.slots.map(s => ({
+          id: s.id, name: s.name, role: s.role, cert: s.cert, disposable: !!s.disposable
+        }))
+      };
     },
 
     async loadRemote(unitKey) {
@@ -627,7 +637,12 @@ export default {
         if (idx === -1) return;
         const curr = this.plan.units[idx];
         const nextSlots = (parsed.slots || []).map(s => ({
-          id: s.id ?? null, name: s.name ?? null, role: s.role || "", origStatus: "FILLED", cert: s.cert || "", disposable: !!s.disposable,
+          id: s.id ?? null,
+          name: s.name ?? null,
+          role: s.role || "",
+          origStatus: "FILLED",
+          cert: s.cert || "",
+          disposable: !!s.disposable,
         }));
         const padded = this.isChalk(curr.title) ? this.padSlots(nextSlots, this.MIN_CHALK_SLOTS) : nextSlots;
         const nextUnit = { ...curr, slots: this.sortSlotsByRole(padded) };
@@ -735,7 +750,11 @@ export default {
       const certs = this.getCertsForPersonId(slot.id) || [];
       return certs[0] || this.titleCase(String(fallbackRole || slot.role || ""));
     },
-    titleCase(s) { const t = String(s || "").replace(/[_-]+/g, " ").trim(); if (!t) return ""; return t.replace(/\s+/g," ").toLowerCase().replace(/\b\w/g,m=>m.toUpperCase()); },
+    titleCase(s) {
+      const t = String(s || "").replace(/[_-]+/g, " ").trim();
+      if (!t) return "";
+      return t.replace(/\s+/g," ").toLowerCase().replace(/\b\w/g,m=>m.toUpperCase());
+    },
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -744,7 +763,13 @@ export default {
             if (s?.member) {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
               const certs = this.extractCertsFromMember(s.member);
-              pool.push({ id, name: String(s.member.name || "Unknown"), callsign: String(s.member.callsign || ""), role: String(s.role || s.member.slot || ""), certs });
+              pool.push({
+                id,
+                name: String(s.member.name || "Unknown"),
+                callsign: String(s.member.callsign || ""),
+                role: String(s.role || s.member.slot || ""),
+                certs
+              });
             }
           });
         });
@@ -754,7 +779,11 @@ export default {
       return out;
     },
     isChalk(title) { return /\bchalk\s*\d+\b/i.test(String(title || "")); },
-    padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id:null, name:null, role:"", origStatus:"VACANT", cert:"", disposable:false }); return out; },
+    padSlots(arr, min) {
+      const out = arr.slice();
+      while (out.length < min) out.push({ id:null, name:null, role:"", origStatus:"VACANT", cert:"", disposable:false });
+      return out;
+    },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
@@ -769,7 +798,14 @@ export default {
             const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
             const origStatus = ["VACANT", "CLOSED"].includes(status) ? status : "FILLED";
             const member = s?.member || null;
-            const slot = { id: member?.id ? String(member.id) : null, name: member?.name || null, role: s?.role || member?.slot || "", origStatus, cert: "", disposable: false };
+            const slot = {
+              id: member?.id ? String(member.id) : null,
+              name: member?.name || null,
+              role: s?.role || member?.slot || "",
+              origStatus,
+              cert: "",
+              disposable: false
+            };
             if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
             slots.push(slot);
           });
@@ -790,7 +826,14 @@ export default {
           const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
           const origStatus = ["VACANT", "CLOSED"].includes(status) ? status : "FILLED";
           const member = s?.member || null;
-          const slot = { id: member?.id ? String(member.id) : null, name: member?.name || null, role: s?.role || member?.slot || "", origStatus, cert: "", disposable: false };
+          const slot = {
+            id: member?.id ? String(member.id) : null,
+            name: member?.name || null,
+            role: s?.role || member?.slot || "",
+            origStatus,
+            cert: "",
+            disposable: false
+          };
           if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
           slots.push(slot);
         });
@@ -848,17 +891,26 @@ export default {
       const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
       const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0);
       const delta = nextPts - prevPts;
-      if (this.wouldExceedCap(g.key, Math.max(0, delta))) { this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`; return; }
+      if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
+        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
+        return;
+      }
       this.detailError = "";
 
       if (from && target?.id && !(from.unitKey === g.key && from.slotIdx === this.picker.slotIdx)) {
         const srcIdx = this.plan.units.findIndex(u => u.key === from.unitKey);
         const srcGroup = this.plan.units[srcIdx];
         const tmp = { ...target };
-        const newTarget = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: chosenCertDefault, disposable: false };
+        const newTarget = {
+          ...target, id: p.id, name: p.name, role: target.role || p.role || "",
+          cert: chosenCertDefault, disposable: false
+        };
 
         const newSrcSlots = srcGroup.slots.slice();
-        newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name, cert: tmp.cert || this.ensureSlotCert(tmp, tmp.role), disposable: !!tmp.disposable };
+        newSrcSlots[from.slotIdx] = {
+          ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name,
+          cert: tmp.cert || this.ensureSlotCert(tmp, tmp.role), disposable: !!tmp.disposable
+        };
         const newSrc = { ...srcGroup, slots: this.sortSlotsByRole(newSrcSlots) };
 
         const newGSlots = g.slots.slice();
@@ -868,7 +920,10 @@ export default {
         this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? newG : i === srcIdx ? newSrc : u));
       } else {
         const newSlots = g.slots.slice();
-        newSlots[this.picker.slotIdx] = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: chosenCertDefault, disposable: false };
+        newSlots[this.picker.slotIdx] = {
+          ...target, id: p.id, name: p.name, role: target.role || p.role || "",
+          cert: chosenCertDefault, disposable: false
+        };
         const newG = { ...g, slots: this.sortSlotsByRole(newSlots) };
         this.plan.units = this.plan.units.map((u, i) => (i === gIdx ? newG : u));
       }
@@ -892,7 +947,7 @@ export default {
     },
 
     clearGroup(unitKey) {
-      const idx = this.plan.units.findIndex(u => u.key === unitKey);
+      const idx = this.plan.units.findIndex u => u.key === unitKey;
       if (idx < 0) return;
       const g = this.plan.units[idx];
       const emptied = g.slots.map(s => ({ ...s, id: null, name: null, cert: "", disposable: false }));
@@ -986,89 +1041,123 @@ export default {
 </script>
 
 <style scoped>
-/* NEW: enforce light default text for this view */
+/* Force light default text */
 #deploymentView { color:#eaf2ff; }
 
-/* -------- Shell / toolbar (kept) -------- */
-#deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
-.deployment-window.section-container{max-width:none!important;width:auto}
-.header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
-.deploy-scroll{max-height:calc(94vh - 100px - 52px - 36px);overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:36px}
+/* Shell / toolbar */
+#deploymentView {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:1.2rem;
+  align-items:start;
+  height:calc(94vh - 100px);
+  overflow:hidden;
+  padding:28px 18px 32px;
+}
+.deployment-window.section-container{max-width:none!important;width:auto;}
+.header-shell{height:52px;overflow:hidden;}
+.section-header,.section-content-container{width:100%;}
+.deploy-scroll{max-height:calc(94vh - 100px - 52px - 36px);overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:36px;}
 
-.panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
-.muted{color:#9ec5e6}.small{font-size:.86rem}
-.detail-toolbar{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;justify-content:space-between}
-.toolbar-left{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
-.toolbar-right{display:flex;gap:.6rem;align-items:center}
-.chalk-picker{min-width:160px}
-.divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block}
-.warn{border:1px solid rgba(255,120,120,.5);background:rgba(90,0,0,.25);color:#ffdcdc;border-radius:.5rem;padding:.4rem .6rem}
-.btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08)}
-.btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,20,.7));border-color:rgba(120,200,255,0.5)}
-.btn:active{transform:translateY(1px) scale(0.995)}
-.btn:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,200,255,0.35)}
-.btn[disabled]{opacity:.45;cursor:not-allowed}
-.btn.small{padding:.32rem .55rem;font-size:.86rem;border-radius:.45rem}
-.btn.xsmall{padding:.22rem .45rem;font-size:.80rem;border-radius:.42rem}
-.btn.primary{background:linear-gradient(180deg,rgba(8,40,22,.9),rgba(6,28,18,.85));border-color:rgba(90,220,160,0.45);box-shadow:inset 0 0 0 1px rgba(90,220,160,0.15)}
-.btn.primary:hover{border-color:rgba(120,255,190,0.6);background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9))}
-.btn.ghost{background:rgba(0,10,30,0.25)}
-.pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
-.pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
-.section-content-container.animate{animation:contentEntry 260ms ease-out both}
-@keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}
+.panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible;}
+.muted{color:#9ec5e6;}
+.small{font-size:.86rem;}
+.detail-toolbar{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;justify-content:space-between;}
+.toolbar-left{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;}
+.toolbar-right{display:flex;gap:.6rem;align-items:center;}
+.chalk-picker{min-width:160px;}
+.divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block;}
+.warn{border:1px solid rgba(255,120,120,.5);background:rgba(90,0,0,.25);color:#ffdcdc;border-radius:.5rem;padding:.4rem .6rem;}
+.btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08);}
+.btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,20,.7));border-color:rgba(120,200,255,0.5);}
+.btn:active{transform:translateY(1px) scale(0.995);}
+.btn:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,200,255,0.35);}
+.btn[disabled]{opacity:.45;cursor:not-allowed;}
+.btn.small{padding:.32rem .55rem;font-size:.86rem;border-radius:.45rem;}
+.btn.xsmall{padding:.22rem .45rem;font-size:.80rem;border-radius:.42rem;}
+.btn.primary{background:linear-gradient(180deg,rgba(8,40,22,.9),rgba(6,28,18,.85));border-color:rgba(90,220,160,0.45);box-shadow:inset 0 0 0 1px rgba(90,220,160,0.15);}
+.btn.primary:hover{border-color:rgba(120,255,190,0.6);background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9));}
+.btn.ghost{background:rgba(0,10,30,0.25);}
+.pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem;}
+.pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55);}
+.section-content-container.animate{animation:contentEntry 260ms ease-out both;}
+@keyframes contentEntry{
+  0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px);}
+  60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0);}
+  80%{opacity:.98;filter:brightness(1.03);}
+  100%{opacity:1;filter:none;}
+}
 
-/* -------- Adopted from PilotsView (card look) -------- */
-/* meta header (points & tag) */
-.squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
-.squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
-.squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
-.loadout-status{margin-top:.35rem;display:flex;gap:.75rem;align-items:center;font-size:.85rem;text-transform:uppercase}
-.loadout-status .points{color:#9ec5e6}.loadout-status .warn{color:rgba(255,190,80,0.95)}.loadout-status .ok{color:rgba(120,255,170,0.9)}
-.squad-tag{border:2px solid #1e90ff;border-radius:.6rem;padding:.35rem .6rem;color:#1e90ff;font-weight:700}
+/* Meta header (points & tag) */
+.squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem;}
+.squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9);}
+.squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6;}
+.loadout-status{margin-top:.35rem;display:flex;gap:.75rem;align-items:center;font-size:.85rem;text-transform:uppercase;}
+.loadout-status .points{color:#9ec5e6;}
+.loadout-status .warn{color:rgba(255,190,80,0.95);}
+.loadout-status .ok{color:rgba(120,255,170,0.9);}
+.squad-tag{border:2px solid #1e90ff;border-radius:.6rem;padding:.35rem .6rem;color:#1e90ff;font-weight:700;}
 
-/* grid */
-.squad-members-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.95rem}
-@media (max-width:1680px){.squad-members-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media (max-width:1350px){.squad-members-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:980px){.squad-members-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:620px){.squad-members-grid{grid-template-columns:1fr}}
+/* Grid */
+.squad-members-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.95rem;}
+@media (max-width:1680px){.squad-members-grid{grid-template-columns:repeat(4,minmax(0,1fr));}}
+@media (max-width:1350px){.squad-members-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media (max-width:980px){.squad-members-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:620px){.squad-members-grid{grid-template-columns:1fr;}}
 
-/* card */
-.member-card{position:relative;background:rgba(0,10,30,0.95);border-radius:.4rem;border-left:4px solid #1e90ff;box-shadow:0 0 10px rgba(0,0,0,0.6);padding:.9rem 1.1rem;display:flex;flex-direction:column;color:#eaf2ff}
-.member-card.vacant,.member-card.closed{border-left-color:rgba(30,144,255,0.35)}
-.member-card.vacant{background:repeating-linear-gradient(45deg,rgba(30,144,255,0.06) 0,rgba(30,144,255,0.06) 10px,transparent 10px,transparent 20px),rgba(0,12,25,0.9);border-left-style:dashed}
-.member-card.closed{filter:grayscale(85%);opacity:.6;background:repeating-linear-gradient(45deg,rgba(200,200,200,0.06) 0,rgba(200,200,200,0.06) 8px,transparent 8px,transparent 16px),repeating-linear-gradient(-45deg,rgba(200,200,200,0.04) 0,rgba(200,200,200,0.04) 8px,transparent 8px,transparent 16px),rgba(1,6,14,0.9)}
-.member-card.closed .member-header h3,.member-card.closed .rank-line,.member-card.closed .detail-line,.member-card.closed .cert-label,.member-card.closed .cert-none,.member-card.closed .member-footer{opacity:.75}
+/* Card */
+.member-card{
+  position:relative;background:rgba(0,10,30,0.95);border-radius:.4rem;border-left:4px solid #1e90ff;
+  box-shadow:0 0 10px rgba(0,0,0,0.6);padding:.9rem 1.1rem;display:flex;flex-direction:column;color:#eaf2ff;
+}
+.member-card.vacant,.member-card.closed{border-left-color:rgba(30,144,255,0.35);}
+.member-card.vacant{
+  background:repeating-linear-gradient(45deg,rgba(30,144,255,0.06) 0,rgba(30,144,255,0.06) 10px,transparent 10px,transparent 20px),
+             rgba(0,12,25,0.9);
+  border-left-style:dashed;
+}
+.member-card.closed{
+  filter:grayscale(85%);opacity:.6;
+  background:
+    repeating-linear-gradient(45deg,rgba(200,200,200,0.06) 0,rgba(200,200,200,0.06) 8px,transparent 8px,transparent 16px),
+    repeating-linear-gradient(-45deg,rgba(200,200,200,0.04) 0,rgba(200,200,200,0.04) 8px,transparent 8px,transparent 16px),
+    rgba(1,6,14,0.9);
+}
+.member-card.closed .member-header h3,
+.member-card.closed .rank-line,
+.member-card.closed .detail-line,
+.member-card.closed .cert-label,
+.member-card.closed .cert-none,
+.member-card.closed .member-footer{opacity:.75;}
 
-/* header/body/footer */
-.member-header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.9rem}
-.member-header h3{margin:0;font-size:1.1rem;color:#e0f0ff;word-break:break-word}
-.rank-line{margin:.15rem 0 0;font-size:.88rem;color:#9ec5e6;display:flex;gap:.6rem;flex-wrap:wrap}
-.member-body{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-top:.6rem;font-size:.9rem}
-.member-column p{margin:.18rem 0}
-.member-footer{margin-top:.6rem;font-size:.75rem;color:#b8d0e4;display:flex;justify-content:space-between}
+/* Header/body/footer */
+.member-header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.9rem;}
+.member-header h3{margin:0;font-size:1.1rem;color:#e0f0ff;word-break:break-word;}
+.rank-line{margin:.15rem 0 0;font-size:.88rem;color:#9ec5e6;display:flex;gap:.6rem;flex-wrap:wrap;}
+.member-body{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-top:.6rem;font-size:.9rem;}
+.member-column p{margin:.18rem 0;}
+.member-footer{margin-top:.6rem;font-size:.75rem;color:#b8d0e4;display:flex;justify-content:space-between;}
 
-/* cert list look */
-.detail-line strong{color:#9ec5e6}
-.role-accent{color:#55ff88;font-weight:600}
-.primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:#dbe9ff}
-.loadout-row{margin-top:.4rem}
-.loadout-select{width:100%;background:#040a14;border:1px solid rgba(30,144,255,.45);color:#eaf2ff;border-radius:.3rem;padding:.25rem .35rem}
-.cert-list{display:grid;grid-template-columns:20px 1fr;row-gap:.28rem}
-.cert-row{display:contents}
-.cert-checkbox{width:16px;height:16px;border:1px solid rgba(30,144,255,.6);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
-.cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
-.checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
-.cert-label,.cert-none,.disposable{color:#eaf2ff}
+/* Cert list look */
+.detail-line strong{color:#9ec5e6;}
+.role-accent{color:#55ff88;font-weight:600;}
+.primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:#dbe9ff;}
+.loadout-row{margin-top:.4rem;}
+.loadout-select{width:100%;background:#040a14;border:1px solid rgba(30,144,255,.45);color:#eaf2ff;border-radius:.3rem;padding:.25rem .35rem;}
+.cert-list{display:grid;grid-template-columns:20px 1fr;row-gap:.28rem;}
+.cert-row{display:contents;}
+.cert-checkbox{width:16px;height:16px;border:1px solid rgba(30,144,255,.6);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;margin-right:6px;}
+.cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset;}
+.checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block;}
+.cert-label,.cert-none,.disposable{color:#eaf2ff;}
 
-/* picker shell */
-.squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
-.squad-modal{background-color:#050811;color:#eaf2ff;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
-.squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
-.squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:#eaf2ff;border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer}
-.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.4rem 0 .2rem}
-.search{flex:1;min-width:260px;padding:.4rem .6rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
-.pick-row.assigned{background:rgba(30,144,255,0.08)}
-.squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 200px)}
+/* Picker shell */
+.squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;}
+.squad-modal{background-color:#050811;color:#eaf2ff;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column;}
+.squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;}
+.squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:#eaf2ff;border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer;}
+.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.4rem 0 .2rem;}
+.search{flex:1;min-width:260px;padding:.4rem .6rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff;}
+.pick-row.assigned{background:rgba(30,144,255,0.08);}
+.squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 200px);}
 </style>
