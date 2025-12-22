@@ -585,7 +585,30 @@ export default {
                   .join("").toUpperCase();
     },
 
-    /* ===== Robust config extraction (improved) ===== */
+    /* ===== STRICT configJSON parser (matches how chalks save/load) ===== */
+    parseConfigJSONSlots(rec) {
+      // why: prefer the exact `configJSON` the sheet stores/returns
+      const txt = typeof rec?.configJSON === 'string' ? rec.configJSON
+                : typeof rec?.data?.configJSON === 'string' ? rec.data.configJSON
+                : null;
+      if (!txt) return [];
+      try {
+        const obj = JSON.parse(txt);
+        const slots = obj?.slots || obj?.config?.slots || [];
+        if (!Array.isArray(slots)) return [];
+        return slots.map(s => ({
+          id: s?.id ?? null,
+          name: s?.name ?? null,
+          role: s?.role || "",
+          cert: s?.cert || "",
+          disposable: !!s?.disposable,
+        }));
+      } catch {
+        return [];
+      }
+    },
+
+    /* ===== Fallback extractor (very tolerant) ===== */
     extractSlotsFromAny(rec) {
       const normSlots = (arr) => (Array.isArray(arr) ? arr : []).map(s => ({
         id: s?.id ?? null,
@@ -594,7 +617,6 @@ export default {
         cert: s?.cert || "",
         disposable: !!s?.disposable
       }));
-
       const tryParse = (val) => {
         if (!val) return null;
         if (typeof val === "string") {
@@ -604,10 +626,8 @@ export default {
         return null;
       };
 
-      // direct: rec.slots
       if (Array.isArray(rec?.slots)) return normSlots(rec.slots);
 
-      // top-level strings/objects
       const topConfigJSON = tryParse(rec?.configJSON || rec?.loadoutJSON);
       if (topConfigJSON) {
         if (Array.isArray(topConfigJSON.slots)) return normSlots(topConfigJSON.slots);
@@ -619,7 +639,6 @@ export default {
         if (Array.isArray(topConfig?.config?.slots)) return normSlots(topConfig.config.slots);
       }
 
-      // common nesting: rec.data.*
       const d = rec?.data || {};
       if (Array.isArray(d.slots)) return normSlots(d.slots);
       const dConfigJSON = tryParse(d.configJSON || d.loadoutJSON);
@@ -633,7 +652,6 @@ export default {
         if (Array.isArray(dConfig?.config?.slots)) return normSlots(dConfig.config.slots);
       }
 
-      // sometimes GAS returns {record:{...}} or {item:{...}}
       const recordish = rec?.record || rec?.item || {};
       if (Array.isArray(recordish.slots)) return normSlots(recordish.slots);
       const rConfigJSON = tryParse(recordish.configJSON);
@@ -664,34 +682,20 @@ export default {
       if (!this.apiBase) { this.overview.error = "execUrl missing"; return; }
       this.overview.loading = true; this.overview.error = "";
       try {
-        const list = await this.apiPost("config:list", {});
-        const map = {};
-        if (list && list.ok && Array.isArray(list.data)) {
-          for (const it of list.data) {
-            const uid = it.unitId || it.key || it.id;
-            if (!uid) continue;
-            const slots = this.extractSlotsFromAny(it);
-            map[uid] = {
-              version: Number(it.version || 0),
-              savedBy: it.savedBy || it.user || "",
-              savedAt: it.savedAt || it.updatedAt || it.timestamp || "",
-              slots,
-              points: this.slotsPoints(slots)
-            };
-          }
-          this.overview.items = map;
-          return;
-        }
-
-        // Fallback: per unit fetch
+        // Per-unit fetch, but prefer configJSON slots strictly
         const results = await Promise.allSettled(
           this.chalkUnits.map(u => this.apiPost("config:get", { unitId: u.key }))
         );
+
+        const map = {};
         results.forEach((r, idx) => {
           const unitKey = this.chalkUnits[idx].key;
           if (r.status === "fulfilled" && r.value && r.value.ok && r.value.data) {
             const it = r.value.data;
-            const slots = this.extractSlotsFromAny(it);
+            // STRICT path first
+            let slots = this.parseConfigJSONSlots(it);
+            // fallback if needed
+            if (!slots.length) slots = this.extractSlotsFromAny(it);
             map[unitKey] = {
               version: Number(it.version || 0),
               savedBy: it.savedBy || it.user || "",
@@ -701,6 +705,7 @@ export default {
             };
           }
         });
+
         this.overview.items = map;
       } catch (e) {
         this.overview.error = String(e.message || e);
@@ -918,11 +923,12 @@ export default {
       this.apiError = ""; this.busy = true;
       try {
         const resp = await this.apiPost("config:get", { unitId: unitKey });
-        console.debug("config:get resp", unitKey, resp); // why: diagnosis if still not loading
         const { ok, data, error } = resp || {};
         if (!ok) throw new Error(error || "Load failed");
         if (!data) { this.apiError = "No remote config yet for this Chalk."; return; }
-        const nextSlots = this.extractSlotsFromAny(data);
+        // Prefer the same configJSON path used by overview & save
+        let nextSlots = this.parseConfigJSONSlots(data);
+        if (!nextSlots.length) nextSlots = this.extractSlotsFromAny(data);
         const idx = this.plan.units.findIndex(u => u.key === unitKey);
         if (idx === -1) return;
         const curr = this.plan.units[idx];
@@ -1105,7 +1111,7 @@ export default {
       return unit.slots.reduce((sum, s) => {
         if (!s.id) return sum;
         const certPts = this.CERT_POINTS[s.cert] ?? 0;
-        const dispPts = s.disposable ? this.DISPOSABLE_COST : 0;
+        the const dispPts = s.disposable ? this.DISPOSABLE_COST : 0; /* keep */
         return sum + certPts + dispPts;
       }, 0);
     },
