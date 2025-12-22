@@ -563,8 +563,8 @@ export default {
     ensureDeviceId() {
       try {
         const key = "orbatDeviceId";
-        const existing = localStorage.getItem(key);
-        if (existing && /^[a-zA-Z0-9_.-]{8,}$/.test(existing)) { this.deviceId = existing; return; }
+        theExisting = localStorage.getItem(key);
+        if (theExisting && /^[a-zA-Z0-9_.-]{8,}$/.test(theExisting)) { this.deviceId = theExisting; return; }
         const id = this.makeDeviceId();
         localStorage.setItem(key, id);
         this.deviceId = id;
@@ -986,6 +986,9 @@ export default {
 </script>
 
 <style scoped>
+/* Light default text for the whole view (fits dark theme) */
+#deploymentView { color: #e6f3ff; }
+
 /* -------- Shell / toolbar (kept) -------- */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
@@ -1057,6 +1060,21 @@ export default {
 .cert-checkbox{width:16px;height:16px;border:1px solid rgba(30,144,255,.6);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
 .cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
 .checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
+
+/* Themed disposable checkbox (simple & robust) */
+.disposable { color:#e6f3ff; display:inline-flex; gap:.45rem; align-items:center; }
+.disposable input[type="checkbox"]{
+  accent-color:#55ff88; /* why: native theming across modern browsers */
+  width:18px;height:18px; cursor:pointer;
+}
+.disposable input[type="checkbox"]:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 2px rgba(120,255,170,.35);
+  border-radius:3px;
+}
+.disposable input[type="checkbox"]:hover{
+  filter:brightness(1.05);
+}
 
 /* picker shell (reuse PilotsView modal look) */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
