@@ -1,4 +1,4 @@
-<!-- src/views/DeploymentView.vue -->
+<!-- File: src/views/DeploymentView.vue -->
 <template>
   <div id="deploymentView" class="content-container" :class="{ animate: animateView }" :style="{ 'animation-delay': animationDelay }">
     <section class="section-container deployment-window">
@@ -40,8 +40,11 @@
               <li><code>&lt;DeploymentView :execUrl="'/.netlify/functions/gas'" /&gt;</code></li>
               <li><code>window.DEPLOYMENT_EXEC_URL = "/.netlify/functions/gas"</code></li>
               <li><code>localStorage.setItem('deploymentExecUrl','/.netlify/functions/gas')</code></li>
-              <li class="muted">Legacy (raw GAS; may CORS): meta <code>apps-script-exec</code>, <code>window.APP_EXEC_URL</code>, <code>localStorage.execUrl</code></li>
             </ul>
+          </div>
+
+          <div v-if="!authToken" class="warn" style="margin-top:.4rem">
+            Login required to <strong>Save</strong>. Viewing/Loading is open to everyone.
           </div>
 
           <div v-if="debugInfo" class="muted small" style="opacity:.8">Status: {{ debugInfo }}</div>
@@ -97,7 +100,15 @@
               <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON (Local)</button>
 
               <span class="divider" />
-              <button type="button" class="btn primary" :disabled="busy || !apiBase" @click="saveRemote(detailKey)">{{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}</button>
+              <button
+                type="button"
+                class="btn primary"
+                :disabled="busy || !apiBase || !authToken"
+                @click="saveRemote(detailKey)"
+                :title="!authToken ? 'Login required to save' : ''"
+              >
+                {{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}
+              </button>
               <button type="button" class="btn" :disabled="busy || !apiBase" @click="loadRemote(detailKey)">
                 Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
               </button>
@@ -109,7 +120,7 @@
       </div>
     </section>
 
-    <!-- ASSIGN/SWAP PICKER -->
+    <!-- Assign/Swap Picker -->
     <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
       <div class="picker">
         <div class="picker-head">
@@ -150,15 +161,34 @@
 </template>
 
 <script>
+function readCookie(name) {
+  try {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[-.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  } catch { return ''; }
+}
+
+async function netlifyIdentityToken() {
+  // Why: support Netlify Identity if used; returns access_token string or ''
+  try {
+    const id = window.netlifyIdentity;
+    if (!id) return '';
+    const user = id.currentUser();
+    if (!user) return '';
+    const token = await user.jwt();
+    return token || '';
+  } catch { return ''; }
+}
+
 export default {
   name: "DeploymentView",
   props: {
     animate: { type: Boolean, default: true },
     orbat: { type: Array, default: () => [] },
-    execUrl: { type: String, default: "" },          // Preferred explicit prop
+    execUrl: { type: String, default: "" },
     secret: { type: String, default: "PLEX" },
-    token:  { type: String, default: "" },           // Optional
-    defaultsCsvUrl: { type: String, default: "" },   // CSV defaults
+    token:  { type: String, default: "" },
+    defaultsCsvUrl: { type: String, default: "" },
   },
   data() {
     return {
@@ -188,12 +218,15 @@ export default {
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
         "Marksman","Breacher","Grenadier","Pilot","RTO","PJ","NCO","Officer",
       ],
+      identityToken: "", // populated on mount if Netlify Identity is present
     };
   },
-  created() {
+  async created() {
     this.ensureDeviceId();
     this.personnel = this.buildPersonnelPool(this.orbat);
     this.ensureUnitsBuilt(this.orbat);
+    // Try Netlify Identity token (async)
+    this.identityToken = await netlifyIdentityToken();
   },
   mounted() { this.triggerFlicker(0); },
   computed: {
@@ -215,92 +248,87 @@ export default {
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
     authToken() {
+      // 1) prop
       const tProp = (this.token || "").trim();
       if (tProp) return tProp;
+
+      // 2) Netlify Identity (if present)
+      const tId = (this.identityToken || "").trim();
+      if (tId) return tId;
+
+      // 3) storage (check multiple common keys)
       try {
         const ls = typeof localStorage !== "undefined" ? localStorage : null;
         const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
-        const fromLS = ls?.getItem("token") || ls?.getItem("authToken") || ls?.getItem("jwt") || "";
-        const fromSS = ss?.getItem("token") || ss?.getItem("authToken") || ss?.getItem("jwt") || "";
-        return (fromLS || fromSS || "").trim();
-      } catch { return ""; }
+        const keys = ["token","authToken","jwt","access_token","userToken","GAS_TOKEN","GAS_JWT"];
+        for (const k of keys) {
+          const v = (ls?.getItem(k) || ss?.getItem(k) || "").trim();
+          if (v) return v;
+        }
+      } catch {}
+
+      // 4) cookies
+      try {
+        const ck = ["token","authToken","jwt","access_token"];
+        for (const c of ck) {
+          const v = (readCookie(c) || "").trim();
+          if (v) return v;
+        }
+      } catch {}
+
+      return "";
     },
     authModeLabel() {
       return this.authToken ? "User mode (token)" : "Device mode (anonymous)";
     },
-    // ✅ Deployment-only & legacy-compatible resolver (prefers Netlify proxy)
     apiBase() {
-      // 1) explicit prop
       const direct = (this.execUrl || "").trim();
       if (direct) return direct;
-
-      // 2) namespaced globals (preferred)
-      try {
-        if (typeof window !== "undefined" && window.DEPLOYMENT_EXEC_URL) {
-          return String(window.DEPLOYMENT_EXEC_URL).trim();
-        }
-      } catch {}
-
-      // 3) namespaced storage (preferred)
+      try { if (typeof window !== "undefined" && window.DEPLOYMENT_EXEC_URL) return String(window.DEPLOYMENT_EXEC_URL).trim(); } catch {}
       try {
         const ls = typeof localStorage !== "undefined" ? localStorage : null;
         const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
         const ns = ls?.getItem("deploymentExecUrl") || ss?.getItem("deploymentExecUrl") || "";
         if (ns && ns.trim()) return ns.trim();
       } catch {}
-
-      // 4) legacy meta
       try {
         const meta = document?.querySelector('meta[name="apps-script-exec"]')?.content || "";
         if (meta && meta.trim()) return meta.trim();
       } catch {}
-
-      // 5) legacy globals
       try {
-        // eslint-disable-next-line no-undef
         if (typeof APP_EXEC_URL !== "undefined" && APP_EXEC_URL) return String(APP_EXEC_URL).trim();
         if (typeof window !== "undefined" && window.APP_EXEC_URL) return String(window.APP_EXEC_URL).trim();
       } catch {}
-
-      // 6) legacy storage
       try {
         const ls = typeof localStorage !== "undefined" ? localStorage : null;
         const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
         const a = ls?.getItem("execUrl") || ss?.getItem("execUrl") || "";
         if (a && a.trim()) return a.trim();
       } catch {}
-
       return "";
     },
-    pointsUsed() {
-      return this.calcUnitPoints(this.currentUnit);
-    },
+    pointsUsed() { return this.calcUnitPoints(this.currentUnit); },
   },
   methods: {
-    /* -------- CSV Defaults (Reset) -------- */
     async resetPlan() {
       this.detailError = ""; this.apiError = ""; this.debugInfo = "";
-      if (this.defaultsCsvUrl) {
+      const url = this.defaultsCsvUrl || (typeof window !== "undefined" ? window.DEFAULTS_CSV_URL : "");
+      if (url) {
         try {
-          const res = await fetch(this.defaultsCsvUrl, { cache: "no-store" });
+          const res = await fetch(url, { cache: "no-store" });
           if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
           const text = await res.text();
           const defaults = this.parseCsvDefaults(text);
           const updated = this.applyCsvDefaults(defaults);
           if (!updated) throw new Error("No matching chalks in CSV.");
-          this.persistPlan();
-          this.triggerFlicker(0);
-          this.debugInfo = "Reset from latest CSV defaults.";
-          return;
-        } catch (e) {
-          this.apiError = `CSV fallback: ${String(e.message || e)}`;
-        }
+          this.persistPlan(); this.triggerFlicker(0);
+          this.debugInfo = "Reset from latest CSV defaults."; return;
+        } catch (e) { this.apiError = `CSV fallback: ${String(e.message || e)}`; }
       }
-      this.ensureUnitsBuilt(this.orbat);
-      this.persistPlan();
-      this.triggerFlicker(0);
+      this.ensureUnitsBuilt(this.orbat); this.persistPlan(); this.triggerFlicker(0);
       if (!this.debugInfo) this.debugInfo = "Fallback defaults applied (ORBAT/template).";
     },
+
     parseCsvDefaults(csvText) {
       const rows = this.csvToRows(csvText);
       if (!rows.length) return {};
@@ -329,6 +357,7 @@ export default {
       Object.keys(out).forEach(k => out[k].sort((a,b)=> (a.idx||9999) - (b.idx||9999)));
       return out;
     },
+
     applyCsvDefaults(defaultsByChalk) {
       let touched = 0;
       const nextUnits = this.plan.units.map(u => {
@@ -352,6 +381,7 @@ export default {
       }
       return false;
     },
+
     csvToRows(text) {
       const rows = []; let i = 0, field = "", row = [], inQuotes = false;
       const pushField = () => { row.push(field); field = ""; };
@@ -378,7 +408,6 @@ export default {
       return idx;
     },
 
-    /* -------- Bootstrap & fallback -------- */
     ensureUnitsBuilt(orbat) {
       const built = this.buildUnitsFromOrbat(orbat).filter(u => this.isPointsUnit(u.title));
       if (built.length === 0) {
@@ -403,7 +432,6 @@ export default {
       return arr;
     },
 
-    /* -------- Device ID (anon mode) -------- */
     ensureDeviceId() {
       try {
         const key = "orbatDeviceId";
@@ -419,21 +447,26 @@ export default {
       return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
     },
 
-    /* -------- Remote API -------- */
     async apiPost(action, body, raw = false) {
       if (!this.apiBase) throw new Error("execUrl missing");
+      // If no token and user tries to save, block client-side early with a clear message
+      if (action === "config:save" && !this.authToken) {
+        throw new Error("AUTH_REQUIRED: Login required to save.");
+      }
       const payload = {
         secret: this.secret || "PLEX",
         action,
-        ...(this.authToken ? { token: this.authToken } : { deviceId: this.deviceId }),
+        ...(this.authToken ? { token: this.authToken } : { deviceId: this.deviceId }), // why: backend requires token for save; loads are public
         ...body,
       };
       const res = await fetch(this.apiBase, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       return raw ? res : res.json();
     },
+
     unitPayload(unit) {
       return { title: unit.title, slots: unit.slots.map(s => ({ id: s.id, name: s.name, role: s.role, cert: s.cert, disposable: !!s.disposable })) };
     },
+
     async loadRemote(unitKey) {
       if (!unitKey) return;
       this.apiError = ""; this.busy = true;
@@ -457,6 +490,7 @@ export default {
         this.apiError = String(e.message || e);
       } finally { this.busy = false; }
     },
+
     async saveRemote(unitKey) {
       if (!unitKey) return;
       const unit = this.plan.units.find(u => u.key === unitKey);
@@ -477,6 +511,7 @@ export default {
         this.apiError = String(e.message || e);
       } finally { this.busy = false; }
     },
+
     async exportRemote(format = "json") {
       this.apiError = ""; this.busy = true;
       try {
@@ -493,7 +528,6 @@ export default {
       } finally { this.busy = false; }
     },
 
-    /* -------- Local helpers -------- */
     isPointsUnit(title) { const t = String(title || "").toLowerCase(); return /\bchalk\s*[1-4]\b/.test(t); },
     triggerFlicker(delayMs = 0) { this.animateView = false; this.animationDelay = `${delayMs}ms`; this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true))); },
     switchUnit(key) { if (!key || key === this.detailKey) return; this.detailKey = key; this.detailError = ""; this.triggerFlicker(0); },
@@ -622,7 +656,6 @@ export default {
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
-    /* -------- Points helpers -------- */
     calcUnitPoints(unit) {
       if (!unit || !unit.slots) return 0;
       return unit.slots.reduce((sum, s) => {
@@ -638,7 +671,6 @@ export default {
       return this.calcUnitPoints(unit) + delta > this.SQUAD_POINT_CAP;
     },
 
-    /* -------- Interactions -------- */
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
@@ -772,7 +804,6 @@ export default {
       this.persistPlan();
     },
 
-    /* -------- Fill / Export -------- */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       if (!rebuilt) { this.detailError = "No matching unit in ORBAT."; return; }
@@ -810,11 +841,11 @@ export default {
 </script>
 
 <style scoped>
+/* unchanged styles from previous message */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
 .deploy-scroll{max-height:calc(94vh - 100px - 52px - 36px);overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:36px}
-
 .panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
 .muted{color:#9ec5e6}.small{font-size:.86rem}
 .detail-toolbar{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;justify-content:space-between}
@@ -822,7 +853,6 @@ export default {
 .toolbar-right{display:flex;gap:.6rem;align-items:center}
 .chalk-picker{min-width:160px}
 .divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block}
-
 .group-card{border:1px solid rgba(30,144,255,0.28);background:rgba(0,10,30,0.28);border-radius:.6rem;padding:.7rem .8rem;display:grid;gap:.6rem}
 .warn{border:1px solid rgba(255,120,120,.5);background:rgba(90,0,0,.25);color:#ffdcdc;border-radius:.5rem;padding:.4rem .6rem}
 .slots-grid{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:.7rem}
@@ -843,23 +873,17 @@ export default {
 .zoom-cert{display:grid;gap:.25rem}
 .zoom-cert label{color:#9ec5e6;font-size:.82rem;letter-spacing:.06em}
 .select{padding:.45rem .55rem;border-radius:.45rem;border:1px solid rgba(30,144,255,0.35);background:rgba(1,8,18,0.45);color:#e6f3ff}
-
 .disp-row{margin-top:.1rem}
 .check{display:inline-flex;align-items:center;gap:.5rem}
 .check .check-label{color:#eaf4ff}
-.check input[type="checkbox"]{
-  appearance:none;width:16px;height:16px;border:1px solid rgba(120,255,190,.55);border-radius:4px;background:rgba(0,20,14,.5);box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);position:relative;transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease,opacity 120ms ease}
+.check input[type="checkbox"]{appearance:none;width:16px;height:16px;border:1px solid rgba(120,255,190,.55);border-radius:4px;background:rgba(0,20,14,.5);box-shadow:inset 0 0 0 1px rgba(90,220,160,.15);position:relative;transition:border-color 120ms ease, background 120ms ease, box-shadow 120ms ease,opacity 120ms ease}
 .check input[type="checkbox"]:hover{border-color:rgba(120,255,190,.85)}
 .check input[type="checkbox"]:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,255,190,.35)}
-.check input[type="checkbox"]:checked{
-  background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9));
-  border-color:rgba(120,255,190,.85)}
-.check input[type="checkbox"]:checked::after{
-  content:"";position:absolute;left:3px;top:1px;right:0;bottom:0;width:8px;height:12px;border-right:2px solid #caffe9;border-bottom:2px solid #caffe9;transform:rotate(45deg)}
-
+.check input[type="checkbox"]:checked{background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9));border-color:rgba(120,255,190,.85)}
+.check input[type="checkbox"]:checked::after{content:"";position:absolute;left:3px;top:1px;right:0;bottom:0;width:8px;height:12px;border-right:2px solid #caffe9;border-bottom:2px solid #caffe9;transform:rotate(45deg)}
 .actions-row{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:.4rem;align-items:center}
 .btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08)}
-.btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,22,.7));border-color:rgba(120,200,255,0.5)}
+.btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,20,.7));border-color:rgba(120,200,255,0.5)}
 .btn:active{transform:translateY(1px) scale(0.995)}
 .btn:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(120,200,255,0.35)}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
@@ -871,7 +895,6 @@ export default {
 button.pick{width:100%}
 .pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
 .pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
-
 .picker-veil{position:fixed;inset:0;background:rgba(0, 0, 0, 0.55);display:grid;place-items:center;z-index:1000}
 .picker{width:min(900px,92vw);max-height:80vh;overflow:hidden;border-radius:.8rem;border:1px solid rgba(30,144,255,0.45);background:rgba(0,10,30,0.98);display:grid;grid-template-rows:auto auto 1fr auto}
 .picker-head{display:flex;align-items:center;justify-content:space-between;padding:.8rem .9rem;border-bottom:1px solid rgba(30,144,255,0.25)}
@@ -882,12 +905,6 @@ button.pick{width:100%}
 .p-name{color:#e6f3ff;font-weight:600}
 .p-meta .subtle{color:#9ec5e6;font-size:.86rem}
 .badge{color:#79ffba;border:1px solid rgba(120,255,170,0.55);border-radius:999px;padding:.1rem .5rem;font-size:.78rem}
-
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
-@keyframes contentEntry{
-  0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}
-  60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}
-  80%{opacity:.98;filter:brightness(1.03)}
-  100%{opacity:1;filter:none}
-}
+@keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}
 </style>
