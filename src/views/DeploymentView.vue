@@ -12,7 +12,7 @@
 
       <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
-          <!-- Prominent Overview -->
+          <!-- Top actions: prominent Overview -->
           <div class="top-actions">
             <button type="button" class="btn primary large" :disabled="!apiBase" @click="openOverview">
               Overview
@@ -56,7 +56,7 @@
           <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
-          <!-- Cards grid (PilotsView-styled) -->
+          <!-- Cards grid -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
@@ -286,7 +286,7 @@
       </div>
     </div>
 
-    <!-- Overview Modal (2×2; remote-or-default) -->
+    <!-- Overview Modal (2×2 grid, remote-or-default) -->
     <div v-if="overview.open" class="squad-overlay" @click.self="closeOverview">
       <div class="squad-modal overview">
         <div class="compact-header">
@@ -329,7 +329,11 @@
               </div>
 
               <div class="overview-body">
-                <div class="slot-row" v-for="(s, idx) in overviewSlots(u)" :key="idx">
+                <div
+                  class="slot-row"
+                  v-for="(s, idx) in (ovItem(u.key) ? ovItem(u.key).slots : u.slots)"
+                  :key="idx"
+                >
                   <div class="slot-left">
                     <span class="slot-name">{{ s.name || 'VACANT' }}</span>
                     <span class="slot-id" v-if="s.id">ID: {{ s.id }}</span>
@@ -340,7 +344,7 @@
                     <span class="slot-disp" v-if="s.disposable">Disp</span>
                   </div>
                 </div>
-                <div v-if="!overviewSlots(u)?.length" class="overview-empty">—</div>
+                <div v-if="!(ovItem(u.key) ? ovItem(u.key).slots : u.slots)?.length" class="overview-empty">—</div>
               </div>
             </div>
           </div>
@@ -351,7 +355,7 @@
 </template>
 
 <script>
-/* why: robust cookie read across browsers */
+/* cookie reader (why: keep auth parity with existing site) */
 function readCookie(name) {
   try {
     const target = `${name}=`;
@@ -364,7 +368,7 @@ function readCookie(name) {
   } catch { return ''; }
 }
 
-/* why: optional Netlify Identity JWT for Authorization (if you use it elsewhere) */
+/* optional Netlify Identity */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -422,7 +426,12 @@ export default {
         "CWO4": 7, "CWO3": 8, "CWO2": 9, "WO": 10,
         "GYSGT": 11, "SSGT": 12, "SSG": 13, "SGT": 14, "CPL": 15, "LCPL": 16, "PFC": 17, "PV2": 18, "PVT": 19
       },
-      overview: { open:false, loading:false, error:"", items:{} },
+      overview: {
+        open: false,
+        loading: false,
+        error: "",
+        items: {} /* key -> { version, savedBy, savedAt, slots[], points } */
+      }
     };
   },
   async created() {
@@ -528,7 +537,7 @@ export default {
     pointsUsed() { return this.calcUnitPoints(this.currentUnit); },
   },
   methods: {
-    /* ranks */
+    /* rank helpers */
     rankLabel(raw) {
       const t = String(raw || "").trim();
       if (!t) return "";
@@ -577,55 +586,12 @@ export default {
 
     /* Overview helpers */
     ovItem(key) { return this.overview.items[key]; },
-    overviewSlots(unit) {
-      const it = this.ovItem(unit.key);
-      if (it && Array.isArray(it.slots)) return it.slots;
-      return unit?.slots || [];
-    },
     formatDate(ts) {
       try {
         const d = new Date(ts);
         if (!isFinite(d)) return String(ts);
         return d.toLocaleString();
       } catch { return String(ts); }
-    },
-
-    /* Robust config parsing */
-    safeParseConfig(rec) {
-      const tryParse = (v) => {
-        if (!v) return null;
-        if (typeof v === "string") {
-          const t = v.trim();
-          try { return JSON.parse(t); } catch {}
-          if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
-            try { return JSON.parse(JSON.parse(t)); } catch {}
-          }
-          if (/^\s*{/.test(t) && /}\s*$/.test(t)) { try { return (new Function(`return (${t})`))(); } catch {} }
-          return null;
-        }
-        if (typeof v === "object") return v;
-        return null;
-      };
-
-      const candidates = [
-        rec?.configJSON,
-        rec?.config,
-        rec?.data?.config,
-        rec?.data?.configJSON,
-        rec?.payload,
-      ];
-      let obj = null;
-      for (const c of candidates) { obj = tryParse(c); if (obj) break; }
-      if (!obj && rec?.slots && Array.isArray(rec.slots)) obj = { slots: rec.slots };
-
-      const slots = Array.isArray(obj?.slots) ? obj.slots : [];
-      return slots.map(s => ({
-        id: s?.id ?? null,
-        name: s?.name ?? null,
-        role: s?.role || "",
-        cert: s?.cert || "",
-        disposable: !!s?.disposable,
-      }));
     },
 
     async openOverview() {
@@ -638,44 +604,51 @@ export default {
       if (!this.apiBase) { this.overview.error = "execUrl missing"; return; }
       this.overview.loading = true; this.overview.error = "";
       try {
+        // Try bulk list
         const list = await this.apiPost("config:list", {});
-        if (list?.ok && Array.isArray(list.data)) {
+        if (list && list.ok && Array.isArray(list.data)) {
           const map = {};
           for (const it of list.data) {
-            const unitKey = it.unitId || it.key || it.title || "";
-            if (!unitKey) continue;
-            const slots = this.safeParseConfig(it);
-            map[unitKey] = {
+            const uid = it.unitId || it.key;
+            if (!uid) continue;
+            const parsed = it.configJSON ? JSON.parse(it.configJSON) : (it.config || {});
+            const slots = (parsed.slots || []).map(s => ({
+              id: s.id ?? null, name: s.name ?? null, role: s.role || "", cert: s.cert || "", disposable: !!s.disposable
+            }));
+            map[uid] = {
               version: Number(it.version || 0),
               savedBy: it.savedBy || it.user || "",
               savedAt: it.savedAt || it.updatedAt || it.timestamp || "",
               slots,
-              points: this.slotsPoints(slots),
+              points: this.slotsPoints(slots)
             };
           }
           this.overview.items = map;
-        } else {
-          const results = await Promise.allSettled(
-            this.chalkUnits.map(u => this.apiPost("config:get", { unitId: u.key }))
-          );
-          const map = {};
-          results.forEach((r, idx) => {
-            const unitKey = this.chalkUnits[idx].key;
-            if (r.status !== "fulfilled") return;
-            const val = r.value;
-            if (!val?.ok || !val.data) return;
-            const it = val.data;
-            const slots = this.safeParseConfig(it);
+          return;
+        }
+        // Fallback: per unit fetch
+        const results = await Promise.allSettled(
+          this.chalkUnits.map(u => this.apiPost("config:get", { unitId: u.key }))
+        );
+        const map = {};
+        results.forEach((r, idx) => {
+          const unitKey = this.chalkUnits[idx].key;
+          if (r.status === "fulfilled" && r.value && r.value.ok && r.value.data) {
+            const it = r.value.data;
+            const parsed = it.configJSON ? JSON.parse(it.configJSON) : (it.config || {});
+            const slots = (parsed.slots || []).map(s => ({
+              id: s.id ?? null, name: s.name ?? null, role: s.role || "", cert: s.cert || "", disposable: !!s.disposable
+            }));
             map[unitKey] = {
               version: Number(it.version || 0),
               savedBy: it.savedBy || it.user || "",
               savedAt: it.savedAt || it.updatedAt || it.timestamp || "",
               slots,
-              points: this.slotsPoints(slots),
+              points: this.slotsPoints(slots)
             };
-          });
-          this.overview.items = map;
-        }
+          }
+        });
+        this.overview.items = map;
       } catch (e) {
         this.overview.error = String(e.message || e);
       } finally {
@@ -688,7 +661,8 @@ export default {
       this.overview.loading = true; this.overview.error = "";
       try {
         const res = await this.apiPost("config:clearAll", {});
-        if (!res?.ok) {
+        if (!res || res.ok !== true) {
+          // Fallback: clear each unit
           await Promise.allSettled(this.chalkUnits.map(u => this.apiPost("config:clear", { unitId: u.key })));
         }
         await this.refreshOverview();
@@ -699,7 +673,155 @@ export default {
       }
     },
 
-    /* API */
+    slotsPoints(slots) {
+      return (slots || []).reduce((sum, s) => {
+        if (!s.id) return sum;
+        const certPts = this.CERT_POINTS[s.cert] ?? 0;
+        const dispPts = s.disposable ? this.DISPOSABLE_COST : 0;
+        return sum + certPts + dispPts;
+      }, 0);
+    },
+
+    async resetPlan() {
+      this.detailError = ""; this.apiError = ""; this.debugInfo = "";
+      const url = this.defaultsCsvUrl || (typeof window !== "undefined" ? window.DEFAULTS_CSV_URL : "");
+      if (url) {
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
+          const text = await res.text();
+          const defaults = this.parseCsvDefaults(text);
+          const updated = this.applyCsvDefaults(defaults);
+          if (!updated) throw new Error("No matching chalks in CSV.");
+          this.persistPlan(); this.triggerFlicker(0);
+          this.debugInfo = "Reset from latest CSV defaults."; return;
+        } catch (e) { this.apiError = `CSV fallback: ${String(e.message || e)}`; }
+      }
+      this.ensureUnitsBuilt(this.orbat); this.persistPlan(); this.triggerFlicker(0);
+      if (!this.debugInfo) this.debugInfo = "Fallback defaults applied (ORBAT/template).";
+    },
+
+    parseCsvDefaults(csvText) {
+      const rows = this.csvToRows(csvText);
+      if (!rows.length) return {};
+      const headers = rows[0].map(h => String(h || "").trim());
+      const idx = {
+        chalk: this.findHeader(headers, /(chalk|unit)/i),
+        slot:  this.findHeader(headers, /(slot|index|position|#)/i, true),
+        role:  this.findHeader(headers, /(role)/i),
+        cert:  this.findHeader(headers, /(cert)/i, true),
+        disp:  this.findHeader(headers, /(disp(osable)?|launcher)/i, true),
+      };
+      if (idx.chalk < 0 || idx.role < 0) throw new Error("Missing required columns (Chalk/Unit and Role).");
+      const out = {};
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r]; if (!row || !row.length) continue;
+        const chalkName = String(row[idx.chalk] || "").trim(); if (!chalkName) continue;
+        const role = String(row[idx.role] || "").trim();
+        const slotNumRaw = idx.slot >= 0 ? String(row[idx.slot] || "").trim() : "";
+        const cert = idx.cert >= 0 ? String(row[idx.cert] || "").trim() : "";
+        const dispRaw = idx.disp >= 0 ? String(row[idx.disp] || "").trim().toUpperCase() : "";
+        const disposable = ["Y","YES","TRUE","1"].includes(dispRaw);
+        const key = chalkName.toLowerCase();
+        if (!out[key]) out[key] = [];
+        out[key].push({ idx: Number(slotNumRaw) || out[key].length + 1, role, cert, disposable: !!disposable });
+      }
+      Object.keys(out).forEach(k => out[k].sort((a,b)=> (a.idx||9999) - (b.idx||9999)));
+      return out;
+    },
+
+    applyCsvDefaults(defaultsByChalk) {
+      let touched = 0;
+      const nextUnits = this.plan.units.map(u => {
+        const key = String(u.title || "").trim().toLowerCase();
+        const rows = defaultsByChalk[key];
+        if (!rows) return u;
+        const slots = rows.map(row => ({
+          id: null, name: null, role: this.titleCase(row.role || ""), origStatus: "VACANT",
+          cert: row.cert || "", disposable: !!row.disposable,
+        }));
+        const padded = this.isChalk(u.title) ? this.padSlots(slots, this.MIN_CHALK_SLOTS) : slots;
+        touched++;
+        return { ...u, slots: this.sortSlotsByRole(padded) };
+      });
+      if (touched > 0) {
+        this.plan.units = nextUnits;
+        if (!this.plan.units.find(x => x.key === this.detailKey) && this.plan.units.length) {
+          this.detailKey = this.plan.units[0].key;
+        }
+        return true;
+      }
+      return false;
+    },
+
+    csvToRows(text) {
+      const rows = []; let i = 0, field = "", row = [], inQuotes = false;
+      const pushField = () => { row.push(field); field = ""; };
+      const pushRow = () => { rows.push(row); row = []; };
+      while (i < text.length) {
+        const ch = text[i];
+        if (inQuotes) {
+          if (ch === '"') { if (text[i+1] === '"') { field += '"'; i += 2; continue; } inQuotes = false; i++; continue; }
+          field += ch; i++; continue;
+        } else {
+          if (ch === '"') { inQuotes = true; i++; continue; }
+          if (ch === ',') { pushField(); i++; continue; }
+          if (ch === '\n') { pushField(); pushRow(); i++; continue; }
+          if (ch === '\r') { i++; continue; }
+          field += ch; i++; continue;
+        }
+      }
+      (field !== "" || row.length) && (pushField(), pushRow());
+      return rows.filter(r => r.some(c => String(c).trim() !== ""));
+    },
+
+    findHeader(headers, regex, optional = false) {
+      const idx = headers.findIndex(h => regex.test(String(h || "")));
+      if (idx === -1 && !optional) return -1;
+      return idx;
+    },
+
+    ensureUnitsBuilt(orbat) {
+      const built = this.buildUnitsFromOrbat(orbat).filter(u => this.isPointsUnit(u.title));
+      if (built.length === 0) {
+        this.plan.units = this.makeDefaultChalks(4, this.MIN_CHALK_SLOTS);
+        this.detailKey = this.plan.units[0].key;
+        this.debugInfo = "Fallback to default Chalk 1–4 (no/invalid ORBAT).";
+        return;
+      }
+      built.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
+      this.plan.units = built;
+      if (!this.detailKey && this.plan.units.length) this.detailKey = this.plan.units[0].key;
+      this.debugInfo = `Loaded ${this.plan.units.length} chalk(s) from ORBAT.`;
+    },
+
+    makeDefaultChalks(count, size) {
+      const arr = [];
+      for (let i = 1; i <= count; i++) {
+        const title = `Chalk ${i}`;
+        const key = this.keyFromName(title);
+        const slots = this.padSlots([], size);
+        arr.push({ key, title, slots });
+      }
+      return arr;
+    },
+
+    ensureDeviceId() {
+      try {
+        const key = "orbatDeviceId";
+        const existing = localStorage.getItem(key);
+        if (existing && /^[a-zA-Z0-9_.-]{8,}$/.test(existing)) { this.deviceId = existing; return; }
+        const id = this.makeDeviceId();
+        localStorage.setItem(key, id);
+        this.deviceId = id;
+      } catch { this.deviceId = this.makeDeviceId(); }
+    },
+
+    makeDeviceId() {
+      const r = (crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(12)) : Array.from({length:12},()=>Math.floor(Math.random()*256));
+      return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
+    },
+
     async apiPost(action, body, raw = false) {
       if (!this.apiBase) throw new Error("execUrl missing");
 
@@ -713,8 +835,7 @@ export default {
       const candidateRole = (userObj?.role || "").trim();
 
       const authHeader =
-        (ls?.getItem("Authorization") || ss?.getItem("Authorization") || "").trim()
-        || (this.authToken ? `Bearer ${this.authToken}` : "");
+        (ls?.getItem("Authorization") || ss?.getItem("Authorization") || "").trim();
 
       const payload = {
         secret: this.secret || "PLEX",
@@ -737,12 +858,7 @@ export default {
     },
 
     unitPayload(unit) {
-      return {
-        title: unit.title,
-        slots: unit.slots.map(s => ({
-          id: s.id, name: s.name, role: s.role, cert: s.cert, disposable: !!s.disposable
-        }))
-      };
+      return { title: unit.title, slots: unit.slots.map(s => ({ id: s.id, name: s.name, role: s.role, cert: s.cert, disposable: !!s.disposable })) };
     },
 
     async loadRemote(unitKey) {
@@ -752,31 +868,18 @@ export default {
         const { ok, data, error } = await this.apiPost("config:get", { unitId: unitKey });
         if (!ok) throw new Error(error || "Load failed");
         if (!data) { this.apiError = "No remote config yet for this Chalk."; return; }
-
-        const slots = this.safeParseConfig(data);
+        const parsed = JSON.parse(data.configJSON || "{}");
         const idx = this.plan.units.findIndex(u => u.key === unitKey);
         if (idx === -1) return;
-
         const curr = this.plan.units[idx];
-        const nextSlots = slots.map(s => ({ ...s, origStatus: s.id ? "FILLED" : "VACANT" }));
+        const nextSlots = (parsed.slots || []).map(s => ({
+          id: s.id ?? null, name: s.name ?? null, role: s.role || "", origStatus: "FILLED", cert: s.cert || "", disposable: !!s.disposable,
+        }));
         const padded = this.isChalk(curr.title) ? this.padSlots(nextSlots, this.MIN_CHALK_SLOTS) : nextSlots;
         const nextUnit = { ...curr, slots: this.sortSlotsByRole(padded) };
-
         this.plan.units = this.plan.units.map((u, i) => (i === idx ? nextUnit : u));
         this.versions = { ...this.versions, [unitKey]: Number(data.version || 0) };
         this.triggerFlicker(0);
-
-        this.overview.items = {
-          ...this.overview.items,
-          [unitKey]: {
-            ...(this.overview.items[unitKey] || {}),
-            version: Number(data.version || 0),
-            savedBy: data.savedBy || data.user || "",
-            savedAt: data.savedAt || data.updatedAt || data.timestamp || "",
-            slots: nextSlots,
-            points: this.slotsPoints(nextSlots),
-          }
-        };
       } catch (e) {
         this.apiError = String(e.message || e);
       } finally { this.busy = false; }
@@ -1116,127 +1219,6 @@ export default {
       this.detailError = "";
       this.triggerFlicker(0);
     },
-
-    ensureUnitsBuilt(orbat) {
-      const built = this.buildUnitsFromOrbat(orbat).filter(u => this.isPointsUnit(u.title));
-      if (built.length === 0) {
-        this.plan.units = this.makeDefaultChalks(4, this.MIN_CHALK_SLOTS);
-        this.detailKey = this.plan.units[0].key;
-        this.debugInfo = "Fallback to default Chalk 1–4 (no/invalid ORBAT).";
-        return;
-      }
-      built.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
-      this.plan.units = built;
-      if (!this.detailKey && this.plan.units.length) this.detailKey = this.plan.units[0].key;
-      this.debugInfo = `Loaded ${this.plan.units.length} chalk(s) from ORBAT.`;
-    },
-
-    makeDefaultChalks(count, size) {
-      const arr = [];
-      for (let i = 1; i <= count; i++) {
-        const title = `Chalk ${i}`;
-        const key = this.keyFromName(title);
-        const slots = this.padSlots([], size);
-        arr.push({ key, title, slots });
-      }
-      return arr;
-    },
-
-    ensureDeviceId() {
-      try {
-        const key = "orbatDeviceId";
-        const existing = localStorage.getItem(key);
-        if (existing && /^[a-zA-Z0-9_.-]{8,}$/.test(existing)) { this.deviceId = existing; return; }
-        const id = this.makeDeviceId();
-        localStorage.setItem(key, id);
-        this.deviceId = id;
-      } catch { this.deviceId = this.makeDeviceId(); }
-    },
-
-    makeDeviceId() {
-      const r = (crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(12)) : Array.from({length:12},()=>Math.floor(Math.random()*256));
-      return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
-    },
-
-    csvToRows(text) {
-      const rows = []; let i = 0, field = "", row = [], inQuotes = false;
-      const pushField = () => { row.push(field); field = ""; };
-      const pushRow = () => { rows.push(row); row = []; };
-      while (i < text.length) {
-        const ch = text[i];
-        if (inQuotes) {
-          if (ch === '"') { if (text[i+1] === '"') { field += '"'; i += 2; continue; } inQuotes = false; i++; continue; }
-          field += ch; i++; continue;
-        } else {
-          if (ch === '"') { inQuotes = true; i++; continue; }
-          if (ch === ',') { pushField(); i++; continue; }
-          if (ch === '\n') { pushField(); pushRow(); i++; continue; }
-          if (ch === '\r') { i++; continue; }
-          field += ch; i++; continue;
-        }
-      }
-      (field !== "" || row.length) && (pushField(), pushRow());
-      return rows.filter(r => r.some(c => String(c).trim() !== ""));
-    },
-
-    findHeader(headers, regex, optional = false) {
-      const idx = headers.findIndex(h => regex.test(String(h || "")));
-      if (idx === -1 && !optional) return -1;
-      return idx;
-    },
-
-    parseCsvDefaults(csvText) {
-      const rows = this.csvToRows(csvText);
-      if (!rows.length) return {};
-      const headers = rows[0].map(h => String(h || "").trim());
-      const idx = {
-        chalk: this.findHeader(headers, /(chalk|unit)/i),
-        slot:  this.findHeader(headers, /(slot|index|position|#)/i, true),
-        role:  this.findHeader(headers, /(role)/i),
-        cert:  this.findHeader(headers, /(cert)/i, true),
-        disp:  this.findHeader(headers, /(disp(osable)?|launcher)/i, true),
-      };
-      if (idx.chalk < 0 || idx.role < 0) throw new Error("Missing required columns (Chalk/Unit and Role).");
-      const out = {};
-      for (let r = 1; r < rows.length; r++) {
-        const row = rows[r]; if (!row || !row.length) continue;
-        const chalkName = String(row[idx.chalk] || "").trim(); if (!chalkName) continue;
-        const role = String(row[idx.role] || "").trim();
-        const slotNumRaw = idx.slot >= 0 ? String(row[idx.slot] || "").trim() : "";
-        const cert = idx.cert >= 0 ? String(row[idx.cert] || "").trim() : "";
-        const dispRaw = idx.disp >= 0 ? String(row[idx.disp] || "").trim().toUpperCase() : "";
-        const disposable = ["Y","YES","TRUE","1"].includes(dispRaw);
-        const key = chalkName.toLowerCase();
-        if (!out[key]) out[key] = [];
-        out[key].push({ idx: Number(slotNumRaw) || out[key].length + 1, role, cert, disposable: !!disposable });
-      }
-      Object.keys(out).forEach(k => out[k].sort((a,b)=> (a.idx||9999) - (b.idx||9999)));
-      return out;
-    },
-
-    applyCsvDefaults(defaultsByChalk) {
-      let touched = 0;
-      const nextUnits = this.plan.units.map(u => {
-        const key = String(u.title || "").trim().toLowerCase();
-        const rows = defaultsByChalk[key];
-        if (!rows) return u;
-        const slots = rows.map(row => ({
-          id: null, name: null, role: this.titleCase(row.role || ""), origStatus: "VACANT",
-          cert: row.cert || "", disposable: !!row.disposable,
-        }));
-        const padded = this.isChalk(u.title) ? this.padSlots(slots, this.MIN_CHALK_SLOTS) : slots;
-        touched++;
-        return { ...u, slots: this.sortSlotsByRole(padded) };
-      });
-      if (touched > 0) {
-        this.plan.units = nextUnits;
-        if (!this.plan.units.find(x => x.key === this.detailKey) && this.plan.units.length) {
-          this.detailKey = this.plan.units[0].key;
-        }
-        return true;
-      }
-      return false;
-    },
   },
   watch: {
     orbat: { deep: true, handler(newV) {
@@ -1343,63 +1325,42 @@ export default {
 .cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
 .checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
 
-/* disposable checkbox */
-.disposable { color:#e6f3ff; display:inline-flex; gap:.45rem; align-items:center; }
-.disposable input[type="checkbox"]{
-  accent-color:#55ff88; width:18px;height:18px; cursor:pointer;
-}
-.disposable input[type="checkbox"]:focus-visible{
-  outline:none; box-shadow:0 0 0 2px rgba(120,255,170,.35); border-radius:3px;
-}
-.disposable input[type="checkbox"]:hover{ filter:brightness(1.05); }
-
-/* -------- Compact Picker styles -------- */
+/* picker shell (compact) */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
-.squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1000px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
-.squad-modal.compact{padding:0.8rem 0.9rem 1rem}
-
-/* Bigger overview modal */
-.squad-modal.overview{ width:96vw; max-width:1600px; max-height:92vh; }
-
-/* Overview grid/cards — 2×2 on wide screens */
-.overview-grid.two-by-two{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:1.1rem;
-}
-@media (max-width:1100px){ .overview-grid.two-by-two{ grid-template-columns:1fr; } }
-
-.compact-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(30,144,255,.35);padding-bottom:.4rem}
-.compact-header h3{margin:0;font-size:1.12rem;color:#e6f3ff}
-
+.squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
+.squad-modal.compact{max-width:1000px}
+.squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
 .squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:#dce6f1;border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer}
+.compact-header{display:flex;justify-content:space-between;align-items:center}
+.picker-toolbar{display:flex;gap:.8rem;align-items:center;padding:.4rem 0 .2rem}
+.search{flex:1;min-width:260px;padding:.4rem .6rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
+.sort{min-width:180px;background:#040a14;border:1px solid rgba(30,144,255,.45);color:#e6f3ff;border-radius:.35rem;padding:.3rem .4rem}
+.check{display:flex;align-items:center;gap:.4rem}.check .check-label{opacity:.9}
+.smallish{font-size:.9rem}
+.pick-row.compact{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;gap:.6rem;background:rgba(10,18,30,0.55);border:1px solid rgba(30,144,255,.25);border-radius:.5rem;padding:.45rem .6rem;margin:.35rem 0}
+.pick-row.assigned{background:rgba(30,144,255,0.08)}
+.row-left{display:flex;align-items:center;gap:.5rem}
+.row-left .name{font-weight:700;letter-spacing:.02em}
+.row-mid{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;color:#9ec5e6}
+.row-mid .chip{border:1px solid rgba(30,144,255,.45);border-radius:.35rem;padding:.05rem .4rem}
+.row-right{display:flex;justify-content:flex-end}
 
-.picker-toolbar{display:flex;gap:.6rem;align-items:center;padding:.5rem 0}
-.picker-toolbar .search{flex:1;min-width:220px;padding:.38rem .55rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
-.picker-toolbar .check.smallish{font-size:.9rem;color:#c7d9ea}
-.picker-toolbar .sort{min-width:170px;padding:.38rem .55rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
-
-.squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 180px)}
-.squad-modal-scroll.compact-list{max-height:calc(90vh - 170px)}
-
-.overview-card{
-  background:rgba(5,12,24,.6); border:1px solid rgba(30,144,255,.2);
-  border-radius:.6rem; padding:.9rem 1rem;
-}
-.overview-head{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; }
-.overview-head .title{ font-weight:800; color:#e6f3ff; font-size:1.12rem; }
-.overview-head .meta{ color:#9ec5e6; display:flex; gap:.5rem; flex-wrap:wrap; }
-.overview-head .chip{ background:rgba(30,144,255,.15); border:1px solid rgba(30,144,255,.35); padding:.1rem .4rem; border-radius:.35rem; }
-
-.overview-body{
-  margin-top:.6rem; border-top:1px dashed rgba(30,144,255,.2); padding-top:.55rem;
-  display:grid; gap:.38rem; font-size:1rem;
-}
-.slot-row{ display:flex; justify-content:space-between; gap:.6rem; }
-.slot-left{ display:flex; gap:.45rem; align-items:baseline; }
-.slot-name{ color:#e6f3ff; font-weight:600; }
-.slot-id{ color:#9ec5e6; }
-.slot-right{ display:flex; gap:.45rem; color:#9ec5e6; }
-.slot-disp{ color:#55ff88; }
-.overview-empty{ color:#9ec5e6; padding:.45rem 0; text-align:center; }
+/* Overview */
+.squad-modal.overview{max-width:1400px}
+.overview-grid.two-by-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+@media (max-width:1080px){.overview-grid.two-by-two{grid-template-columns:1fr}}
+.overview-card{background:rgba(6,12,24,.7);border:1px solid rgba(30,144,255,.35);border-radius:.6rem;overflow:hidden;display:flex;flex-direction:column}
+.overview-head{display:flex;justify-content:space-between;gap:.6rem;align-items:center;padding:.6rem .8rem;background:rgba(8,18,30,.85);border-bottom:1px solid rgba(30,144,255,.25)}
+.overview-head .title{font-weight:800;letter-spacing:.03em}
+.overview-head .meta{display:flex;gap:.45rem;flex-wrap:wrap;color:#9ec5e6}
+.overview-body{padding:.6rem .8rem}
+.slot-row{display:flex;justify-content:space-between;border-bottom:1px dashed rgba(30,144,255,.2);padding:.28rem 0}
+.slot-row:last-child{border-bottom:none}
+.slot-left{display:flex;gap:.5rem;align-items:center}
+.slot-name{font-weight:600}
+.slot-id{color:#9ec5e6;font-size:.9rem}
+.slot-right{display:flex;gap:.5rem;align-items:center}
+.slot-cert{color:#9ec5e6}
+.slot-disp{border:1px solid rgba(120,255,170,.45);color:#caffe9;border-radius:.3rem;padding:.05rem .35rem;font-size:.8rem}
+.overview-empty{text-align:center;color:#9ec5e6;padding:.5rem 0}
 </style>
