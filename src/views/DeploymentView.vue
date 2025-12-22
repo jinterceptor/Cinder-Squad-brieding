@@ -314,6 +314,7 @@
                       <span v-if="ovItem(u.key).savedBy">by {{ ovItem(u.key).savedBy }}</span>
                       <span v-if="ovItem(u.key).savedAt">at {{ formatDate(ovItem(u.key).savedAt) }}</span>
                       <span v-if="ovItem(u.key).points !== undefined">· {{ ovItem(u.key).points }} pts</span>
+                      <span v-if="!ovItem(u.key).slots?.length" class="chip muted">Saved record found but empty — showing default</span>
                     </template>
                     <template v-else>
                       <span class="chip muted">Not saved — showing default</span>
@@ -331,7 +332,7 @@
               <div class="overview-body">
                 <div
                   class="slot-row"
-                  v-for="(s, idx) in (ovItem(u.key) ? ovItem(u.key).slots : u.slots)"
+                  v-for="(s, idx) in (ovItem(u.key) && ovItem(u.key).slots?.length ? ovItem(u.key).slots : u.slots)"
                   :key="idx"
                 >
                   <div class="slot-left">
@@ -344,7 +345,7 @@
                     <span class="slot-disp" v-if="s.disposable">Disp</span>
                   </div>
                 </div>
-                <div v-if="!(ovItem(u.key) ? ovItem(u.key).slots : u.slots)?.length" class="overview-empty">—</div>
+                <div v-if="!((ovItem(u.key) && ovItem(u.key).slots?.length) || u.slots?.length)" class="overview-empty">—</div>
               </div>
             </div>
           </div>
@@ -355,6 +356,7 @@
 </template>
 
 <script>
+/* cookie reader */
 function readCookie(name) {
   try {
     const target = `${name}=`;
@@ -367,6 +369,7 @@ function readCookie(name) {
   } catch { return ''; }
 }
 
+/* optional Netlify Identity */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -582,9 +585,8 @@ export default {
                   .join("").toUpperCase();
     },
 
-    /* ===== Robust config extraction (fix) ===== */
+    /* ===== Robust config extraction (improved) ===== */
     extractSlotsFromAny(rec) {
-      // why: GAS may return different shapes; normalize to [{id,name,role,cert,disposable}]
       const normSlots = (arr) => (Array.isArray(arr) ? arr : []).map(s => ({
         id: s?.id ?? null,
         name: s?.name ?? null,
@@ -593,38 +595,56 @@ export default {
         disposable: !!s?.disposable
       }));
 
-      // candidate 1: stringified configJSON
-      try {
-        const rawJSON = rec?.configJSON || rec?.loadoutJSON;
-        if (typeof rawJSON === "string" && rawJSON.trim()) {
-          const obj = JSON.parse(rawJSON);
-          if (Array.isArray(obj?.slots)) return normSlots(obj.slots);
-          if (Array.isArray(obj?.config?.slots)) return normSlots(obj.config.slots);
+      const tryParse = (val) => {
+        if (!val) return null;
+        if (typeof val === "string") {
+          try { return JSON.parse(val); } catch { return null; }
         }
-      } catch {}
+        if (typeof val === "object") return val;
+        return null;
+      };
 
-      // candidate 2: config field (object or string)
-      if (rec?.config) {
-        if (typeof rec.config === "string") {
-          try {
-            const obj = JSON.parse(rec.config);
-            if (Array.isArray(obj?.slots)) return normSlots(obj.slots);
-            if (Array.isArray(obj?.config?.slots)) return normSlots(obj.config.slots);
-          } catch {}
-        } else if (typeof rec.config === "object") {
-          if (Array.isArray(rec.config.slots)) return normSlots(rec.config.slots);
-          if (Array.isArray(rec.config?.config?.slots)) return normSlots(rec.config.config.slots);
-        }
-      }
-
-      // candidate 3: rec.slots directly
+      // direct: rec.slots
       if (Array.isArray(rec?.slots)) return normSlots(rec.slots);
 
-      // candidate 4: rec.data nesting
-      const d = rec?.data;
-      if (d) {
-        const sub = this.extractSlotsFromAny(d);
-        if (sub && sub.length) return sub;
+      // top-level strings/objects
+      const topConfigJSON = tryParse(rec?.configJSON || rec?.loadoutJSON);
+      if (topConfigJSON) {
+        if (Array.isArray(topConfigJSON.slots)) return normSlots(topConfigJSON.slots);
+        if (Array.isArray(topConfigJSON?.config?.slots)) return normSlots(topConfigJSON.config.slots);
+      }
+      const topConfig = tryParse(rec?.config);
+      if (topConfig) {
+        if (Array.isArray(topConfig.slots)) return normSlots(topConfig.slots);
+        if (Array.isArray(topConfig?.config?.slots)) return normSlots(topConfig.config.slots);
+      }
+
+      // common nesting: rec.data.*
+      const d = rec?.data || {};
+      if (Array.isArray(d.slots)) return normSlots(d.slots);
+      const dConfigJSON = tryParse(d.configJSON || d.loadoutJSON);
+      if (dConfigJSON) {
+        if (Array.isArray(dConfigJSON.slots)) return normSlots(dConfigJSON.slots);
+        if (Array.isArray(dConfigJSON?.config?.slots)) return normSlots(dConfigJSON.config.slots);
+      }
+      const dConfig = tryParse(d.config);
+      if (dConfig) {
+        if (Array.isArray(dConfig.slots)) return normSlots(dConfig.slots);
+        if (Array.isArray(dConfig?.config?.slots)) return normSlots(dConfig.config.slots);
+      }
+
+      // sometimes GAS returns {record:{...}} or {item:{...}}
+      const recordish = rec?.record || rec?.item || {};
+      if (Array.isArray(recordish.slots)) return normSlots(recordish.slots);
+      const rConfigJSON = tryParse(recordish.configJSON);
+      if (rConfigJSON) {
+        if (Array.isArray(rConfigJSON.slots)) return normSlots(rConfigJSON.slots);
+        if (Array.isArray(rConfigJSON?.config?.slots)) return normSlots(rConfigJSON.config.slots);
+      }
+      const rConfig = tryParse(recordish.config);
+      if (rConfig) {
+        if (Array.isArray(rConfig.slots)) return normSlots(rConfig.slots);
+        if (Array.isArray(rConfig?.config?.slots)) return normSlots(rConfig.config.slots);
       }
 
       return [];
@@ -644,15 +664,13 @@ export default {
       if (!this.apiBase) { this.overview.error = "execUrl missing"; return; }
       this.overview.loading = true; this.overview.error = "";
       try {
-        // Try bulk list
         const list = await this.apiPost("config:list", {});
+        const map = {};
         if (list && list.ok && Array.isArray(list.data)) {
-          const map = {};
           for (const it of list.data) {
             const uid = it.unitId || it.key || it.id;
             if (!uid) continue;
             const slots = this.extractSlotsFromAny(it);
-            if (!slots.length) continue; // ignore empty saves
             map[uid] = {
               version: Number(it.version || 0),
               savedBy: it.savedBy || it.user || "",
@@ -664,17 +682,16 @@ export default {
           this.overview.items = map;
           return;
         }
+
         // Fallback: per unit fetch
         const results = await Promise.allSettled(
           this.chalkUnits.map(u => this.apiPost("config:get", { unitId: u.key }))
         );
-        const map = {};
         results.forEach((r, idx) => {
           const unitKey = this.chalkUnits[idx].key;
           if (r.status === "fulfilled" && r.value && r.value.ok && r.value.data) {
             const it = r.value.data;
             const slots = this.extractSlotsFromAny(it);
-            if (!slots.length) return;
             map[unitKey] = {
               version: Number(it.version || 0),
               savedBy: it.savedBy || it.user || "",
@@ -900,15 +917,17 @@ export default {
       if (!unitKey) return;
       this.apiError = ""; this.busy = true;
       try {
-        const { ok, data, error } = await this.apiPost("config:get", { unitId: unitKey });
+        const resp = await this.apiPost("config:get", { unitId: unitKey });
+        console.debug("config:get resp", unitKey, resp); // why: diagnosis if still not loading
+        const { ok, data, error } = resp || {};
         if (!ok) throw new Error(error || "Load failed");
         if (!data) { this.apiError = "No remote config yet for this Chalk."; return; }
         const nextSlots = this.extractSlotsFromAny(data);
-        if (!nextSlots.length) { this.apiError = "Saved config has no slots."; return; }
         const idx = this.plan.units.findIndex(u => u.key === unitKey);
         if (idx === -1) return;
         const curr = this.plan.units[idx];
-        const padded = this.isChalk(curr.title) ? this.padSlots(nextSlots.map(s => ({...s, origStatus: "FILLED"})), this.MIN_CHALK_SLOTS) : nextSlots;
+        const toApply = (nextSlots.length ? nextSlots : curr.slots).map(s => ({...s, origStatus: s.id ? "FILLED" : "VACANT"}));
+        const padded = this.isChalk(curr.title) ? this.padSlots(toApply, this.MIN_CHALK_SLOTS) : toApply;
         const nextUnit = { ...curr, slots: this.sortSlotsByRole(padded) };
         this.plan.units = this.plan.units.map((u, i) => (i === idx ? nextUnit : u));
         this.versions = { ...this.versions, [unitKey]: Number(data.version || 0) };
