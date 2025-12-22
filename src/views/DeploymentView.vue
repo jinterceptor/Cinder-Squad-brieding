@@ -12,6 +12,13 @@
 
       <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
+          <!-- Top actions: prominent Overview -->
+          <div class="top-actions">
+            <button type="button" class="btn primary large" :disabled="!apiBase" @click="openOverview">
+              Overview
+            </button>
+          </div>
+
           <!-- Toolbar -->
           <div class="detail-toolbar">
             <div class="toolbar-left">
@@ -49,7 +56,7 @@
           <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
-          <!-- Cards grid styled like PilotsView -->
+          <!-- Cards grid -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
@@ -218,8 +225,7 @@
                 Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
               </button>
 
-              <span class="divider" />
-              <button type="button" class="btn" :disabled="!apiBase" @click="openOverview">Overview</button>
+              <!-- Overview button moved to top; removed here -->
             </div>
           </div>
         </div>
@@ -282,7 +288,7 @@
       </div>
     </div>
 
-    <!-- Overview Modal -->
+    <!-- Overview Modal (bigger) -->
     <div v-if="overview.open" class="squad-overlay" @click.self="closeOverview">
       <div class="squad-modal overview">
         <div class="compact-header">
@@ -1231,6 +1237,7 @@ export default {
 .deploy-scroll{max-height:calc(94vh - 100px - 52px - 36px);overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:36px}
 
 .panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
+.top-actions{display:flex;justify-content:flex-end;margin-bottom:.5rem}
 .muted{color:#9ec5e6}.small{font-size:.86rem}
 .detail-toolbar{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;justify-content:space-between}
 .toolbar-left{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
@@ -1245,6 +1252,7 @@ export default {
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 .btn.small{padding:.32rem .55rem;font-size:.86rem;border-radius:.45rem}
 .btn.xsmall{padding:.22rem .45rem;font-size:.80rem;border-radius:.42rem}
+.btn.large{padding:.5rem 1rem;font-size:1.02rem;border-radius:.6rem;font-weight:700;letter-spacing:.02em}
 .btn.primary{background:linear-gradient(180deg,rgba(8,40,22,.9),rgba(6,28,18,.85));border-color:rgba(90,220,160,0.45);box-shadow:inset 0 0 0 1px rgba(90,220,160,0.15)}
 .btn.primary:hover{border-color:rgba(120,255,190,0.6);background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9))}
 .btn.ghost{background:rgba(0,10,30,0.25)}
@@ -1324,7 +1332,20 @@ export default {
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
 .squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1000px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
 .squad-modal.compact{padding:0.8rem 0.9rem 1rem}
-.squad-modal.overview{max-width:1200px}
+
+/* Bigger overview modal */
+.squad-modal.overview{
+  width:96vw; max-width:1600px; max-height:92vh;
+}
+
+/* Overview grid/cards */
+.overview-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:1rem;
+}
+@media (max-width:1280px){ .overview-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:900px){ .overview-grid{ grid-template-columns:1fr; } }
 
 .compact-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(30,144,255,.35);padding-bottom:.4rem}
 .compact-header h3{margin:0;font-size:1.05rem;color:#e6f3ff}
@@ -1339,28 +1360,23 @@ export default {
 .squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 180px)}
 .squad-modal-scroll.compact-list{max-height:calc(90vh - 170px)}
 
-/* Overview grid/cards */
-.overview-grid{
-  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.9rem;
-}
-@media (max-width:1000px){ .overview-grid{ grid-template-columns:1fr; } }
 .overview-card{
   background:rgba(5,12,24,.6); border:1px solid rgba(30,144,255,.2);
-  border-radius:.6rem; padding:.7rem .8rem;
+  border-radius:.6rem; padding:.8rem .9rem;
 }
 .overview-head{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; }
-.overview-head .title{ font-weight:800; color:#e6f3ff; }
+.overview-head .title{ font-weight:800; color:#e6f3ff; font-size:1.05rem; }
 .overview-head .meta{ color:#9ec5e6; display:flex; gap:.5rem; flex-wrap:wrap; }
 
 .overview-body{
   margin-top:.5rem; border-top:1px dashed rgba(30,144,255,.2); padding-top:.5rem;
-  display:grid; gap:.3rem;
+  display:grid; gap:.35rem;
 }
-.slot-row{ display:flex; justify-content:space-between; gap:.6rem; font-size:.92rem; }
+.slot-row{ display:flex; justify-content:space-between; gap:.6rem; font-size:.95rem; }
 .slot-left{ display:flex; gap:.45rem; align-items:baseline; }
 .slot-name{ color:#e6f3ff; font-weight:600; }
 .slot-id{ color:#9ec5e6; }
 .slot-right{ display:flex; gap:.45rem; color:#9ec5e6; }
 .slot-disp{ color:#55ff88; }
-.overview-empty{ color:#9ec5e6; padding:.35rem 0; text-align:center; }
+.overview-empty{ color:#9ec5e6; padding:.45rem 0; text-align:center; }
 </style>
