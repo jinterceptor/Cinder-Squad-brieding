@@ -1,3 +1,4 @@
+<!-- File: src/views/DeploymentView.vue -->
 <template>
   <div id="deploymentView" class="content-container" :class="{ animate: animateView }" :style="{ 'animation-delay': animationDelay }">
     <section class="section-container deployment-window">
@@ -88,7 +89,7 @@
                     </label>
                   </div>
 
-                  <button type="button" class="btn primary pick" :disabled="slot.origStatus === 'CLOSED'" @click.stop="openPicker(detailKey, sIdx)">
+                  <button type="button" class="btn primary pick" :disabled="slot.origStatus === "CLOSED"" @click.stop="openPicker(detailKey, sIdx)">
                     {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
                   </button>
                 </div>
@@ -161,13 +162,20 @@
 </template>
 
 <script>
+/* cookie reader without regex (build-safe) */
 function readCookie(name) {
   try {
-    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[-.$?*|{}()[\\]\\/+^]/g, '\\$&') + '=([^;]*)'));
-    return m ? decodeURIComponent(m[1]) : '';
+    const target = `${name}=`;
+    const parts = document.cookie ? document.cookie.split(';') : [];
+    for (let i = 0; i < parts.length; i++) {
+      const v = parts[i].trim();
+      if (v.startsWith(target)) return decodeURIComponent(v.substring(target.length));
+    }
+    return '';
   } catch { return ''; }
 }
 
+/* support Netlify Identity token if present */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -318,6 +326,7 @@ export default {
       this.ensureUnitsBuilt(this.orbat); this.persistPlan(); this.triggerFlicker(0);
       if (!this.debugInfo) this.debugInfo = "Fallback defaults applied (ORBAT/template).";
     },
+
     parseCsvDefaults(csvText) {
       const rows = this.csvToRows(csvText);
       if (!rows.length) return {};
@@ -346,6 +355,7 @@ export default {
       Object.keys(out).forEach(k => out[k].sort((a,b)=> (a.idx||9999) - (b.idx||9999)));
       return out;
     },
+
     applyCsvDefaults(defaultsByChalk) {
       let touched = 0;
       const nextUnits = this.plan.units.map(u => {
@@ -369,6 +379,7 @@ export default {
       }
       return false;
     },
+
     csvToRows(text) {
       const rows = []; let i = 0, field = "", row = [], inQuotes = false;
       const pushField = () => { row.push(field); field = ""; };
@@ -389,6 +400,7 @@ export default {
       (field !== "" || row.length) && (pushField(), pushRow());
       return rows.filter(r => r.some(c => String(c).trim() !== ""));
     },
+
     findHeader(headers, regex, optional = false) {
       const idx = headers.findIndex(h => regex.test(String(h || "")));
       if (idx === -1 && !optional) return -1;
@@ -408,6 +420,7 @@ export default {
       if (!this.detailKey && this.plan.units.length) this.detailKey = this.plan.units[0].key;
       this.debugInfo = `Loaded ${this.plan.units.length} chalk(s) from ORBAT.`;
     },
+
     makeDefaultChalks(count, size) {
       const arr = [];
       for (let i = 1; i <= count; i++) {
@@ -429,6 +442,7 @@ export default {
         this.deviceId = id;
       } catch { this.deviceId = this.makeDeviceId(); }
     },
+
     makeDeviceId() {
       const r = (crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(12)) : Array.from({length:12},()=>Math.floor(Math.random()*256));
       return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -600,6 +614,7 @@ export default {
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
+
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach(sq => {
@@ -621,6 +636,7 @@ export default {
       });
       return units;
     },
+
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
       if (!unit) return null;
@@ -636,7 +652,7 @@ export default {
         });
       });
       let finalSlots = this.sortSlotsByRole(slots);
-      if (this.isChalk(unit.squad)) finalSlots = this.padSlots(unit.slots, this.MIN_CHALK_SLOTS);
+      if (this.isChalk(unit.squad)) finalSlots = this.padSlots(finalSlots, this.MIN_CHALK_SLOTS); /* fix */
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
 
@@ -649,6 +665,7 @@ export default {
         return sum + certPts + dispPts;
       }, 0);
     },
+
     wouldExceedCap(unitKey, delta) {
       const unit = this.plan.units.find(u => u.key === unitKey);
       if (!unit) return false;
@@ -660,7 +677,9 @@ export default {
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
       this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false };
     },
+
     closePicker() { this.picker.open = false; },
+
     findAssignment(personId) {
       for (const g of this.plan.units) {
         const idx = g.slots.findIndex(s => String(s.id) === String(personId));
@@ -668,7 +687,9 @@ export default {
       }
       return null;
     },
+
     formatAssignment(a) { return `${a.title} #${a.slotIdx + 1}`; },
+
     selectPersonnel(p) {
       if (!this.picker.open) return;
       const from = this.findAssignment(p.id);
@@ -711,7 +732,9 @@ export default {
       this.persistPlan();
       this.closePicker();
     },
+
     clearCurrentSlot() { if (!this.picker.open) return; this.clearSlot(this.picker.unitKey, this.picker.slotIdx); },
+
     clearSlot(unitKey, slotIdx) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -723,6 +746,7 @@ export default {
       this.persistPlan();
       this.detailError = "";
     },
+
     clearGroup(unitKey) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -733,6 +757,7 @@ export default {
       this.persistPlan();
       this.detailError = "";
     },
+
     addSlot(unitKey) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -743,6 +768,7 @@ export default {
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
     },
+
     removeSlot(unitKey, slotIdx) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -771,6 +797,7 @@ export default {
       this.plan.units = this.plan.units.map((u, i) => (i === uIdx ? newU : u));
       this.persistPlan();
     },
+
     onToggleDisposable(unitKey, slotIdx, checked) {
       const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
       if (uIdx < 0) return;
@@ -800,10 +827,12 @@ export default {
       this.detailError = "";
       this.triggerFlicker(0);
     },
+
     exportJson() {
       const blob = new Blob([JSON.stringify(this.plan, null, 2)], { type: "application/json" });
       this.downloadBlob(blob, "deployment-plan.json");
     },
+
     downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
