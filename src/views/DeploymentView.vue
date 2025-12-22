@@ -49,7 +49,7 @@
           <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
-          <!-- Cards grid styled like PilotsView -->
+          <!-- Cards grid -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
@@ -120,7 +120,14 @@
                   <div class="member-header">
                     <div class="member-header-text">
                       <div class="name-line">
-                        <span v-if="rankFor(slot.id)" class="rank-badge">{{ rankFor(slot.id) }}</span>
+                        <img
+                          v-if="rankFor(slot.id)"
+                          class="rank-icon"
+                          :src="rankIcon(rankFor(slot.id))"
+                          :alt="rankFor(slot.id)"
+                          :title="rankFor(slot.id)"
+                          @error="onRankImgError($event)"
+                        />
                         <h3>{{ (slot.name || 'UNKNOWN').toUpperCase() }}</h3>
                       </div>
                       <p class="rank-line">
@@ -248,7 +255,14 @@
             <div class="member-header">
               <div class="member-header-text">
                 <div class="name-line">
-                  <span v-if="p.rank" class="rank-badge">{{ rankLabel(p.rank) }}</span>
+                  <img
+                    v-if="p.rank"
+                    class="rank-icon"
+                    :src="rankIcon(rankLabel(p.rank))"
+                    :alt="rankLabel(p.rank)"
+                    :title="rankLabel(p.rank)"
+                    @error="onRankImgError($event)"
+                  />
                   <h3>{{ (p.name || 'UNKNOWN').toUpperCase() }}</h3>
                 </div>
                 <p class="rank-line">
@@ -322,6 +336,10 @@ export default {
     secret: { type: String, default: "PLEX" },
     token:  { type: String, default: "" },
     defaultsCsvUrl: { type: String, default: "" },
+    /* where rank icons live; e.g., '/assets/ranks' or '/ranks' */
+    rankIconBase: { type: String, default: () => (typeof window !== 'undefined' && window.RANK_ICON_BASE) ? window.RANK_ICON_BASE : '/ranks' },
+    /* icon extension: 'svg' or 'png' */
+    rankIconExt:  { type: String, default: 'svg' },
   },
   data() {
     return {
@@ -438,28 +456,24 @@ export default {
     rankLabel(raw) {
       const t = String(raw || "").trim();
       if (!t) return "";
-      // Normalize a few common variants; otherwise uppercase the token
       const map = {
-        pvt: "PVT", pfc: "PFC", lcpl: "LCPL", cpl: "CPL", sgt: "SGT",
-        ssgt: "SSGT", gysgt: "GYSGT", lt: "LT", "2lt": "2LT", "1lt": "1LT",
-        capt: "CPT", cpt: "CPT", maj: "MAJ", col: "COL", gen: "GEN",
-        wo: "WO", cwo2: "CWO2", cwo3: "CWO3", cwo4: "CWO4"
+        pvt:"PVT", pv2:"PV2", pfc:"PFC", lcpl:"LCPL", cpl:"CPL", sgt:"SGT",
+        ssg:"SSG", ssgt:"SSGT", gysgt:"GYSGT",
+        "2lt":"2LT", "1lt":"1LT", lt:"LT", cpt:"CPT", capt:"CPT", maj:"MAJ",
+        col:"COL", gen:"GEN", wo:"WO", cwo2:"CWO2", cwo3:"CWO3", cwo4:"CWO4"
       };
       const k = t.toLowerCase();
       return map[k] || t.toUpperCase();
     },
     extractRank(member) {
-      // prefer explicit field
       const r = member?.rank || member?.grade;
       if (r) return this.rankLabel(r);
-      // try first token of name/callsign if it looks like a rank
       const candidates = [member?.name, member?.callsign].filter(Boolean);
       for (const c of candidates) {
         const tok = String(c).trim().split(/\s+/)[0] || "";
         const norm = this.rankLabel(tok);
         if (norm && /^[A-Z0-9]{2,6}$/.test(norm)) {
-          // simple whitelist of known ranks
-          const known = ["PVT","PFC","LCPL","CPL","SGT","SSGT","GYSGT","2LT","1LT","LT","CPT","MAJ","COL","GEN","WO","CWO2","CWO3","CWO4"];
+          const known = ["PVT","PV2","PFC","LCPL","CPL","SGT","SSG","SSGT","GYSGT","2LT","1LT","LT","CPT","MAJ","COL","GEN","WO","CWO2","CWO3","CWO4"];
           if (known.includes(norm)) return norm;
         }
       }
@@ -468,6 +482,17 @@ export default {
     rankFor(personId) {
       const p = this.personnel.find(pp => String(pp.id) === String(personId));
       return p?.rank ? this.rankLabel(p.rank) : "";
+    },
+    rankIcon(code) {
+      if (!code) return "";
+      const base = (this.rankIconBase || "/ranks").replace(/\/+$/,"");
+      const ext = (this.rankIconExt || "svg").replace(/^\.+/,"");
+      // filenames typically match the code; e.g., /ranks/CPL.svg
+      return `${base}/${code}.${ext}`;
+    },
+    onRankImgError(ev) {
+      // why: hide broken image without affecting layout; title/alt remains useful
+      ev.target.style.display = 'none';
     },
 
     squadInitials(name) {
@@ -605,7 +630,7 @@ export default {
     ensureDeviceId() {
       try {
         const key = "orbatDeviceId";
-        const existing = localStorage.getItem(key); /* why: previous var was undeclared */
+        const existing = localStorage.getItem(key);
         if (existing && /^[a-zA-Z0-9_.-]{8,}$/.test(existing)) { this.deviceId = existing; return; }
         const id = this.makeDeviceId();
         localStorage.setItem(key, id);
@@ -764,10 +789,7 @@ export default {
       for (const label of this.certLabels) if (n.includes(label.toLowerCase())) return label;
       return "";
     },
-    getCertsForPersonId(personId) {
-      const p = this.personnel.find(pp => String(pp.id) === String(personId));
-      return p?.certs || [];
-    },
+    getCertsForPersonId(personId) { const p = this.personnel.find(pp => String(pp.id) === String(personId)); return p?.certs || []; },
     hasCertId(personId, idx) {
       const p = this.personnel.find(pp => String(pp.id) === String(personId));
       if (!p) return false;
@@ -790,14 +812,7 @@ export default {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
               const certs = this.extractCertsFromMember(s.member);
               const rank = this.extractRank(s.member);
-              pool.push({
-                id,
-                name: String(s.member.name || "Unknown"),
-                callsign: String(s.member.callsign || ""),
-                role: String(s.role || s.member.slot || ""),
-                certs,
-                rank
-              });
+              pool.push({ id, name: String(s.member.name || "Unknown"), callsign: String(s.member.callsign || ""), role: String(s.role || s.member.slot || ""), certs, rank });
             }
           });
         });
@@ -1042,7 +1057,7 @@ export default {
 /* Light default text for the whole view */
 #deploymentView { color: #e6f3ff; }
 
-/* -------- Shell / toolbar (kept) -------- */
+/* -------- Shell / toolbar -------- */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
@@ -1069,9 +1084,9 @@ export default {
 .pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
 .pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
-@keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}}
+@keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}
 
-/* -------- Adopted from PilotsView (card look) -------- */
+/* -------- Cards -------- */
 .squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
 .squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
 .squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
@@ -1079,14 +1094,12 @@ export default {
 .loadout-status .points{color:#9ec5e6}.loadout-status .warn{color:rgba(255,190,80,0.95)}.loadout-status .ok{color:rgba(120,255,170,0.9)}
 .squad-tag{border:2px solid #1e90ff;border-radius:.6rem;padding:.35rem .6rem;color:#1e90ff;font-weight:700}
 
-/* grid */
 .squad-members-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.95rem}
 @media (max-width:1680px){.squad-members-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:1350px){.squad-members-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:980px){.squad-members-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.squad-members-grid{grid-template-columns:1fr}}
 
-/* card */
 .member-card{position:relative;background:rgba(0,10,30,0.95);border-radius:.4rem;border-left:4px solid #1e90ff;box-shadow:0 0 10px rgba(0,0,0,0.6);padding:.9rem 1.1rem;display:flex;flex-direction:column}
 .member-card.vacant,.member-card.closed{border-left-color:rgba(30,144,255,0.35)}
 .member-card.vacant{background:repeating-linear-gradient(45deg,rgba(30,144,255,0.06) 0,rgba(30,144,255,0.06) 10px,transparent 10px,transparent 20px),rgba(0,12,25,0.9);border-left-style:dashed}
@@ -1102,16 +1115,14 @@ export default {
 .member-column p{margin:.18rem 0}
 .member-footer{margin-top:.6rem;font-size:.75rem;color:#7aa7c7;display:flex;justify-content:space-between}
 
-/* rank badge (PilotsView-like capsule) */
-.rank-badge{
-  display:inline-flex;align-items:center;justify-content:center;
-  padding:.1rem .45rem;border-radius:.4rem;
-  background:rgba(30,144,255,0.12);border:1px solid rgba(30,144,255,0.55);
-  color:#d7ebff;font-weight:700;font-size:.78rem;letter-spacing:.03em;
-  text-shadow:0 0 2px rgba(0,0,0,.35);
+/* rank icon */
+.rank-icon{
+  width: 22px; height: 22px; object-fit: contain;
+  filter: drop-shadow(0 0 2px rgba(0,0,0,.5));
+  user-select:none; -webkit-user-drag:none;
 }
 
-/* cert list look */
+/* cert list */
 .detail-line strong{color:#9ec5e6}
 .role-accent{color:#55ff88;font-weight:600}
 .primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:#9ec5e6}
@@ -1123,18 +1134,17 @@ export default {
 .cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
 .checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
 
-/* Themed disposable checkbox */
+/* disposable checkbox */
 .disposable { color:#e6f3ff; display:inline-flex; gap:.45rem; align-items:center; }
 .disposable input[type="checkbox"]{
-  accent-color:#55ff88;
-  width:18px;height:18px; cursor:pointer;
+  accent-color:#55ff88; width:18px;height:18px; cursor:pointer;
 }
 .disposable input[type="checkbox"]:focus-visible{
   outline:none; box-shadow:0 0 0 2px rgba(120,255,170,.35); border-radius:3px;
 }
 .disposable input[type="checkbox"]:hover{ filter:brightness(1.05); }
 
-/* picker shell */
+/* picker */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
 .squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
 .squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
