@@ -35,12 +35,12 @@
           </div>
 
           <div v-if="!apiBase" class="warn">
-            Apps Script /exec URL missing. Set one of:
+            Apps Script /exec URL missing. Use your Netlify proxy to avoid CORS:
             <ul style="margin:.3rem 0 .1rem .9rem">
-              <li><code>&lt;DeploymentView :execUrl="'https://script.google.com/.../exec'" /&gt;</code></li>
-              <li><code>&lt;meta name="apps-script-exec" content="https://script.google.com/.../exec"&gt;</code></li>
-              <li><code>window.APP_EXEC_URL = "https://script.google.com/.../exec"</code></li>
-              <li><code>localStorage.setItem('execUrl', 'https://script.google.com/.../exec')</code></li>
+              <li><code>&lt;DeploymentView :execUrl="'/.netlify/functions/gas'" /&gt;</code></li>
+              <li><code>window.DEPLOYMENT_EXEC_URL = "/.netlify/functions/gas"</code></li>
+              <li><code>localStorage.setItem('deploymentExecUrl','/.netlify/functions/gas')</code></li>
+              <li class="muted">Legacy (raw GAS; may CORS): meta <code>apps-script-exec</code>, <code>window.APP_EXEC_URL</code>, <code>localStorage.execUrl</code></li>
             </ul>
           </div>
 
@@ -155,7 +155,7 @@ export default {
   props: {
     animate: { type: Boolean, default: true },
     orbat: { type: Array, default: () => [] },
-    execUrl: { type: String, default: "" },          // Preferred
+    execUrl: { type: String, default: "" },          // Preferred explicit prop
     secret: { type: String, default: "PLEX" },
     token:  { type: String, default: "" },           // Optional
     defaultsCsvUrl: { type: String, default: "" },   // CSV defaults
@@ -180,9 +180,9 @@ export default {
       SQUAD_POINT_CAP: 10,
       DISPOSABLE_COST: 1,
       CERT_POINTS: {
-        "Rifleman": 0, "Grenadier": 1, "Breacher": 1, "RTO": 1,
-        "Machine Gunner": 2, "Marksman": 2, "Combat Engineer": 2,
-        "Anti Tank": 3, "Corpsmen": 3, "PJ": 3, "Pilot": 3, "NCO": 0, "Officer": 0,
+        Rifleman: 0, Grenadier: 1, Breacher: 1, RTO: 1,
+        "Machine Gunner": 2, Marksman: 2, "Combat Engineer": 2,
+        "Anti Tank": 3, Corpsmen: 3, PJ: 3, Pilot: 3, NCO: 0, Officer: 0,
       },
       certLabels: [
         "Rifleman","Machine Gunner","Anti Tank","Corpsmen","Combat Engineer",
@@ -228,26 +228,48 @@ export default {
     authModeLabel() {
       return this.authToken ? "User mode (token)" : "Device mode (anonymous)";
     },
-    // Robust resolver for /exec URL
+    // ✅ Deployment-only & legacy-compatible resolver (prefers Netlify proxy)
     apiBase() {
+      // 1) explicit prop
       const direct = (this.execUrl || "").trim();
       if (direct) return direct;
+
+      // 2) namespaced globals (preferred)
+      try {
+        if (typeof window !== "undefined" && window.DEPLOYMENT_EXEC_URL) {
+          return String(window.DEPLOYMENT_EXEC_URL).trim();
+        }
+      } catch {}
+
+      // 3) namespaced storage (preferred)
+      try {
+        const ls = typeof localStorage !== "undefined" ? localStorage : null;
+        const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
+        const ns = ls?.getItem("deploymentExecUrl") || ss?.getItem("deploymentExecUrl") || "";
+        if (ns && ns.trim()) return ns.trim();
+      } catch {}
+
+      // 4) legacy meta
       try {
         const meta = document?.querySelector('meta[name="apps-script-exec"]')?.content || "";
         if (meta && meta.trim()) return meta.trim();
       } catch {}
+
+      // 5) legacy globals
       try {
         // eslint-disable-next-line no-undef
         if (typeof APP_EXEC_URL !== "undefined" && APP_EXEC_URL) return String(APP_EXEC_URL).trim();
-        // eslint-disable-next-line no-underscore-dangle
         if (typeof window !== "undefined" && window.APP_EXEC_URL) return String(window.APP_EXEC_URL).trim();
       } catch {}
+
+      // 6) legacy storage
       try {
         const ls = typeof localStorage !== "undefined" ? localStorage : null;
         const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
         const a = ls?.getItem("execUrl") || ss?.getItem("execUrl") || "";
         if (a && a.trim()) return a.trim();
       } catch {}
+
       return "";
     },
     pointsUsed() {
@@ -299,7 +321,7 @@ export default {
         const slotNumRaw = idx.slot >= 0 ? String(row[idx.slot] || "").trim() : "";
         const cert = idx.cert >= 0 ? String(row[idx.cert] || "").trim() : "";
         const dispRaw = idx.disp >= 0 ? String(row[idx.disp] || "").trim().toUpperCase() : "";
-        const disposable = dispRaw === "Y" || dispRaw === "YES" || dispRaw === "TRUE" || dispRaw === "1";
+        const disposable = ["Y","YES","TRUE","1"].includes(dispRaw);
         const key = chalkName.toLowerCase();
         if (!out[key]) out[key] = [];
         out[key].push({ idx: Number(slotNumRaw) || out[key].length + 1, role, cert, disposable: !!disposable });
@@ -521,10 +543,10 @@ export default {
     bestCertLabelMatch(name) {
       const n = String(name || "").trim().toLowerCase();
       const map = {
-        "rifleman":"Rifleman","mg":"Machine Gunner","machinegunner":"Machine Gunner","machine gunner":"Machine Gunner",
-        "anti tank":"Anti Tank","at":"Anti Tank","corpsman":"Corpsmen","medic":"Corpsmen","combat engineer":"Combat Engineer",
-        "engineer":"Combat Engineer","marksman":"Marksman","breacher":"Breacher","grenadier":"Grenadier","pilot":"Pilot",
-        "rto":"RTO","pj":"PJ","nco":"NCO","officer":"Officer",
+        rifleman:"Rifleman", mg:"Machine Gunner", machinegunner:"Machine Gunner","machine gunner":"Machine Gunner",
+        "anti tank":"Anti Tank", at:"Anti Tank", corpsman:"Corpsmen", medic:"Corpsmen","combat engineer":"Combat Engineer",
+        engineer:"Combat Engineer", marksman:"Marksman", breacher:"Breacher", grenadier:"Grenadier", pilot:"Pilot",
+        rto:"RTO", pj:"PJ", nco:"NCO", officer:"Officer",
       };
       if (map[n]) return map[n];
       for (const label of this.certLabels) if (n.includes(label.toLowerCase())) return label;
