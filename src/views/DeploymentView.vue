@@ -213,7 +213,7 @@
       </div>
     </section>
 
-    <!-- Assign/Swap Picker (unchanged logic) -->
+    <!-- Assign/Swap Picker -->
     <div v-if="picker.open" class="squad-overlay" @click.self="closePicker">
       <div class="squad-modal">
         <div class="squad-modal-header">
@@ -282,7 +282,6 @@
 </template>
 
 <script>
-/* cookie reader */
 function readCookie(name) {
   try {
     const target = `${name}=`;
@@ -295,7 +294,6 @@ function readCookie(name) {
   } catch { return ''; }
 }
 
-/* optional Netlify Identity */
 async function netlifyIdentityToken() {
   try {
     const id = window.netlifyIdentity;
@@ -758,7 +756,6 @@ export default {
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
-
     buildUnitsFromOrbat(orbat) {
       const units = [];
       (orbat || []).forEach(sq => {
@@ -780,7 +777,6 @@ export default {
       });
       return units;
     },
-
     buildUnitFromOrbatByKey(orbat, unitKey) {
       const unit = (orbat || []).find(sq => this.keyFromName(sq.squad) === unitKey);
       if (!unit) return null;
@@ -799,7 +795,6 @@ export default {
       if (this.isChalk(unit.squad)) finalSlots = this.padSlots(finalSlots, this.MIN_CHALK_SLOTS);
       return { key: unitKey, title: unit.squad, slots: finalSlots };
     },
-
     calcUnitPoints(unit) {
       if (!unit || !unit.slots) return 0;
       return unit.slots.reduce((sum, s) => {
@@ -809,21 +804,17 @@ export default {
         return sum + certPts + dispPts;
       }, 0);
     },
-
     wouldExceedCap(unitKey, delta) {
       const unit = this.plan.units.find(u => u.key === unitKey);
       if (!unit) return false;
       return this.calcUnitPoints(unit) + delta > this.SQUAD_POINT_CAP;
     },
-
     openPicker(unitKey, slotIdx) {
       const g = this.plan.units.find(u => u.key === unitKey);
       if (!g || g.slots[slotIdx]?.origStatus === "CLOSED") return;
       this.picker = { ...this.picker, open: true, unitKey, slotIdx, query: "", onlyFree: false };
     },
-
     closePicker() { this.picker.open = false; },
-
     findAssignment(personId) {
       for (const g of this.plan.units) {
         const idx = g.slots.findIndex(s => String(s.id) === String(personId));
@@ -831,9 +822,7 @@ export default {
       }
       return null;
     },
-
     formatAssignment(a) { return `${a.title} #${a.slotIdx + 1}`; },
-
     selectPersonnel(p) {
       if (!this.picker.open) return;
       const from = this.findAssignment(p.id);
@@ -876,9 +865,7 @@ export default {
       this.persistPlan();
       this.closePicker();
     },
-
     clearCurrentSlot() { if (!this.picker.open) return; this.clearSlot(this.picker.unitKey, this.picker.slotIdx); },
-
     clearSlot(unitKey, slotIdx) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -890,7 +877,6 @@ export default {
       this.persistPlan();
       this.detailError = "";
     },
-
     clearGroup(unitKey) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -901,7 +887,6 @@ export default {
       this.persistPlan();
       this.detailError = "";
     },
-
     addSlot(unitKey) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -912,7 +897,6 @@ export default {
       this.plan.units = this.plan.units.map((u, i) => (i === idx ? newG : u));
       this.persistPlan();
     },
-
     removeSlot(unitKey, slotIdx) {
       const idx = this.plan.units.findIndex(u => u.key === unitKey);
       if (idx < 0) return;
@@ -924,7 +908,6 @@ export default {
       this.persistPlan();
       this.detailError = "";
     },
-
     onChangeCert(unitKey, slotIdx, nextCert) {
       const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
       if (uIdx < 0) return;
@@ -941,7 +924,6 @@ export default {
       this.plan.units = this.plan.units.map((u, i) => (i === uIdx ? newU : u));
       this.persistPlan();
     },
-
     onToggleDisposable(unitKey, slotIdx, checked) {
       const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
       if (uIdx < 0) return;
@@ -958,7 +940,6 @@ export default {
       this.plan.units = this.plan.units.map((u, i) => (i === uIdx ? newU : u));
       this.persistPlan();
     },
-
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       if (!rebuilt) { this.detailError = "No matching unit in ORBAT."; return; }
@@ -986,20 +967,24 @@ export default {
 </script>
 
 <style scoped>
-/* -------- Shell / toolbar (kept) -------- */
+:root{--text:#e8f0ff;--muted:#9ec5e6}
+
+/* -------- Shell / toolbar -------- */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
 .deploy-scroll{max-height:calc(94vh - 100px - 52px - 36px);overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:36px}
 
-.panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible}
-.muted{color:#9ec5e6}.small{font-size:.86rem}
+.panel{border:1px dashed rgba(30,144,255,0.35);background:rgba(0,10,30,0.18);border-radius:.6rem;padding:.8rem .9rem;overflow:visible;color:var(--text)}
+.muted{color:var(--muted)}.small{font-size:.86rem}
 .detail-toolbar{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;justify-content:space-between}
 .toolbar-left{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
 .toolbar-right{display:flex;gap:.6rem;align-items:center}
-.chalk-picker{min-width:160px}
+.chalk-picker{min-width:160px;color:var(--text);background:#040a14;border:1px solid rgba(30,144,255,.45)}
+.chalk-picker option{color:#111;background:#e8f0ff} /* why: native dropdowns render separately */
 .divider{width:1px;height:18px;background:rgba(158,197,230,0.35);display:inline-block}
 .warn{border:1px solid rgba(255,120,120,.5);background:rgba(90,0,0,.25);color:#ffdcdc;border-radius:.5rem;padding:.4rem .6rem}
+
 .btn{appearance:none;border:1px solid rgba(30,144,255,0.35);background:linear-gradient(180deg,rgba(6,18,30,.75),rgba(2,10,20,.6));color:#dbeeff;padding:.42rem .7rem;border-radius:.5rem;font-size:.92rem;letter-spacing:.02em;cursor:pointer;transition:transform 80ms ease,background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,opacity 120ms ease;box-shadow:inset 0 0 0 1px rgba(120,200,255,0.08)}
 .btn:hover{background:linear-gradient(180deg,rgba(10,28,44,.85),rgba(2,12,20,.7));border-color:rgba(120,200,255,0.5)}
 .btn:active{transform:translateY(1px) scale(0.995)}
@@ -1007,22 +992,23 @@ export default {
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 .btn.small{padding:.32rem .55rem;font-size:.86rem;border-radius:.45rem}
 .btn.xsmall{padding:.22rem .45rem;font-size:.80rem;border-radius:.42rem}
-.btn.primary{background:linear-gradient(180deg,rgba(8,40,22,.9),rgba(6,28,18,.85));border-color:rgba(90,220,160,0.45);box-shadow:inset 0 0 0 1px rgba(90,220,160,0.15)}
+.btn.primary{background:linear-gradient(180deg,rgba(8,40,22,.9),rgba(6,28,18,.85));border-color:rgba(90,220,160,0.45);box-shadow:inset 0 0 0 1px rgba(90,220,160,0.15);color:#eafff5}
 .btn.primary:hover{border-color:rgba(120,255,190,0.6);background:linear-gradient(180deg,rgba(10,50,28,.95),rgba(6,32,20,.9))}
-.btn.ghost{background:rgba(0,10,30,0.25)}
+.btn.ghost{background:rgba(0,10,30,0.25);color:var(--text)}
 .pts.big{color:#caffe9;border:1px solid rgba(120,255,190,.45);border-radius:.45rem;padding:.12rem .5rem}
 .pts.big.over{color:#ffd4d4;border-color:rgba(255,140,140,.55)}
+
 .section-content-container.animate{animation:contentEntry 260ms ease-out both}
 @keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}}
 
-/* -------- Adopted from PilotsView (card look) -------- */
-/* meta header (points & tag) */
-.squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
+/* -------- Adopted card look (light text enforced) -------- */
+.squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem;color:var(--text)}
 .squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
-.squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
-.loadout-status{margin-top:.35rem;display:flex;gap:.75rem;align-items:center;font-size:.85rem;text-transform:uppercase}
-.loadout-status .points{color:#9ec5e6}.loadout-status .warn{color:rgba(255,190,80,0.95)}.loadout-status .ok{color:rgba(120,255,170,0.9)}
-.squad-tag{border:2px solid #1e90ff;border-radius:.6rem;padding:.35rem .6rem;color:#1e90ff;font-weight:700}
+.squad-title h2{color:var(--text)}
+.squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:var(--muted)}
+.loadout-status{margin-top:.35rem;display:flex;gap:.75rem;align-items:center;font-size:.85rem;text-transform:uppercase;color:var(--text)}
+.loadout-status .points{color:var(--muted)}.loadout-status .warn{color:rgba(255,190,80,0.95)}.loadout-status .ok{color:rgba(120,255,170,0.9)}
+.squad-tag{border:2px solid #1e90ff;border-radius:.6rem;padding:.35rem .6rem;color:#1e90ff;font-weight:700;background:rgba(0,10,30,0.3)}
 
 /* grid */
 .squad-members-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.95rem}
@@ -1032,7 +1018,7 @@ export default {
 @media (max-width:620px){.squad-members-grid{grid-template-columns:1fr}}
 
 /* card */
-.member-card{position:relative;background:rgba(0,10,30,0.95);border-radius:.4rem;border-left:4px solid #1e90ff;box-shadow:0 0 10px rgba(0,0,0,0.6);padding:.9rem 1.1rem;display:flex;flex-direction:column}
+.member-card{position:relative;background:rgba(0,10,30,0.95);border-radius:.4rem;border-left:4px solid #1e90ff;box-shadow:0 0 10px rgba(0,0,0,0.6);padding:.9rem 1.1rem;display:flex;flex-direction:column;color:var(--text)}
 .member-card.vacant,.member-card.closed{border-left-color:rgba(30,144,255,0.35)}
 .member-card.vacant{background:repeating-linear-gradient(45deg,rgba(30,144,255,0.06) 0,rgba(30,144,255,0.06) 10px,transparent 10px,transparent 20px),rgba(0,12,25,0.9);border-left-style:dashed}
 .member-card.closed{filter:grayscale(85%);opacity:.6;background:repeating-linear-gradient(45deg,rgba(200,200,200,0.06) 0,rgba(200,200,200,0.06) 8px,transparent 8px,transparent 16px),repeating-linear-gradient(-45deg,rgba(200,200,200,0.04) 0,rgba(200,200,200,0.04) 8px,transparent 8px,transparent 16px),rgba(1,6,14,0.9)}
@@ -1040,31 +1026,36 @@ export default {
 
 /* header/body/footer */
 .member-header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.9rem}
-.member-header h3{margin:0;font-size:1.1rem;color:#e0f0ff;word-break:break-word}
-.rank-line{margin:.15rem 0 0;font-size:.88rem;color:#9ec5e6;display:flex;gap:.6rem;flex-wrap:wrap}
+.member-header h3{margin:0;font-size:1.1rem;color:#e0f0ff}
+.rank-line{margin:.15rem 0 0;font-size:.88rem;color:var(--muted);display:flex;gap:.6rem;flex-wrap:wrap}
 .member-body{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-top:.6rem;font-size:.9rem}
-.member-column p{margin:.18rem 0}
-.member-footer{margin-top:.6rem;font-size:.75rem;color:#7aa7c7;display:flex;justify-content:space-between}
+.member-column p,.member-column span,.member-column label{color:var(--text)}
+.member-footer{margin-top:.6rem;font-size:.75rem;color:#b8d0e4;display:flex;justify-content:space-between}
 
 /* cert list look */
-.detail-line strong{color:#9ec5e6}
-.role-accent{color:#55ff88;font-weight:600}
-.primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:#9ec5e6}
+.detail-line strong{color:var(--muted)}
+.role-accent{color:#caffe9;font-weight:600}
+.primary-label{display:block;margin-bottom:.15rem;font-size:.85rem;color:var(--muted)}
 .loadout-row{margin-top:.4rem}
-.loadout-select{width:100%;background:#040a14;border:1px solid rgba(30,144,255,.45);color:#dce6f1;border-radius:.3rem;padding:.25rem .35rem}
+.loadout-select{width:100%;background:#040a14;border:1px solid rgba(30,144,255,.45);color:var(--text);border-radius:.3rem;padding:.25rem .35rem}
+.loadout-select option{color:#111;background:#e8f0ff}
 .cert-list{display:grid;grid-template-columns:20px 1fr;row-gap:.28rem}
 .cert-row{display:contents}
 .cert-checkbox{width:16px;height:16px;border:1px solid rgba(30,144,255,.6);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
 .cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
 .checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
+.cert-label,.cert-none{color:var(--text)}
 
-/* picker shell (reuse PilotsView modal look) */
+/* disposable label */
+.disposable{color:var(--text)}
+
+/* picker shell */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
-.squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
+.squad-modal{background-color:#050811;color:var(--text);width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
 .squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
-.squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:#dce6f1;border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer}
-.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.4rem 0 .2rem}
-.search{flex:1;min-width:260px;padding:.4rem .6rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:#e6f3ff}
+.squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:var(--text);border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer}
+.picker-controls{display:flex;gap:.8rem;align-items:center;padding:.4rem 0 .2rem;color:var(--text)}
+.search{flex:1;min-width:260px;padding:.4rem .6rem;border:1px solid rgba(30,144,255,.45);border-radius:.35rem;background:#040a14;color:var(--text)}
 .pick-row.assigned{background:rgba(30,144,255,0.08)}
 .squad-modal-scroll{overflow:auto;padding-right:.4rem;margin-top:.2rem;max-height:calc(90vh - 200px)}
 </style>
