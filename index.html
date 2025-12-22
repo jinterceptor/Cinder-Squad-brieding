@@ -10,20 +10,11 @@
   <body style="margin: 0px">
     <div id="app"></div>
 
-    <!-- Your app -->
-    <script type="module" src="/src/main.js"></script>
-
-    <!-- three.js + vanta (unchanged) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script type="module" src="/src/assets/scripts/vanta.globe.min.js"></script>
-
-    <!-- ✅ Deployment-only globals (no meta, no generic localStorage keys) -->
+    <!-- ✅ Deployment-only globals (namespaced; read-only; safe for auth) -->
     <script>
-      // Why: give DeploymentView its own endpoint without colliding with auth.
       window.DEPLOYMENT_EXEC_URL =
         "https://script.google.com/macros/s/AKfycbzDhKyzdKylfdCKV5n--av0_AmkqDgVeNBPtUoLWQFic7E3YiVBnaZDNope_7B3hkem/exec";
 
-      // Optional data feeds for views that use CSVs
       window.DEFAULTS_CSV_URL =
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=107253735&single=true&output=csv";
       window.MEMBERS_MASTER_CSV =
@@ -31,6 +22,12 @@
       window.ATTENDANCE_CSV =
         "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq9fpYoWY_heQNfXegQ52zvOIGk-FCMML3kw2cX3M3s8blNRSH6XSRUdtTo7UXaJDDkg4bGQcl3jRP/pub?gid=1115158828&single=true&output=csv";
     </script>
+
+    <!-- Your app boot (unchanged order) -->
+    <script type="module" src="/src/main.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script type="module" src="/src/assets/scripts/vanta.globe.min.js"></script>
 
     <script type="module">
       VANTA.GLOBE({
