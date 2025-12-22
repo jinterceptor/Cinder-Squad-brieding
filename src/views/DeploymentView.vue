@@ -1,11 +1,6 @@
 <!-- src/views/DeploymentView.vue -->
 <template>
-  <div
-    id="deploymentView"
-    class="content-container"
-    :class="{ animate: animateView }"
-    :style="{ 'animation-delay': animationDelay }"
-  >
+  <div id="deploymentView" class="content-container" :class="{ animate: animateView }" :style="{ 'animation-delay': animationDelay }">
     <section class="section-container deployment-window">
       <div class="header-shell">
         <div class="section-header clipped-medium-backward-pilot">
@@ -17,7 +12,6 @@
 
       <div class="section-content-container deploy-scroll" :class="{ animate: animateView }">
         <div class="panel">
-          <!-- Top toolbar: Chalk picker + actions + points -->
           <div class="detail-toolbar">
             <div class="toolbar-left">
               <label class="muted small">Chalk</label>
@@ -29,15 +23,17 @@
               <button class="btn ghost small" @click="resetPlan">Reset All</button>
             </div>
 
-            <div class="muted small toolbar-right">
-              <span>{{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }} assigned</span>
+            <div class="toolbar-right">
+              <span class="muted small">
+                {{ filledCount(currentUnit) }} / {{ currentUnit?.slots.length || 0 }} assigned
+              </span>
               <span class="divider" />
-              <span
-                v-if="currentUnit"
-                class="pts big"
-                :class="{ over: unitPointsUsed(currentUnit) > SQUAD_POINT_CAP }"
-              >
+              <span v-if="currentUnit" class="pts big" :class="{ over: unitPointsUsed(currentUnit) > SQUAD_POINT_CAP }">
                 Points: {{ unitPointsUsed(currentUnit) }} / {{ SQUAD_POINT_CAP }}
+              </span>
+              <span class="divider" />
+              <span class="muted small">
+                {{ authModeLabel }}
               </span>
             </div>
           </div>
@@ -45,27 +41,17 @@
           <div v-if="apiError" class="warn">{{ apiError }}</div>
           <div v-if="!currentUnit" class="muted">No chalk selected.</div>
 
-          <!-- Detailed editor for the selected Chalk -->
           <div v-else class="group-card">
             <div v-if="detailError" class="warn">{{ detailError }}</div>
 
             <div class="slots-grid">
-              <div
-                v-for="(slot, sIdx) in currentUnit.slots"
-                :key="`slot-${detailKey}-${sIdx}`"
-                class="slot"
-                :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }"
-              >
+              <div v-for="(slot, sIdx) in currentUnit.slots" :key="`slot-${detailKey}-${sIdx}`"
+                   class="slot" :class="{ vacant: slot.origStatus === 'VACANT', closed: slot.origStatus === 'CLOSED' }">
                 <div class="slot-topline">
                   <span class="slot-tag">#{{ sIdx + 1 }}</span>
                   <span class="slot-role" :title="slot.role || 'Slot'">{{ slot.role || 'Slot' }}</span>
                   <div style="display:flex; gap:.35rem;">
-                    <button
-                      v-if="slot.id"
-                      type="button"
-                      class="btn ghost xsmall"
-                      @click.stop="clearSlot(detailKey, sIdx)"
-                    >Clear</button>
+                    <button v-if="slot.id" type="button" class="btn ghost xsmall" @click.stop="clearSlot(detailKey, sIdx)">Clear</button>
                     <button type="button" class="btn ghost xsmall" @click.stop="removeSlot(detailKey, sIdx)">–</button>
                   </div>
                 </div>
@@ -73,41 +59,23 @@
                 <div class="slot-body">
                   <div class="slot-name" :title="displayName(slot)">{{ displayName(slot) }}</div>
 
-                  <!-- Cert picker -->
                   <div v-if="slot.id" class="zoom-cert">
                     <label>Cert</label>
-                    <select
-                      class="select"
-                      :value="slot.cert || ''"
-                      @change="onChangeCert(detailKey, sIdx, $event.target.value)"
-                    >
+                    <select class="select" :value="slot.cert || ''" @change="onChangeCert(detailKey, sIdx, $event.target.value)">
                       <option value="">—</option>
-                      <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">
-                        {{ c }}{{ certPointSuffix(c) }}
-                      </option>
+                      <option v-for="c in getCertsForPersonId(slot.id)" :key="c" :value="c">{{ c }}{{ certPointSuffix(c) }}</option>
                     </select>
                   </div>
 
-                  <!-- Disposable -->
                   <div v-if="slot.id && currentUnit" class="disp-row">
                     <label class="check">
-                      <input
-                        type="checkbox"
-                        :checked="!!slot.disposable"
-                        @change="onToggleDisposable(detailKey, sIdx, $event.target.checked)"
-                      />
-                      <span class="check-label">
-                        Disposable launcher <span class="muted small">( +{{ DISPOSABLE_COST }} pt )</span>
-                      </span>
+                      <input type="checkbox" :checked="!!slot.disposable" @change="onToggleDisposable(detailKey, sIdx, $event.target.checked)" />
+                      <span class="check-label">Disposable launcher <span class="muted small">( +{{ DISPOSABLE_COST }} pt )</span></span>
                     </label>
                   </div>
 
-                  <button
-                    type="button"
-                    class="btn primary pick"
-                    :disabled="slot.origStatus === 'CLOSED'"
-                    @click.stop="openPicker(detailKey, sIdx)"
-                  >
+                  <button type="button" class="btn primary pick"
+                          :disabled="slot.origStatus === 'CLOSED'" @click.stop="openPicker(detailKey, sIdx)">
                     {{ slot.id ? 'Swap' : (slot.origStatus === 'CLOSED' ? 'Closed' : 'Assign') }}
                   </button>
                 </div>
@@ -118,7 +86,6 @@
               <button type="button" class="btn ghost" @click.stop="addSlot(detailKey)">Add slot</button>
               <button type="button" class="btn ghost" @click.stop="exportJson">Export JSON (Local)</button>
 
-              <!-- Remote actions -->
               <span class="divider" />
               <button type="button" class="btn primary" :disabled="busy" @click="saveRemote(detailKey)">
                 {{ busy ? 'Saving…' : 'Save Chalk (Remote)' }}
@@ -138,10 +105,7 @@
     <div v-if="picker.open" class="picker-veil" @click.self="closePicker">
       <div class="picker">
         <div class="picker-head">
-          <h3>
-            {{ currentSlotTitle }}
-            <span class="muted">— select soldier</span>
-          </h3>
+          <h3>{{ currentSlotTitle }} <span class="muted">— select soldier</span></h3>
           <button type="button" class="btn ghost" @click="closePicker">Close</button>
         </div>
 
@@ -151,12 +115,7 @@
         </div>
 
         <div class="picker-list">
-          <div
-            v-for="p in filteredPersonnel"
-            :key="p.id"
-            class="pick-row"
-            :class="{ assigned: !!findAssignment(p.id) }"
-          >
+          <div v-for="p in filteredPersonnel" :key="p.id" class="pick-row" :class="{ assigned: !!findAssignment(p.id) }">
             <div class="pick-info">
               <div class="p-name" :title="p.name">{{ p.name }}</div>
               <div class="p-meta">
@@ -165,9 +124,7 @@
               </div>
             </div>
             <div class="pick-status">
-              <span v-if="findAssignment(p.id)" class="badge">
-                Assigned: {{ formatAssignment(findAssignment(p.id)) }}
-              </span>
+              <span v-if="findAssignment(p.id)" class="badge">Assigned: {{ formatAssignment(findAssignment(p.id)) }}</span>
             </div>
             <div class="pick-actions">
               <button type="button" class="btn primary small" @click.stop="selectPersonnel(p)">Select</button>
@@ -185,18 +142,14 @@
 </template>
 
 <script>
-/**
- * NOTE: Set execUrl/secret/token via props from your app shell.
- * token fallback: tries localStorage.getItem('token').
- */
 export default {
   name: "DeploymentView",
   props: {
     animate: { type: Boolean, default: true },
     orbat: { type: Array, default: () => [] },
-    execUrl: { type: String, default: "" },   // e.g. https://script.google.com/macros/s/.../exec
+    execUrl: { type: String, default: "" },   // Apps Script /exec
     secret: { type: String, default: "PLEX" },
-    token:  { type: String, default: "" },
+    token:  { type: String, default: "" },    // optional; site can still pass it
   },
   data() {
     return {
@@ -213,9 +166,9 @@ export default {
 
       personnel: [],
       STORAGE_KEY: "deploymentPlan2",
-
-      // Remote versions tracker per unitId (unit key)
       versions: {},
+
+      deviceId: "",
 
       MIN_CHALK_SLOTS: 12,
       ROLE_ORDER: ["squad lead", "team leader", "corpsman 1", "corpsman 2"],
@@ -234,12 +187,11 @@ export default {
     };
   },
   created() {
+    this.ensureDeviceId();
     this.personnel = this.buildPersonnelPool(this.orbat);
-
     const built = this.buildUnitsFromOrbat(this.orbat).filter(u => this.isPointsUnit(u.title));
     built.forEach(u => u.slots.forEach(s => { if (typeof s.disposable === "undefined") s.disposable = false; }));
     this.plan.units = built;
-
     if (this.plan.units.length) this.detailKey = this.plan.units[0].key;
   },
   mounted() { this.triggerFlicker(0); },
@@ -254,29 +206,67 @@ export default {
     filteredPersonnel() {
       const q = this.picker.query.trim().toLowerCase();
       const base = this.personnel.filter(
-        p =>
-          !q ||
+        p => !q ||
           (p.name || "").toLowerCase().includes(q) ||
           (p.callsign || "").toLowerCase().includes(q) ||
           (p.role || "").toLowerCase().includes(q)
       );
       return this.picker.onlyFree ? base.filter(p => !this.findAssignment(p.id)) : base;
     },
+    // prefer a provided token; fallback to common storage if present; otherwise empty
     authToken() {
-      return this.token || (typeof localStorage !== "undefined" ? localStorage.getItem("token") : "") || "";
+      const tProp = (this.token || "").trim();
+      if (tProp) return tProp;
+      try {
+        const ls = typeof localStorage !== "undefined" ? localStorage : null;
+        const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
+        const fromLS = ls?.getItem("token") || ls?.getItem("authToken") || ls?.getItem("jwt") || "";
+        const fromSS = ss?.getItem("token") || ss?.getItem("authToken") || ss?.getItem("jwt") || "";
+        return (fromLS || fromSS || "").trim();
+      } catch { return ""; }
     },
-    apiBase() {
-      return this.execUrl || "";
+    authModeLabel() {
+      return this.authToken ? "User mode (token)" : "Device mode (anonymous)";
     },
+    apiBase() { return this.execUrl || ""; },
   },
   methods: {
+    /* -------- Device ID (anon mode) -------- */
+    ensureDeviceId() {
+      try {
+        const key = "orbatDeviceId";
+        const existing = localStorage.getItem(key);
+        if (existing && /^[a-zA-Z0-9_.-]{8,}$/.test(existing)) {
+          this.deviceId = existing;
+          return;
+        }
+        const id = this.makeDeviceId();
+        localStorage.setItem(key, id);
+        this.deviceId = id;
+      } catch {
+        // last resort: ephemeral id (not persisted)
+        this.deviceId = this.makeDeviceId();
+      }
+    },
+    makeDeviceId() {
+      // short, URL-safe id
+      const r = crypto && crypto.getRandomValues ? crypto.getRandomValues(new Uint8Array(12)) : Array.from({length:12},()=>Math.floor(Math.random()*256));
+      return Array.from(r).map(b => b.toString(16).padStart(2,'0')).join('');
+    },
+
     /* -------- Remote API -------- */
     async apiPost(action, body, raw = false) {
       if (!this.apiBase) throw new Error("execUrl missing");
+      const payload = {
+        secret: this.secret || "PLEX",
+        action,
+        ...(this.authToken ? { token: this.authToken } : { deviceId: this.deviceId }),
+        ...body,
+      };
       const res = await fetch(this.apiBase, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret: this.secret || "PLEX", action, token: this.authToken, ...body }),
+        body: JSON.stringify(payload),
       });
       return raw ? res : res.json();
     },
@@ -288,7 +278,6 @@ export default {
     },
     async loadRemote(unitKey) {
       if (!unitKey) return;
-      if (!this.authToken) { this.apiError = "Missing token."; return; }
       this.apiError = ""; this.busy = true;
       try {
         const { ok, data, error } = await this.apiPost("config:get", { unitId: unitKey });
@@ -298,7 +287,7 @@ export default {
         const idx = this.plan.units.findIndex(u => u.key === unitKey);
         if (idx === -1) return;
         const curr = this.plan.units[idx];
-        // Minimal merge: replace slots by id/name/role/cert/disposable
+
         const nextSlots = (parsed.slots || []).map(s => ({
           id: s.id ?? null, name: s.name ?? null, role: s.role || "", origStatus: "FILLED",
           cert: s.cert || "", disposable: !!s.disposable,
@@ -316,7 +305,6 @@ export default {
     },
     async saveRemote(unitKey) {
       if (!unitKey) return;
-      if (!this.authToken) { this.apiError = "Missing token."; return; }
       const unit = this.plan.units.find(u => u.key === unitKey);
       if (!unit) return;
       this.apiError = ""; this.busy = true;
@@ -325,11 +313,7 @@ export default {
         const payload = this.unitPayload(unit);
         const res = await this.apiPost("config:save", { unitId: unitKey, config: payload, expectedVersion });
         if (res.conflict && res.current) {
-          // why: notify conflict and allow overwrite
-          const theirs = JSON.parse(res.current.configJSON || "{}");
-          this.apiError = `Remote conflict (v${res.current.version}). Reload or press Save again to overwrite.`;
-          // Overwrite path: save again using current server version
-          // (Keep conservative: only auto-overwrite if user tries again)
+          this.apiError = `Remote conflict (v${res.current.version}). Press Save again to overwrite.`;
           this.versions = { ...this.versions, [unitKey]: Number(res.current.version || 0) };
           return;
         }
@@ -342,7 +326,6 @@ export default {
       }
     },
     async exportRemote(format = "json") {
-      if (!this.authToken) { this.apiError = "Missing token."; return; }
       this.apiError = ""; this.busy = true;
       try {
         const res = await this.apiPost("config:export", { format }, true);
@@ -360,22 +343,10 @@ export default {
       }
     },
 
-    /* -------- Existing logic (trimmed to essentials) -------- */
-    isPointsUnit(title) {
-      const t = String(title || "").toLowerCase();
-      return /\bchalk\s*[1-4]\b/.test(t);
-    },
-    triggerFlicker(delayMs = 0) {
-      this.animateView = false;
-      this.animationDelay = `${delayMs}ms`;
-      this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true)));
-    },
-    switchUnit(key) {
-      if (!key || key === this.detailKey) return;
-      this.detailKey = key;
-      this.detailError = "";
-      this.triggerFlicker(0);
-    },
+    /* -------- existing local logic (unchanged) -------- */
+    isPointsUnit(title) { const t = String(title || "").toLowerCase(); return /\bchalk\s*[1-4]\b/.test(t); },
+    triggerFlicker(delayMs = 0) { this.animateView = false; this.animationDelay = `${delayMs}ms`; this.$nextTick(() => requestAnimationFrame(() => (this.animateView = true))); },
+    switchUnit(key) { if (!key || key === this.detailKey) return; this.detailKey = key; this.detailError = ""; this.triggerFlicker(0); },
     persistPlan() { try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.plan)); } catch {} },
     normalizeRole(txt) {
       const t = String(txt || "").toLowerCase().trim();
@@ -388,17 +359,8 @@ export default {
       }
       return t;
     },
-    rolePriority(role) {
-      const key = this.normalizeRole(role);
-      const idx = this.ROLE_ORDER.indexOf(key);
-      return idx === -1 ? 10_000 : idx;
-    },
-    sortSlotsByRole(slots) {
-      return slots
-        .map((s, i) => ({ s, i, p: this.rolePriority(s.role) }))
-        .sort((a, b) => a.p - b.p || a.i - b.i)
-        .map(x => x.s);
-    },
+    rolePriority(role) { const key = this.normalizeRole(role); const idx = this.ROLE_ORDER.indexOf(key); return idx === -1 ? 10000 : idx; },
+    sortSlotsByRole(slots) { return slots.map((s,i)=>({s,i,p:this.rolePriority(s.role)})).sort((a,b)=>a.p-b.p||a.i-b.i).map(x=>x.s); },
     extractCertsFromMember(member) {
       const arr = member?.certifications;
       if (Array.isArray(arr) && arr.length) {
@@ -425,9 +387,7 @@ export default {
         const tokens = raw.split(/[;,/|]/g).map(s => s.trim()).filter(Boolean);
         return [...new Set(tokens.map(this.bestCertLabelMatch).filter(Boolean))];
       }
-      if (Array.isArray(raw)) {
-        return [...new Set(raw.map(this.bestCertLabelMatch).filter(Boolean))];
-      }
+      if (Array.isArray(raw)) { return [...new Set(raw.map(this.bestCertLabelMatch).filter(Boolean))]; }
       return [];
     },
     bestCertLabelMatch(name) {
@@ -442,24 +402,14 @@ export default {
       for (const label of this.certLabels) if (n.includes(label.toLowerCase())) return label;
       return "";
     },
-    getCertsForPersonId(personId) {
-      const p = this.personnel.find(pp => String(pp.id) === String(personId));
-      return p?.certs || [];
-    },
-    certPointSuffix(label) {
-      const pts = this.CERT_POINTS[label] ?? 0;
-      return pts ? ` (+${pts})` : "";
-    },
+    getCertsForPersonId(personId) { const p = this.personnel.find(pp => String(pp.id) === String(personId)); return p?.certs || []; },
+    certPointSuffix(label) { const pts = this.CERT_POINTS[label] ?? 0; return pts ? ` (+${pts})` : ""; },
     ensureSlotCert(slot, fallbackRole = "") {
       if (slot.cert) return slot.cert;
       const certs = this.getCertsForPersonId(slot.id) || [];
       return certs[0] || this.titleCase(String(fallbackRole || slot.role || ""));
     },
-    titleCase(s) {
-      const t = String(s || "").replace(/[_-]+/g, " ").trim();
-      if (!t) return "";
-      return t.replace(/\s+/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
-    },
+    titleCase(s) { const t = String(s || "").replace(/[_-]+/g, " ").trim(); if (!t) return ""; return t.replace(/\s+/g," ").toLowerCase().replace(/\b\w/g,m=>m.toUpperCase()); },
     buildPersonnelPool(orbat) {
       const pool = [];
       (orbat || []).forEach(sq => {
@@ -468,13 +418,7 @@ export default {
             if (s?.member) {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
               const certs = this.extractCertsFromMember(s.member);
-              pool.push({
-                id,
-                name: String(s.member.name || "Unknown"),
-                callsign: String(s.member.callsign || ""),
-                role: String(s.role || s.member.slot || ""),
-                certs,
-              });
+              pool.push({ id, name: String(s.member.name || "Unknown"), callsign: String(s.member.callsign || ""), role: String(s.role || s.member.slot || ""), certs });
             }
           });
         });
@@ -484,11 +428,7 @@ export default {
       return out;
     },
     isChalk(title) { return /\bchalk\s*\d+\b/i.test(String(title || "")); },
-    padSlots(arr, min) {
-      const out = arr.slice();
-      while (out.length < min) out.push({ id: null, name: null, role: "", origStatus: "VACANT", cert: "", disposable: false });
-      return out;
-    },
+    padSlots(arr, min) { const out = arr.slice(); while (out.length < min) out.push({ id:null, name:null, role:"", origStatus:"VACANT", cert:"", disposable:false }); return out; },
     keyFromName(name) { return String(name || "").trim().toLowerCase().replace(/\s+/g, "-"); },
     filledCount(g) { if(!g) return 0; return g.slots.reduce((n, s) => n + (s.id ? 1 : 0), 0); },
     displayName(slot) { return slot.name || (slot.origStatus === "VACANT" ? "— Vacant —" : "— Empty —"); },
@@ -502,14 +442,7 @@ export default {
             const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
             const origStatus = ["VACANT", "CLOSED"].includes(status) ? status : "FILLED";
             const member = s?.member || null;
-            const slot = {
-              id: member?.id ? String(member.id) : null,
-              name: member?.name || null,
-              role: s?.role || member?.slot || "",
-              origStatus,
-              cert: "",
-              disposable: false,
-            };
+            const slot = { id: member?.id ? String(member.id) : null, name: member?.name || null, role: s?.role || member?.slot || "", origStatus, cert: "", disposable: false };
             if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
             slots.push(slot);
           });
@@ -529,14 +462,7 @@ export default {
           const status = String(s?.status || (s?.member ? "FILLED" : "VACANT")).toUpperCase();
           const origStatus = ["VACANT", "CLOSED"].includes(status) ? status : "FILLED";
           const member = s?.member || null;
-          const slot = {
-            id: member?.id ? String(member.id) : null,
-            name: member?.name || null,
-            role: s?.role || member?.slot || "",
-            origStatus,
-            cert: "",
-            disposable: false,
-          };
+          const slot = { id: member?.id ? String(member.id) : null, name: member?.name || null, role: s?.role || member?.slot || "", origStatus, cert: "", disposable: false };
           if (slot.id) slot.cert = this.ensureSlotCert(slot, slot.role);
           slots.push(slot);
         });
@@ -591,10 +517,7 @@ export default {
       const prevPts = (this.CERT_POINTS[target.cert] ?? 0) + (target.disposable ? this.DISPOSABLE_COST : 0);
       const nextPts = (this.CERT_POINTS[chosenCertDefault] ?? 0);
       const delta = nextPts - prevPts;
-      if (this.wouldExceedCap(g.key, Math.max(0, delta))) {
-        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
-        return;
-      }
+      if (this.wouldExceedCap(g.key, Math.max(0, delta))) { this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`; return; }
       this.detailError = "";
 
       if (from && target?.id && !(from.unitKey === g.key && from.slotIdx === this.picker.slotIdx)) {
@@ -602,11 +525,7 @@ export default {
         const srcGroup = this.plan.units[srcIdx];
         const tmp = { ...target };
 
-        const newTarget = {
-          ...target, id: p.id, name: p.name,
-          role: target.role || p.role || "", cert: chosenCertDefault, disposable: false,
-        };
-
+        const newTarget = { ...target, id: p.id, name: p.name, role: target.role || p.role || "", cert: chosenCertDefault, disposable: false };
         const newSrcSlots = srcGroup.slots.slice();
         newSrcSlots[from.slotIdx] = { ...newSrcSlots[from.slotIdx], id: tmp.id, name: tmp.name, cert: tmp.cert || this.ensureSlotCert(tmp, tmp.role), disposable: !!tmp.disposable };
         const newSrc = { ...srcGroup, slots: this.sortSlotsByRole(newSrcSlots) };
@@ -670,7 +589,6 @@ export default {
       this.detailError = "";
     },
 
-    /* points-aware handlers */
     onChangeCert(unitKey, slotIdx, nextCert) {
       const uIdx = this.plan.units.findIndex(u => u.key === unitKey);
       if (uIdx < 0) return;
@@ -681,10 +599,7 @@ export default {
       const nextPts = (this.CERT_POINTS[nextCert] ?? 0) + (slot.disposable ? this.DISPOSABLE_COST : 0);
       const delta = nextPts - prevPts;
 
-      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
-        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
-        return;
-      }
+      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) { this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`; return; }
       this.detailError = "";
 
       const newSlots = unit.slots.slice();
@@ -703,10 +618,7 @@ export default {
       const remove = !checked ? this.DISPOSABLE_COST : 0;
       const delta = add - remove;
 
-      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) {
-        this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`;
-        return;
-      }
+      if (this.wouldExceedCap(unitKey, Math.max(0, delta))) { this.detailError = `Point cap ( ${this.SQUAD_POINT_CAP} ) would be exceeded.`; return; }
       this.detailError = "";
 
       const newSlots = unit.slots.slice();
@@ -716,7 +628,7 @@ export default {
       this.persistPlan();
     },
 
-    /* fill / reset */
+    /* fill / reset / export */
     fillFromRoster(unitKey) {
       const rebuilt = this.buildUnitFromOrbatByKey(this.orbat, unitKey);
       if (!rebuilt) return;
@@ -739,8 +651,6 @@ export default {
       this.detailError = "";
       this.triggerFlicker(0);
     },
-
-    /* utility */
     exportJson() {
       const blob = new Blob([JSON.stringify(this.plan, null, 2)], { type: "application/json" });
       this.downloadBlob(blob, "deployment-plan.json");
@@ -753,17 +663,13 @@ export default {
     },
   },
   watch: {
-    orbat: { deep: true, handler(newV) {
-      if (Array.isArray(newV) && newV.length) {
-        this.personnel = this.buildPersonnelPool(newV);
-      }
-    }},
+    orbat: { deep: true, handler(newV) { if (Array.isArray(newV) && newV.length) { this.personnel = this.buildPersonnelPool(newV); } } },
   },
 };
 </script>
 
 <style scoped>
-/* (original styles kept) */
+/* (styles identical to previous message except token box removed) */
 #deploymentView{display:grid;grid-template-columns:1fr;gap:1.2rem;align-items:start;height:calc(94vh - 100px);overflow:hidden;padding:28px 18px 32px}
 .deployment-window.section-container{max-width:none!important;width:auto}
 .header-shell{height:52px;overflow:hidden}.section-header,.section-content-container{width:100%}
