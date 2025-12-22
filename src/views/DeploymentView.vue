@@ -224,15 +224,13 @@
               <button type="button" class="btn" :disabled="busy || !apiBase" @click="loadRemote(detailKey)">
                 Load Chalk (Remote) <span v-if="versions[detailKey] !== undefined" class="muted small">v{{ versions[detailKey] }}</span>
               </button>
-
-              <!-- Overview button moved to top; removed here -->
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Assign/Swap Picker — compact -->
+    <!-- Assign/Swap Picker (compact) -->
     <div v-if="picker.open" class="squad-overlay" @click.self="closePicker">
       <div class="squad-modal compact">
         <div class="compact-header">
@@ -288,11 +286,11 @@
       </div>
     </div>
 
-    <!-- Overview Modal (bigger) -->
+    <!-- Overview Modal (2×2 grid, remote-or-default) -->
     <div v-if="overview.open" class="squad-overlay" @click.self="closeOverview">
       <div class="squad-modal overview">
         <div class="compact-header">
-          <h3>Saved Loadouts Overview</h3>
+          <h3>Chalk Loadouts Overview</h3>
           <div style="display:flex; gap:.5rem;">
             <button class="btn ghost small" @click="refreshOverview" :disabled="overview.loading">
               {{ overview.loading ? 'Refreshing…' : 'Refresh' }}
@@ -305,28 +303,37 @@
         <div v-if="overview.error" class="warn" style="margin-top:.5rem">{{ overview.error }}</div>
 
         <div class="squad-modal-scroll">
-          <div class="overview-grid">
+          <div class="overview-grid two-by-two">
             <div v-for="u in chalkUnits" :key="u.key" class="overview-card">
               <div class="overview-head">
                 <div class="left">
                   <div class="title">{{ u.title }}</div>
                   <div class="meta">
-                    <span v-if="ovItem(u.key)?.version !== undefined">v{{ ovItem(u.key).version }}</span>
-                    <span v-if="ovItem(u.key)?.savedBy">by {{ ovItem(u.key).savedBy }}</span>
-                    <span v-if="ovItem(u.key)?.savedAt">at {{ formatDate(ovItem(u.key).savedAt) }}</span>
-                    <span v-if="ovItem(u.key) && ovItem(u.key).points !== undefined">· {{ ovItem(u.key).points }} pts</span>
-                    <span v-if="!ovItem(u.key)" class="muted">Not saved yet</span>
+                    <template v-if="ovItem(u.key)">
+                      <span>v{{ ovItem(u.key).version }}</span>
+                      <span v-if="ovItem(u.key).savedBy">by {{ ovItem(u.key).savedBy }}</span>
+                      <span v-if="ovItem(u.key).savedAt">at {{ formatDate(ovItem(u.key).savedAt) }}</span>
+                      <span v-if="ovItem(u.key).points !== undefined">· {{ ovItem(u.key).points }} pts</span>
+                    </template>
+                    <template v-else>
+                      <span class="chip muted">Not saved — showing default</span>
+                      <span>· {{ slotsPoints(u.slots) }} pts</span>
+                    </template>
                   </div>
                 </div>
                 <div class="right">
                   <button class="btn small" :disabled="!apiBase || overview.loading" @click="loadRemote(u.key)">
-                    Load
+                    Load Saved
                   </button>
                 </div>
               </div>
 
-              <div v-if="ovItem(u.key)" class="overview-body">
-                <div class="slot-row" v-for="(s, idx) in ovItem(u.key).slots" :key="idx">
+              <div class="overview-body">
+                <div
+                  class="slot-row"
+                  v-for="(s, idx) in (ovItem(u.key) ? ovItem(u.key).slots : u.slots)"
+                  :key="idx"
+                >
                   <div class="slot-left">
                     <span class="slot-name">{{ s.name || 'VACANT' }}</span>
                     <span class="slot-id" v-if="s.id">ID: {{ s.id }}</span>
@@ -337,8 +344,8 @@
                     <span class="slot-disp" v-if="s.disposable">Disp</span>
                   </div>
                 </div>
+                <div v-if="!(ovItem(u.key) ? ovItem(u.key).slots : u.slots)?.length" class="overview-empty">—</div>
               </div>
-              <div v-else class="overview-empty">—</div>
             </div>
           </div>
         </div>
@@ -1338,17 +1345,16 @@ export default {
   width:96vw; max-width:1600px; max-height:92vh;
 }
 
-/* Overview grid/cards */
-.overview-grid{
+/* Overview grid/cards — 2×2 on wide screens */
+.overview-grid.two-by-two{
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:1rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:1.1rem;
 }
-@media (max-width:1280px){ .overview-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media (max-width:900px){ .overview-grid{ grid-template-columns:1fr; } }
+@media (max-width:1100px){ .overview-grid.two-by-two{ grid-template-columns:1fr; } }
 
 .compact-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(30,144,255,.35);padding-bottom:.4rem}
-.compact-header h3{margin:0;font-size:1.05rem;color:#e6f3ff}
+.compact-header h3{margin:0;font-size:1.12rem;color:#e6f3ff}
 
 .squad-close{background:transparent;border:1px solid rgba(220,230,241,0.4);color:#dce6f1;border-radius:999px;padding:.2rem .75rem;font-size:1rem;cursor:pointer}
 
@@ -1362,17 +1368,18 @@ export default {
 
 .overview-card{
   background:rgba(5,12,24,.6); border:1px solid rgba(30,144,255,.2);
-  border-radius:.6rem; padding:.8rem .9rem;
+  border-radius:.6rem; padding:.9rem 1rem;
 }
 .overview-head{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; }
-.overview-head .title{ font-weight:800; color:#e6f3ff; font-size:1.05rem; }
+.overview-head .title{ font-weight:800; color:#e6f3ff; font-size:1.12rem; }
 .overview-head .meta{ color:#9ec5e6; display:flex; gap:.5rem; flex-wrap:wrap; }
+.overview-head .chip{ background:rgba(30,144,255,.15); border:1px solid rgba(30,144,255,.35); padding:.1rem .4rem; border-radius:.35rem; }
 
 .overview-body{
-  margin-top:.5rem; border-top:1px dashed rgba(30,144,255,.2); padding-top:.5rem;
-  display:grid; gap:.35rem;
+  margin-top:.6rem; border-top:1px dashed rgba(30,144,255,.2); padding-top:.55rem;
+  display:grid; gap:.38rem; font-size:1rem;
 }
-.slot-row{ display:flex; justify-content:space-between; gap:.6rem; font-size:.95rem; }
+.slot-row{ display:flex; justify-content:space-between; gap:.6rem; }
 .slot-left{ display:flex; gap:.45rem; align-items:baseline; }
 .slot-name{ color:#e6f3ff; font-weight:600; }
 .slot-id{ color:#9ec5e6; }
