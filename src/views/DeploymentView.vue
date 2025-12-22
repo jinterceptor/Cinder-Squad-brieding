@@ -119,7 +119,10 @@
                 <template v-else>
                   <div class="member-header">
                     <div class="member-header-text">
-                      <h3>{{ (slot.name || 'UNKNOWN').toUpperCase() }}</h3>
+                      <div class="name-line">
+                        <span v-if="rankFor(slot.id)" class="rank-badge">{{ rankFor(slot.id) }}</span>
+                        <h3>{{ (slot.name || 'UNKNOWN').toUpperCase() }}</h3>
+                      </div>
                       <p class="rank-line">
                         <span class="rank">{{ slot.role || 'N/A' }}</span>
                         <span class="id">ID: {{ slot.id || 'N/A' }}</span>
@@ -213,7 +216,7 @@
       </div>
     </section>
 
-    <!-- Assign/Swap Picker (unchanged logic) -->
+    <!-- Assign/Swap Picker -->
     <div v-if="picker.open" class="squad-overlay" @click.self="closePicker">
       <div class="squad-modal">
         <div class="squad-modal-header">
@@ -244,7 +247,10 @@
           <div v-for="p in filteredPersonnel" :key="p.id" class="pick-row member-card" :class="{ assigned: !!findAssignment(p.id) }">
             <div class="member-header">
               <div class="member-header-text">
-                <h3>{{ (p.name || 'UNKNOWN').toUpperCase() }}</h3>
+                <div class="name-line">
+                  <span v-if="p.rank" class="rank-badge">{{ rankLabel(p.rank) }}</span>
+                  <h3>{{ (p.name || 'UNKNOWN').toUpperCase() }}</h3>
+                </div>
                 <p class="rank-line">
                   <span class="rank">{{ p.role || '—' }}</span>
                   <span class="id">{{ p.callsign || '' }}</span>
@@ -428,6 +434,42 @@ export default {
     pointsUsed() { return this.calcUnitPoints(this.currentUnit); },
   },
   methods: {
+    /* rank helpers */
+    rankLabel(raw) {
+      const t = String(raw || "").trim();
+      if (!t) return "";
+      // Normalize a few common variants; otherwise uppercase the token
+      const map = {
+        pvt: "PVT", pfc: "PFC", lcpl: "LCPL", cpl: "CPL", sgt: "SGT",
+        ssgt: "SSGT", gysgt: "GYSGT", lt: "LT", "2lt": "2LT", "1lt": "1LT",
+        capt: "CPT", cpt: "CPT", maj: "MAJ", col: "COL", gen: "GEN",
+        wo: "WO", cwo2: "CWO2", cwo3: "CWO3", cwo4: "CWO4"
+      };
+      const k = t.toLowerCase();
+      return map[k] || t.toUpperCase();
+    },
+    extractRank(member) {
+      // prefer explicit field
+      const r = member?.rank || member?.grade;
+      if (r) return this.rankLabel(r);
+      // try first token of name/callsign if it looks like a rank
+      const candidates = [member?.name, member?.callsign].filter(Boolean);
+      for (const c of candidates) {
+        const tok = String(c).trim().split(/\s+/)[0] || "";
+        const norm = this.rankLabel(tok);
+        if (norm && /^[A-Z0-9]{2,6}$/.test(norm)) {
+          // simple whitelist of known ranks
+          const known = ["PVT","PFC","LCPL","CPL","SGT","SSGT","GYSGT","2LT","1LT","LT","CPT","MAJ","COL","GEN","WO","CWO2","CWO3","CWO4"];
+          if (known.includes(norm)) return norm;
+        }
+      }
+      return "";
+    },
+    rankFor(personId) {
+      const p = this.personnel.find(pp => String(pp.id) === String(personId));
+      return p?.rank ? this.rankLabel(p.rank) : "";
+    },
+
     squadInitials(name) {
       if (!name) return "UNSC";
       const parts = String(name).trim().split(/\s+/);
@@ -563,8 +605,8 @@ export default {
     ensureDeviceId() {
       try {
         const key = "orbatDeviceId";
-        theExisting = localStorage.getItem(key);
-        if (theExisting && /^[a-zA-Z0-9_.-]{8,}$/.test(theExisting)) { this.deviceId = theExisting; return; }
+        const existing = localStorage.getItem(key); /* why: previous var was undeclared */
+        if (existing && /^[a-zA-Z0-9_.-]{8,}$/.test(existing)) { this.deviceId = existing; return; }
         const id = this.makeDeviceId();
         localStorage.setItem(key, id);
         this.deviceId = id;
@@ -722,7 +764,10 @@ export default {
       for (const label of this.certLabels) if (n.includes(label.toLowerCase())) return label;
       return "";
     },
-    getCertsForPersonId(personId) { const p = this.personnel.find(pp => String(pp.id) === String(personId)); return p?.certs || []; },
+    getCertsForPersonId(personId) {
+      const p = this.personnel.find(pp => String(pp.id) === String(personId));
+      return p?.certs || [];
+    },
     hasCertId(personId, idx) {
       const p = this.personnel.find(pp => String(pp.id) === String(personId));
       if (!p) return false;
@@ -744,7 +789,15 @@ export default {
             if (s?.member) {
               const id = String(s.member.id ?? `${sq.squad}-${ft.name}-${idx}`);
               const certs = this.extractCertsFromMember(s.member);
-              pool.push({ id, name: String(s.member.name || "Unknown"), callsign: String(s.member.callsign || ""), role: String(s.role || s.member.slot || ""), certs });
+              const rank = this.extractRank(s.member);
+              pool.push({
+                id,
+                name: String(s.member.name || "Unknown"),
+                callsign: String(s.member.callsign || ""),
+                role: String(s.role || s.member.slot || ""),
+                certs,
+                rank
+              });
             }
           });
         });
@@ -986,7 +1039,7 @@ export default {
 </script>
 
 <style scoped>
-/* Light default text for the whole view (fits dark theme) */
+/* Light default text for the whole view */
 #deploymentView { color: #e6f3ff; }
 
 /* -------- Shell / toolbar (kept) -------- */
@@ -1019,7 +1072,6 @@ export default {
 @keyframes contentEntry{0%{opacity:0;filter:brightness(1.1) saturate(1.03) blur(1px)}60%{opacity:1;filter:brightness(1.0) saturate(1.0) blur(0)}80%{opacity:.98;filter:brightness(1.03)}100%{opacity:1;filter:none}}
 
 /* -------- Adopted from PilotsView (card look) -------- */
-/* meta header (points & tag) */
 .squad-modal-meta{display:flex;justify-content:space-between;align-items:center;margin:.2rem 0 .6rem;border-bottom:1px solid rgba(30,144,255,0.6);padding-bottom:.4rem}
 .squad-modal-meta.invalid{border-bottom-color:rgba(255,190,80,0.9)}
 .squad-title .subtitle{margin:.15rem 0 0;font-size:.95rem;color:#9ec5e6}
@@ -1044,10 +1096,20 @@ export default {
 /* header/body/footer */
 .member-header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.9rem}
 .member-header h3{margin:0;font-size:1.1rem;color:#e0f0ff;word-break:break-word}
+.name-line{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .rank-line{margin:.15rem 0 0;font-size:.88rem;color:#9ec5e6;display:flex;gap:.6rem;flex-wrap:wrap}
 .member-body{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-top:.6rem;font-size:.9rem}
 .member-column p{margin:.18rem 0}
 .member-footer{margin-top:.6rem;font-size:.75rem;color:#7aa7c7;display:flex;justify-content:space-between}
+
+/* rank badge (PilotsView-like capsule) */
+.rank-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:.1rem .45rem;border-radius:.4rem;
+  background:rgba(30,144,255,0.12);border:1px solid rgba(30,144,255,0.55);
+  color:#d7ebff;font-weight:700;font-size:.78rem;letter-spacing:.03em;
+  text-shadow:0 0 2px rgba(0,0,0,.35);
+}
 
 /* cert list look */
 .detail-line strong{color:#9ec5e6}
@@ -1061,22 +1123,18 @@ export default {
 .cert-checkbox.checked{border-color:rgba(120,255,170,.9);box-shadow:0 0 6px rgba(120,255,170,.25) inset}
 .checkbox-dot{width:10px;height:10px;background:rgba(120,255,170,.95);border-radius:2px;display:block}
 
-/* Themed disposable checkbox (simple & robust) */
+/* Themed disposable checkbox */
 .disposable { color:#e6f3ff; display:inline-flex; gap:.45rem; align-items:center; }
 .disposable input[type="checkbox"]{
-  accent-color:#55ff88; /* why: native theming across modern browsers */
+  accent-color:#55ff88;
   width:18px;height:18px; cursor:pointer;
 }
 .disposable input[type="checkbox"]:focus-visible{
-  outline:none;
-  box-shadow:0 0 0 2px rgba(120,255,170,.35);
-  border-radius:3px;
+  outline:none; box-shadow:0 0 0 2px rgba(120,255,170,.35); border-radius:3px;
 }
-.disposable input[type="checkbox"]:hover{
-  filter:brightness(1.05);
-}
+.disposable input[type="checkbox"]:hover{ filter:brightness(1.05); }
 
-/* picker shell (reuse PilotsView modal look) */
+/* picker shell */
 .squad-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center}
 .squad-modal{background-color:#050811;color:#dce6f1;width:95vw;max-width:1200px;max-height:90vh;border-radius:.8rem;box-shadow:0 0 24px rgba(0,0,0,0.9);padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column}
 .squad-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
